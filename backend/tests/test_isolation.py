@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+from tests.helpers import login
+
+
+async def _branch_id(client, token) -> str:
+    response = await client.get(
+        "/api/v1/branches", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200, response.text
+    branches = response.json()
+    assert len(branches) == 1
+    return branches[0]["id"]
+
+
+async def _create_member(client, token, branch_id: str, first_name: str) -> dict:
+    response = await client.post(
+        "/api/v1/members",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "first_name": first_name,
+            "last_name": "Member",
+            "email": f"{first_name.lower()}@example.com",
+            "phone": "+919900000001",
+            "branch_id": branch_id,
+            "status": "prospect",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def test_tenant_cannot_read_other_tenant_member(client, gym_a, gym_b):
+    owner_a = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    owner_b = await login(client, "owner-gymb@example.com", "owner-pass-123")
+    branch_a = await _branch_id(client, owner_a["access_token"])
+    member = await _create_member(client, owner_a["access_token"], branch_a, "Alice")
+
+    # Owner B tries to fetch Alice's member record (belongs to tenant A).
+    response = await client.get(
+        f"/api/v1/members/{member['id']}",
+        headers={"Authorization": f"Bearer {owner_b['access_token']}"},
+    )
+    assert response.status_code == 404
+
+    # Owner B's member list contains nothing from tenant A.
+    response = await client.get(
+        "/api/v1/members",
+        headers={"Authorization": f"Bearer {owner_b['access_token']}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 0
+
+    # Owner A can still read their own member.
+    response = await client.get(
+        f"/api/v1/members/{member['id']}",
+        headers={"Authorization": f"Bearer {owner_a['access_token']}"},
+    )
+    assert response.status_code == 200
+
+
+async def test_owner_b_cannot_touch_tenant_a_member(client, gym_a, gym_b):
+    owner_a = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    owner_b = await login(client, "owner-gymb@example.com", "owner-pass-123")
+    branch_a = await _branch_id(client, owner_a["access_token"])
+    member = await _create_member(client, owner_a["access_token"], branch_a, "Bob")
+
+    response = await client.patch(
+        f"/api/v1/members/{member['id']}",
+        headers={"Authorization": f"Bearer {owner_b['access_token']}"},
+        json={"status": "active"},
+    )
+    assert response.status_code == 404
+
+    response = await client.post(
+        "/api/v1/checkin",
+        headers={"Authorization": f"Bearer {owner_b['access_token']}"},
+        json={"member_id": member["id"], "branch_id": branch_a, "source": "manual"},
+    )
+    assert response.status_code == 201
+    assert response.json()["result"] == "denied"
+
+
+async def test_platform_can_list_all_gyms(client, platform_token, gym_a, gym_b):
+    response = await client.get(
+        "/api/v1/platform/gyms",
+        headers={"Authorization": f"Bearer {platform_token}"},
+    )
+    assert response.status_code == 200
+    slugs = {g["slug"] for g in response.json()}
+    assert {"gyma", "gymb"} <= slugs

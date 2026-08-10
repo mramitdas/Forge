@@ -1,0 +1,550 @@
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.errors import ConflictError, NotFoundError, ValidationError
+from app.core.security import hash_password
+from app.kernel.events import bus
+from app.modules.identity import service as identity_svc
+from app.modules.identity.models import Credential, Role, User, UserRole
+from app.modules.identity.permissions import ROLE_TEMPLATES, template_permission_codes
+from app.modules.identity.schemas import TokenResponse
+from app.modules.identity.service import create_role
+from app.modules.members.models import Member
+from app.modules.membership.models import MembershipPlan, Subscription
+from app.modules.tenancy.models import (
+    Branch,
+    Gym,
+    GymSubscriptionEvent,
+    SubscriptionTier,
+    TenantEntitlement,
+)
+from app.modules.tenancy.schemas import (
+    PlatformRevenueOut,
+    RevenuePointOut,
+    SoldSubscriptionOut,
+    SubscriptionEventOut,
+)
+
+
+async def provision_gym(
+    session: AsyncSession,
+    *,
+    name: str,
+    slug: str,
+    owner_email: str,
+    owner_name: str,
+    owner_password: str,
+    tier_code: str = "starter",
+    timezone: str = "Asia/Kolkata",
+    currency: str = "INR",
+    actor_user_id: uuid.UUID | None = None,
+    actor_email: str | None = None,
+) -> Gym:
+    existing = await session.execute(select(Gym.id).where(Gym.slug == slug))
+    if existing.first() is not None:
+        raise ConflictError("Gym slug already exists", code="SLUG_TAKEN")
+
+    tier = await session.get(SubscriptionTier, tier_code)
+    if tier is None:
+        raise ConflictError("Unknown tier", code="UNKNOWN_TIER")
+    if not tier.is_active:
+        raise ConflictError("Tier is disabled", code="TIER_DISABLED")
+
+    gym = Gym(
+        name=name,
+        slug=slug,
+        status="trial",
+        tier_code=tier_code,
+        timezone=timezone,
+        currency=currency,
+    )
+    session.add(gym)
+    await session.flush()
+    gym.tenant_id = gym.id  # self-tenant: gym's tenant_id == gym.id
+    await session.flush()
+
+    branch = Branch(gym_id=gym.id, name=f"{name} - Main", timezone=timezone)
+    branch.tenant_id = gym.id
+    session.add(branch)
+
+    session.add(
+        TenantEntitlement(
+            gym_id=gym.id,
+            tenant_id=gym.id,
+            tier_code=tier_code,
+        )
+    )
+
+    owner = User(
+        tenant_id=gym.id,
+        email=owner_email.lower(),
+        full_name=owner_name,
+        is_active=True,
+        is_platform=False,
+    )
+    owner.credential = Credential(password_hash=hash_password(owner_password))
+    session.add(owner)
+    await session.flush()
+
+    owner_role = await _seed_roles(session, gym.id)
+    session.add(UserRole(user_id=owner.id, role_id=owner_role.id))
+
+    session.add(
+        GymSubscriptionEvent(
+            gym_id=gym.id,
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
+            event_type="provisioned",
+            from_tier_code=None,
+            to_tier_code=tier_code,
+        )
+    )
+
+    await bus.emit(
+        session,
+        tenant_id=gym.id,
+        aggregate_type="gym",
+        aggregate_id=gym.id,
+        event_type="tenancy.gym.provisioned",
+        payload={"gym_id": str(gym.id), "slug": slug, "tier": tier_code},
+    )
+    return gym
+
+
+async def _seed_roles(session: AsyncSession, tenant_id: uuid.UUID) -> Role:
+    owner_role: Role | None = None
+    for key, template in ROLE_TEMPLATES.items():
+        if template.get("scope", "gym") != "gym":
+            continue
+        role = await create_role(
+            session,
+            tenant_id=tenant_id,
+            name=template["name"],
+            description=template.get("description"),
+            permission_codes=template_permission_codes(template),
+            branch_scope="all",
+            is_system=template.get("is_system", True),
+            is_editable=template.get("is_editable", True),
+        )
+        if key == "gym_owner":
+            owner_role = role
+    if owner_role is None:
+        raise RuntimeError("owner role template missing")
+    return owner_role
+
+
+async def update_gym(
+    session: AsyncSession,
+    *,
+    gym_id: uuid.UUID,
+    name: str | None = None,
+    timezone: str | None = None,
+    currency: str | None = None,
+    status: str | None = None,
+    tier_code: str | None = None,
+    cross_branch_access: bool | None = None,
+    actor_user_id: uuid.UUID | None = None,
+    actor_email: str | None = None,
+) -> Gym:
+    gym = await session.get(Gym, gym_id)
+    if gym is None or gym.deleted_at is not None:
+        raise NotFoundError("Gym not found", code="NOT_FOUND")
+    if name is not None:
+        gym.name = name
+    if timezone is not None:
+        gym.timezone = timezone
+    if currency is not None:
+        gym.currency = currency
+    if status is not None:
+        if status not in {"active", "suspended", "trial"}:
+            raise ValidationError("Invalid gym status", code="INVALID_STATUS")
+        gym.status = status
+    if tier_code is not None and tier_code != gym.tier_code:
+        tier = await session.get(SubscriptionTier, tier_code)
+        if tier is None:
+            raise ConflictError("Unknown tier", code="UNKNOWN_TIER")
+        if not tier.is_active:
+            raise ConflictError("Tier is disabled", code="TIER_DISABLED")
+        previous = gym.tier_code
+        gym.tier_code = tier_code
+        await _apply_tier(session, gym)
+        await _record_tier_change(
+            session,
+            gym=gym,
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
+            from_tier_code=previous,
+        )
+    if cross_branch_access is not None:
+        gym.cross_branch_access = cross_branch_access
+    await session.flush()
+    return gym
+
+
+async def delete_gym(
+    session: AsyncSession,
+    *,
+    gym_id: uuid.UUID,
+    actor_id: uuid.UUID | None = None,
+) -> None:
+    """Soft-delete a gym and every account in its tenant so logins fail."""
+    gym = await session.get(Gym, gym_id)
+    if gym is None or gym.deleted_at is not None:
+        raise NotFoundError("Gym not found", code="NOT_FOUND")
+    now = datetime.now(UTC)
+    gym.deleted_at = now
+    gym.deleted_by = actor_id
+    users = await session.scalars(
+        select(User).where(User.tenant_id == gym_id, User.deleted_at.is_(None))
+    )
+    for user in users:
+        user.deleted_at = now
+        user.deleted_by = actor_id
+    branches = await session.scalars(
+        select(Branch).where(Branch.gym_id == gym_id, Branch.deleted_at.is_(None))
+    )
+    for branch in branches:
+        branch.deleted_at = now
+        branch.deleted_by = actor_id
+    await session.flush()
+    await bus.emit(
+        session,
+        tenant_id=gym_id,
+        aggregate_type="gym",
+        aggregate_id=gym_id,
+        event_type="tenancy.gym.removed",
+        payload={"gym_id": str(gym_id)},
+    )
+
+
+async def change_gym_tier(
+    session: AsyncSession,
+    *,
+    gym_id: uuid.UUID,
+    tier_code: str,
+    actor_user_id: uuid.UUID | None = None,
+    actor_email: str | None = None,
+) -> Gym:
+    gym = await session.get(Gym, gym_id)
+    if gym is None or gym.deleted_at is not None:
+        raise NotFoundError("Gym not found", code="NOT_FOUND")
+    tier = await session.get(SubscriptionTier, tier_code)
+    if tier is None:
+        raise ConflictError("Unknown tier", code="UNKNOWN_TIER")
+    if not tier.is_active:
+        raise ConflictError("Tier is disabled", code="TIER_DISABLED")
+    if gym.tier_code != tier_code:
+        previous = gym.tier_code
+        gym.tier_code = tier_code
+        await _apply_tier(session, gym)
+        await _record_tier_change(
+            session,
+            gym=gym,
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
+            from_tier_code=previous,
+        )
+    await session.flush()
+    return gym
+
+
+async def _record_tier_change(
+    session: AsyncSession,
+    *,
+    gym: Gym,
+    actor_user_id: uuid.UUID | None,
+    actor_email: str | None,
+    from_tier_code: str,
+) -> None:
+    session.add(
+        GymSubscriptionEvent(
+            gym_id=gym.id,
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
+            event_type="tier_changed",
+            from_tier_code=from_tier_code,
+            to_tier_code=gym.tier_code,
+        )
+    )
+
+
+async def _apply_tier(session: AsyncSession, gym: Gym) -> None:
+    """Close the current entitlement and open a new one for the gym's tier."""
+    now = datetime.now(UTC)
+    current = await session.scalars(
+        select(TenantEntitlement).where(
+            TenantEntitlement.gym_id == gym.id, TenantEntitlement.valid_to.is_(None)
+        )
+    )
+    for entitlement in current:
+        entitlement.valid_to = now
+    session.add(
+        TenantEntitlement(
+            gym_id=gym.id,
+            tenant_id=gym.id,
+            tier_code=gym.tier_code,
+            valid_from=now,
+        )
+    )
+    await session.flush()
+    await bus.emit(
+        session,
+        tenant_id=gym.id,
+        aggregate_type="gym",
+        aggregate_id=gym.id,
+        event_type="tenancy.gym.subscription.changed",
+        payload={"gym_id": str(gym.id), "tier": gym.tier_code},
+    )
+
+
+async def update_owner(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    full_name: str | None = None,
+    email: str | None = None,
+    password: str | None = None,
+    is_active: bool | None = None,
+) -> User:
+    result = await session.execute(
+        select(User)
+        .where(User.id == user_id, User.deleted_at.is_(None))
+        .options(selectinload(User.credential))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise NotFoundError("Owner not found", code="NOT_FOUND")
+    is_owner = await session.scalar(
+        select(func.count())
+        .select_from(UserRole)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(
+            UserRole.user_id == user.id,
+            Role.name == "Gym Owner",
+            Role.deleted_at.is_(None),
+        )
+    )
+    if not is_owner:
+        raise NotFoundError("Owner not found", code="NOT_FOUND")
+    if email is not None and email.lower() != user.email:
+        existing = await session.execute(
+            select(User.id).where(
+                User.tenant_id == user.tenant_id,
+                User.email == email.lower(),
+                User.deleted_at.is_(None),
+                User.id != user.id,
+            )
+        )
+        if existing.first() is not None:
+            raise ConflictError("Email already in use", code="EMAIL_TAKEN")
+        user.email = email.lower()
+    if full_name is not None:
+        user.full_name = full_name
+    if is_active is not None:
+        user.is_active = is_active
+    if password is not None:
+        user.credential.password_hash = hash_password(password)
+        user.credential.must_change = False
+    await session.flush()
+    return user
+
+
+async def impersonate_owner(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    ip: str | None = None,
+    user_agent: str | None = None,
+) -> TokenResponse:
+    """Issue a session for a gym owner so platform staff can debug their app."""
+    user = await session.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise NotFoundError("Owner not found", code="NOT_FOUND")
+    if not user.is_active:
+        raise ConflictError("Owner account is disabled", code="ACCOUNT_DISABLED")
+    gym = await session.get(Gym, user.tenant_id)
+    if gym is None or gym.deleted_at is not None:
+        raise NotFoundError("Gym not found", code="NOT_FOUND")
+    if gym.status not in {"active", "trial"}:
+        raise ConflictError("Gym is not active", code="GYM_SUSPENDED")
+    return await identity_svc.issue_tokens(session, user, ip=ip, user_agent=user_agent)
+
+
+async def create_tier(
+    session: AsyncSession,
+    *,
+    code: str,
+    name: str,
+    description: str | None,
+    price_minor: int | None,
+    max_branches: int | None,
+    max_members: int | None,
+    limits: dict,
+) -> SubscriptionTier:
+    existing = await session.get(SubscriptionTier, code)
+    if existing is not None:
+        raise ConflictError("Tier already exists", code="TIER_EXISTS")
+    tier = SubscriptionTier(
+        code=code,
+        name=name,
+        description=description,
+        price_minor=price_minor,
+        max_branches=max_branches,
+        max_members=max_members,
+        limits=limits or {},
+        is_active=True,
+    )
+    session.add(tier)
+    await session.flush()
+    return tier
+
+
+async def update_tier(
+    session: AsyncSession,
+    *,
+    code: str,
+    name: str | None = None,
+    description: str | None = None,
+    price_minor: int | None = None,
+    max_branches: int | None = None,
+    max_members: int | None = None,
+    limits: dict | None = None,
+    is_active: bool | None = None,
+) -> SubscriptionTier:
+    tier = await session.get(SubscriptionTier, code)
+    if tier is None:
+        raise NotFoundError("Tier not found", code="NOT_FOUND")
+    if name is not None:
+        tier.name = name
+    if description is not None:
+        tier.description = description
+    if price_minor is not None:
+        tier.price_minor = price_minor
+    if max_branches is not None:
+        tier.max_branches = max_branches
+    if max_members is not None:
+        tier.max_members = max_members
+    if limits is not None:
+        tier.limits = limits
+    if is_active is not None:
+        tier.is_active = is_active
+    await session.flush()
+    return tier
+
+
+async def delete_tier(session: AsyncSession, *, code: str) -> None:
+    tier = await session.get(SubscriptionTier, code)
+    if tier is None:
+        raise NotFoundError("Tier not found", code="NOT_FOUND")
+    in_use = await session.scalar(
+        select(func.count())
+        .select_from(Gym)
+        .where(Gym.tier_code == code, Gym.deleted_at.is_(None))
+    )
+    if in_use:
+        raise ConflictError(
+            "Tier is assigned to active gyms; disable it instead",
+            code="TIER_IN_USE",
+        )
+    await session.delete(tier)
+    await session.flush()
+
+
+async def list_subscription_events(
+    session: AsyncSession, *, limit: int = 50
+) -> list[SubscriptionEventOut]:
+    rows = await session.execute(
+        select(GymSubscriptionEvent, Gym.name)
+        .join(Gym, Gym.id == GymSubscriptionEvent.gym_id)
+        .order_by(GymSubscriptionEvent.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        SubscriptionEventOut(
+            id=event.id,
+            gym_id=event.gym_id,
+            gym_name=gym_name,
+            actor_email=event.actor_email,
+            event_type=event.event_type,
+            from_tier_code=event.from_tier_code,
+            to_tier_code=event.to_tier_code,
+            created_at=event.created_at,
+        )
+        for event, gym_name in rows
+    ]
+
+
+async def platform_revenue(
+    session: AsyncSession, *, months: int = 12, sold_limit: int = 200
+) -> PlatformRevenueOut:
+    month_expr = text("date_trunc('month', subscriptions.start_at)")
+    rows = await session.execute(
+        select(
+            month_expr,
+            func.coalesce(func.sum(Subscription.price_minor), 0),
+            func.count(),
+        )
+        .where(Subscription.deleted_at.is_(None))
+        .group_by(month_expr)
+        .order_by(month_expr)
+    )
+    by_month: dict[str, tuple[int, int]] = {}
+    for month, revenue, count in rows.all():
+        by_month[str(month)[:7]] = (revenue or 0, count or 0)
+
+    now = datetime.now(UTC)
+    series: list[RevenuePointOut] = []
+    for i in range(months - 1, -1, -1):
+        start = (now.replace(day=1) - timedelta(days=i * 31)).replace(day=1)
+        key = start.strftime("%Y-%m")
+        revenue, count = by_month.get(key, (0, 0))
+        series.append(
+            RevenuePointOut(month=key, revenue_minor=revenue, subscriptions_sold=count)
+        )
+
+    sold_rows = await session.execute(
+        select(
+            Subscription.id,
+            MembershipPlan.name,
+            Member.first_name,
+            Member.last_name,
+            Gym.name,
+            Branch.name,
+            Subscription.status,
+            Subscription.price_minor,
+            Subscription.currency,
+            Subscription.start_at,
+        )
+        .join(MembershipPlan, MembershipPlan.id == Subscription.plan_id)
+        .join(Member, Member.id == Subscription.member_id)
+        .join(Branch, Branch.id == Subscription.branch_id)
+        .join(Gym, Gym.id == Branch.gym_id)
+        .where(Subscription.deleted_at.is_(None))
+        .order_by(Subscription.start_at.desc())
+        .limit(sold_limit)
+    )
+    sold = [
+        SoldSubscriptionOut(
+            id=row[0],
+            plan_name=row[1],
+            member_name=" ".join(
+                p for p in (row[2] or "", row[3] or "") if p
+            ).strip()
+            or "—",
+            gym_name=row[4],
+            branch_name=row[5],
+            status=row[6],
+            price_minor=row[7],
+            currency=row[8],
+            start_at=row[9],
+        )
+        for row in sold_rows.all()
+    ]
+    total_minor = sum(point.revenue_minor for point in series)
+    return PlatformRevenueOut(series=series, sold=sold, total_minor=total_minor)

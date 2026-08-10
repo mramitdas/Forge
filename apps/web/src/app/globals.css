@@ -1,0 +1,293 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Space Grotesk", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+    "Segoe UI", Roboto, sans-serif;
+
+  /* ── Light (macOS pastel) ─────────────────────────────── */
+  --color-canvas: #f2f3f8;
+  --color-elevated: #ffffff;
+  --color-panel: rgba(255, 255, 255, 0.74);
+  --color-panel-strong: #ffffff;
+
+  --color-accent: #7b87f2;
+  --color-accent-hover: #8f9aff;
+  --color-accent-deep: #5a66d6;
+  --color-accent-soft: rgba(123, 135, 242, 0.16);
+  --color-accent-ink: #0f1224;
+
+  --color-ink: #1f2130;
+  --color-ink-soft: #5f6275;
+  --color-ink-faint: #9093a6;
+  --color-line: rgba(31, 33, 48, 0.08);
+  --color-line-strong: rgba(31, 33, 48, 0.15);
+
+  --color-green: #2f9e6e;
+  --color-green-soft: rgba(47, 158, 110, 0.14);
+  --color-red: #e0574f;
+  --color-red-soft: rgba(224, 87, 79, 0.14);
+  --color-amber: #c98a1b;
+  --color-amber-soft: rgba(201, 138, 27, 0.16);
+  --color-blue: #3f7cf4;
+  --color-blue-soft: rgba(63, 124, 244, 0.15);
+  --color-pink: #e0579b;
+  --color-pink-soft: rgba(224, 87, 155, 0.14);
+  --color-gray2: #9093a6;
+  --color-gray3: #d4d6e0;
+
+  --color-fill: rgba(31, 33, 48, 0.05);
+  --color-fill-strong: rgba(31, 33, 48, 0.09);
+
+  --color-scroll-thumb: rgba(31, 33, 48, 0.25);
+  --color-selection: #0f1224;
+  --color-glow-a: rgba(123, 135, 242, 0.1);
+  --color-glow-b: rgba(224, 87, 155, 0.06);
+  --color-glow-c: rgba(63, 124, 244, 0.06);
+  --color-glow: rgba(123, 135, 242, 0.32);
+  --color-glow-strong: rgba(123, 135, 242, 0.42);
+  --color-pulse: rgba(47, 158, 110, 0.5);
+  --color-shadow: rgba(31, 33, 48, 0.1);
+  --color-text-gradient: linear-gradient(100deg, #1f2130 0%, #7b87f2 130%);
+}
+
+/* ── Dark (macOS pastel) ───────────────────────────────── */
+.dark {
+  --color-canvas: #15161d;
+  --color-elevated: #1d1e27;
+  --color-panel: rgba(28, 29, 38, 0.72);
+  --color-panel-strong: #1d1e27;
+
+  --color-accent: #aab2ff;
+  --color-accent-hover: #bcc3ff;
+  --color-accent-deep: #8b93ff;
+  --color-accent-soft: rgba(170, 178, 255, 0.16);
+  --color-accent-ink: #0f1224;
+
+  --color-ink: #f0f1f7;
+  --color-ink-soft: #b8bacb;
+  --color-ink-faint: #8a8ca0;
+  --color-line: rgba(255, 255, 255, 0.09);
+  --color-line-strong: rgba(255, 255, 255, 0.15);
+
+  --color-green: #4fd7a0;
+  --color-green-soft: rgba(79, 215, 160, 0.16);
+  --color-red: #ff7a70;
+  --color-red-soft: rgba(255, 122, 112, 0.16);
+  --color-amber: #ffb54a;
+  --color-amber-soft: rgba(255, 181, 74, 0.17);
+  --color-blue: #7ab0ff;
+  --color-blue-soft: rgba(122, 176, 255, 0.17);
+  --color-pink: #ff7ab5;
+  --color-pink-soft: rgba(255, 122, 181, 0.16);
+  --color-gray2: #8a8ca0;
+  --color-gray3: #3a3b48;
+
+  --color-fill: rgba(255, 255, 255, 0.06);
+  --color-fill-strong: rgba(255, 255, 255, 0.1);
+
+  --color-scroll-thumb: rgba(255, 255, 255, 0.25);
+  --color-selection: #f0f1f7;
+  --color-glow-a: rgba(170, 178, 255, 0.13);
+  --color-glow-b: rgba(255, 122, 181, 0.07);
+  --color-glow-c: rgba(122, 176, 255, 0.07);
+  --color-glow: rgba(170, 178, 255, 0.4);
+  --color-glow-strong: rgba(170, 178, 255, 0.55);
+  --color-pulse: rgba(79, 215, 160, 0.5);
+  --color-shadow: rgba(0, 0, 0, 0.4);
+  --color-text-gradient: linear-gradient(100deg, #ffffff 0%, #aab2ff 130%);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Ambient pastel glow field behind the whole app */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 12% -10%, var(--color-glow-a), transparent 60%),
+    radial-gradient(800px 500px at 105% 10%, var(--color-glow-b), transparent 55%),
+    radial-gradient(700px 700px at 50% 120%, var(--color-glow-c), transparent 60%);
+  transition: background 0.3s ease;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-selection);
+}
+
+/* Thin, unobtrusive scrollbars like macOS */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scroll-thumb) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-scroll-thumb);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: none;
+}
+
+/* Brand kicker — small uppercase eyebrow labels */
+.kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+
+@keyframes mac-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes mac-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mac-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--color-pulse);
+  }
+  50% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+@keyframes mac-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-fill) 25%,
+    var(--color-fill-strong) 37%,
+    var(--color-fill) 63%
+  );
+  background-size: 200% 100%;
+  animation: mac-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes mac-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-content-in {
+  animation: mac-content-in 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+  .animate-content-in {
+    animation: none;
+  }
+}
+
+.animate-modal-in {
+  animation: mac-modal-in 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.animate-fade-in {
+  animation: mac-fade-in 0.25s ease;
+}
+
+.animate-toast-in {
+  animation: mac-toast-in 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-out infinite;
+}
+
+/* Glass panel helpers */
+.glass {
+  background: var(--color-panel);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid var(--color-line);
+}
+
+.glass-edge {
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.text-gradient {
+  background: var(--color-text-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

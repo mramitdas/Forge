@@ -1,0 +1,164 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Badge, Button, Card, EmptyState, Switch, Toast } from "@/components/ui";
+import { Async } from "@/components/skeleton";
+import { RoleCardSkeleton } from "@/components/skeletons";
+import { usePermissionCatalog, useRoles, useUpdateRole } from "@/lib/hooks";
+
+const MODULE_LABELS: Record<string, string> = {
+  members: "Members",
+  membership: "Memberships & plans",
+  billing: "Billing",
+  attendance: "Check-ins & attendance",
+  notifications: "Notifications",
+  reports: "Reports",
+  tenancy: "Branches & settings",
+  identity: "Roles & staff",
+};
+
+export default function RolesPage() {
+  const { roles, isLoading: rolesLoading, isError: rolesError } = useRoles();
+  const { permissions, isLoading: permsLoading, isError: permsError } = usePermissionCatalog();
+  const updateRole = useUpdateRole();
+  const [draft, setDraft] = useState<Record<string, Set<string>>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const isLoading = rolesLoading || permsLoading;
+  const isError = rolesError || permsError;
+
+  const byModule = useMemo(() => {
+    const map: Record<string, typeof permissions> = {};
+    for (const p of permissions) {
+      if (p.module === "platform") continue;
+      (map[p.module] ??= []).push(p);
+    }
+    return map;
+  }, [permissions]);
+
+  function toggle(roleId: string, code: string) {
+    setDraft((d) => {
+      const next = new Set(d[roleId] ?? new Set<string>());
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return { ...d, [roleId]: next };
+    });
+  }
+
+  function isDirty(roleId: string, base: string[]) {
+    const cur = draft[roleId];
+    if (!cur) return false;
+    if (cur.size !== base.length) return true;
+    for (const c of base) if (!cur.has(c)) return true;
+    return false;
+  }
+
+  async function save(roleId: string, name: string) {
+    const codes = draft[roleId] ? [...draft[roleId]] : [];
+    setSaving(roleId);
+    try {
+      await updateRole.mutateAsync({ roleId, body: { permission_codes: codes } });
+      setDraft((d) => ({ ...d, [roleId]: new Set(codes) }));
+      setToast(`Saved ${name} permissions`);
+    } catch {
+      setToast("Could not save role — it may be locked");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-5">
+      <p className="text-[13px] text-ink-faint">
+        Tune what each staff role can view, edit and delete. The Gym Owner role is locked.
+      </p>
+
+      <Async loading={isLoading} error={isError} skeleton={<RoleCardSkeleton count={3} />}>
+        {roles.map((role) => {
+        const base = role.permission_codes;
+        const dirty = isDirty(role.id, base);
+        const current = draft[role.id] ?? new Set(base);
+        return (
+          <Card key={role.id} className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-line bg-fill px-5 py-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[15px] font-semibold tracking-tight">{role.name}</h3>
+                  {!role.is_editable && (
+                    <Badge tone="gray">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <rect x="5" y="11" width="14" height="9" rx="2" />
+                        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                      </svg>
+                      Locked
+                    </Badge>
+                  )}
+                </div>
+                {role.description && <p className="text-[12px] text-ink-faint">{role.description}</p>}
+              </div>
+              {role.is_editable && dirty && (
+                <Button size="sm" disabled={saving === role.id} onClick={() => save(role.id, role.name)}>
+                  {saving === role.id ? "Saving…" : `Save (${current.size} perms)`}
+                </Button>
+              )}
+              {role.is_editable && !dirty && (
+                <span className="text-[12px] text-ink-faint">{current.size} permissions</span>
+              )}
+            </div>
+
+            {role.is_editable ? (
+              <div className="divide-y divide-line">
+                {Object.entries(byModule).map(([module, perms]) => (
+                  <div key={module} className="px-5 py-4">
+                    <p className="kicker mb-2">{MODULE_LABELS[module] ?? module}</p>
+                    <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                      {perms.map((p) => {
+                        const on = current.has(p.code);
+                        return (
+                          <div
+                            key={p.code}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => toggle(role.id, p.code)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                toggle(role.id, p.code);
+                              }
+                            }}
+                            className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-fill"
+                          >
+                            <span className="min-w-0">
+                              <span className={`block text-[13px] ${on ? "text-ink" : "text-ink-faint"}`}>
+                                {p.description}
+                              </span>
+                              <span className="block font-mono text-[10px] text-ink-faint">{p.code}</span>
+                            </span>
+                            <span onClick={(e) => e.stopPropagation()}>
+                              <Switch checked={on} onChange={() => toggle(role.id, p.code)} label={p.code} />
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-5 py-4">
+                <EmptyState
+                  title="Locked system role"
+                  hint="This role is fixed and cannot be overridden."
+                />
+              </div>
+            )}
+          </Card>
+        );
+      })}
+      </Async>
+
+      {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
