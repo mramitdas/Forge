@@ -5,7 +5,7 @@ their owners and subscription tiers, and track revenue; each gym owner gets a
 fully scoped workspace for members, check-ins, plans, subscriptions, billing,
 branches, and staff roles.
 
-![CI](https://img.shields.io/github/actions/workflow/status/monkeycode-ai/Forge/ci.yml?branch=main&label=CI)
+![CI](https://img.shields.io/github/actions/workflow/status/mramitdas/Forge/ci.yml?branch=main&label=CI)
 
 ## Features
 
