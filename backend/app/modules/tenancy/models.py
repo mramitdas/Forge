@@ -57,6 +57,8 @@ class Branch(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, Base):
     code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    country_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    gst_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Kolkata", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

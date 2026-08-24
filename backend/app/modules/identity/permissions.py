@@ -43,6 +43,7 @@ PERMISSIONS: list[dict[str, str]] = [
     {"code": "tenancy.branches.create", "module": "tenancy", "description": "Create a branch"},
     {"code": "tenancy.branches.view", "module": "tenancy", "description": "View branches"},
     {"code": "tenancy.branches.update", "module": "tenancy", "description": "Update a branch"},
+    {"code": "tenancy.branches.delete", "module": "tenancy", "description": "Delete a branch"},
     {
         "code": "tenancy.settings.manage",
         "module": "tenancy",
@@ -69,6 +70,11 @@ PERMISSIONS: list[dict[str, str]] = [
         "code": "membership.plans.update",
         "module": "membership",
         "description": "Update membership plans",
+    },
+    {
+        "code": "membership.plans.delete",
+        "module": "membership",
+        "description": "Delete membership plans",
     },
     {
         "code": "membership.subscriptions.view",

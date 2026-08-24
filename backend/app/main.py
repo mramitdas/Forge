@@ -20,6 +20,7 @@ from app.modules.identity.api import employees_router, roles_router
 from app.modules.identity.api import router as auth_router
 from app.modules.members.api import router as members_router
 from app.modules.membership.api import router as membership_router
+from app.modules.membership.renewal import start_renewal_worker
 from app.modules.notifications.api import router as notifications_router
 from app.modules.notifications.service import register_handlers
 from app.modules.tenancy.api import platform_router, settings_router, tenant_router
@@ -33,16 +34,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     register_handlers()
     dispatcher = Dispatcher()
     settings = get_settings()
+    tasks = []
     if not settings.debug:
-        task = None
         import asyncio
 
-        task = asyncio.create_task(dispatcher.run_forever(settings.outbox_poll_interval_seconds))
+        tasks.append(asyncio.create_task(dispatcher.run_forever(settings.outbox_poll_interval_seconds)))
         logger.info("outbox dispatcher started")
-    else:
-        task = None
+        renewal_worker = start_renewal_worker()
+        if renewal_worker is not None:
+            tasks.append(asyncio.create_task(renewal_worker.run_forever(settings.renewal_interval_seconds)))
+            logger.info("renewal worker started")
     yield
-    if task is not None:
+    for task in tasks:
         task.cancel()
 
 

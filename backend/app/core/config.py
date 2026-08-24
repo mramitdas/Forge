@@ -31,6 +31,8 @@ class Settings(BaseSettings):
 
     outbox_poll_interval_seconds: float = 1.0
     outbox_max_deliveries: int = 5
+    renewal_interval_seconds: float = 30.0
+    media_dir: str = "media"
 
     @property
     def is_platform_scope(self) -> bool:

@@ -174,3 +174,6 @@
 *.lz
 *.lzma
 *.iso
+
+# Runtime uploads (member avatars, media)
+backend/media/

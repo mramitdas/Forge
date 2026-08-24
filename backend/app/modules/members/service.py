@@ -27,8 +27,10 @@ async def create_member(
     last_name: str | None,
     email: str | None,
     phone: str | None,
+    country_code: str | None,
     gender: str | None,
     status: str,
+    is_active: bool,
     notes: str | None,
 ) -> Member:
     _validate_status(status)
@@ -49,8 +51,10 @@ async def create_member(
         last_name=last_name,
         email=email.lower() if email else None,
         phone=phone,
+        country_code=country_code,
         gender=gender,
         status=status,
+        is_active=is_active,
         notes=notes,
         joined_at=datetime.now() if status == "active" else None,
     )
@@ -82,7 +86,35 @@ async def get_member(session: AsyncSession, member_id: uuid.UUID) -> Member:
     return member
 
 
-async def update_member(session: AsyncSession, member_id: uuid.UUID, data: dict) -> Member:
+async def set_member_avatar(
+    session: AsyncSession,
+    member_id: uuid.UUID,
+    avatar_path: str,
+    actor_id: uuid.UUID | None = None,
+    actor_name: str | None = None,
+) -> Member:
+    member = await get_member(session, member_id)
+    member.avatar_path = avatar_path
+    member.version += 1
+    session.add(
+        MemberTimeline(
+            tenant_id=member.tenant_id,
+            member_id=member.id,
+            action="member.avatar.updated",
+            payload={"path": avatar_path, "actor_name": actor_name},
+            actor_id=actor_id,
+        )
+    )
+    return member
+
+
+async def update_member(
+    session: AsyncSession,
+    member_id: uuid.UUID,
+    data: dict,
+    actor_id: uuid.UUID | None = None,
+    actor_name: str | None = None,
+) -> Member:
     member = await get_member(session, member_id)
     if data.get("status"):
         data["status"] = _validate_status(data["status"])
@@ -97,10 +129,39 @@ async def update_member(session: AsyncSession, member_id: uuid.UUID, data: dict)
             tenant_id=member.tenant_id,
             member_id=member.id,
             action="member.updated",
-            payload={"fields": list(data.keys())},
+            payload={"fields": list(data.keys()), "actor_name": actor_name},
+            actor_id=actor_id,
         )
     )
     return member
+
+
+async def delete_member(
+    session: AsyncSession,
+    member_id: uuid.UUID,
+    actor_id: uuid.UUID | None = None,
+    actor_name: str | None = None,
+) -> None:
+    member = await get_member(session, member_id)
+    member.deleted_at = datetime.now()
+    member.version += 1
+    session.add(
+        MemberTimeline(
+            tenant_id=member.tenant_id,
+            member_id=member.id,
+            action="member.deleted",
+            payload={"actor_name": actor_name},
+            actor_id=actor_id,
+        )
+    )
+    await bus.emit(
+        session,
+        tenant_id=member.tenant_id,
+        aggregate_type="member",
+        aggregate_id=member.id,
+        event_type="members.member.deleted",
+        payload={"member_id": str(member.id)},
+    )
 
 
 async def list_members(

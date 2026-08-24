@@ -11,10 +11,12 @@ class MemberCreate(BaseModel):
     last_name: str | None = None
     email: EmailStr | None = None
     phone: str | None = None
+    country_code: str | None = None
     gender: str | None = None
     dob: date | None = None
     branch_id: uuid.UUID
     status: str = "lead"
+    is_active: bool = True
     notes: str | None = None
 
 
@@ -23,9 +25,11 @@ class MemberUpdate(BaseModel):
     last_name: str | None = None
     email: EmailStr | None = None
     phone: str | None = None
+    country_code: str | None = None
     gender: str | None = None
     dob: date | None = None
     status: str | None = None
+    is_active: bool | None = None
     notes: str | None = None
 
 
@@ -37,8 +41,11 @@ class MemberOut(BaseModel):
     full_name: str
     email: str | None
     phone: str | None
+    country_code: str | None
     gender: str | None
     status: str
+    is_active: bool
+    avatar_path: str | None
     joined_at: datetime | None
     created_at: datetime
     version: int

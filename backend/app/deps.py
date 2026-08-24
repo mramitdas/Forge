@@ -65,10 +65,45 @@ async def get_actor_context(
     return actor
 
 
+async def get_actor_from_query_token(
+    authorization: Annotated[str | None, Header()] = None,
+    token: str | None = None,
+) -> Actor:
+    """Actor from the Authorization header, falling back to a `token` query
+    param (used for <img> tags that cannot set request headers)."""
+    auth = authorization or (f"Bearer {token}" if token else None)
+    actor = await resolve_actor(auth)
+    ctx = TenantContext(
+        tenant_id=actor.tenant_id,
+        platform_scope=actor.is_platform,
+    )
+    set_tenant_context(ctx)
+    return actor
+
+
 async def get_session_for_actor(
     actor: Annotated[Actor, Depends(get_actor_context)],
 ):
     """Request session for authenticated routes, stamped with the actor's tenant."""
+    from app.db.session import get_sessionmaker
+
+    maker = get_sessionmaker()
+    async with maker() as session:
+        await session.begin()
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        else:
+            await session.commit()
+
+
+async def get_session_for_query_token(
+    actor: Annotated[Actor, Depends(get_actor_from_query_token)],
+):
+    """Session dependency for requests authenticated via a `token` query param
+    (e.g. <img> tags). Stamps the actor's tenant like the header variant."""
     from app.db.session import get_sessionmaker
 
     maker = get_sessionmaker()

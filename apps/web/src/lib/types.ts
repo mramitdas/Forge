@@ -32,8 +32,11 @@ export interface MemberOut {
   full_name: string;
   email: string | null;
   phone: string | null;
+  country_code: string | null;
   gender: string | null;
   status: string;
+  is_active: boolean;
+  avatar_path: string | null;
   joined_at: string | null;
   created_at: string;
   version: number;
@@ -43,6 +46,7 @@ export interface PlanOut {
   id: string;
   name: string;
   slug: string;
+  branch_id: string | null;
   description: string | null;
   billing_period: string;
   amount_minor: number;
@@ -60,6 +64,8 @@ export interface BranchOut {
   code: string | null;
   address: string | null;
   phone: string | null;
+  country_code: string | null;
+  gst_number: string | null;
   timezone: string;
   is_active: boolean;
 }

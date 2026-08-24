@@ -1,7 +1,7 @@
 export type MemberStatus = "active" | "paused" | "expired" | "lead";
 export type PlanPeriod = "day" | "monthly" | "quarterly" | "yearly" | "pt";
 export type SubStatus = "pending" | "active" | "paused" | "expired" | "cancelled";
-export type InvoiceStatus = "open" | "paid" | "overdue";
+export type InvoiceStatus = "open" | "paid" | "overdue" | "void";
 export type CheckinResult = "granted" | "denied" | "duplicate";
 
 export interface Branch {
@@ -10,8 +10,11 @@ export interface Branch {
   code: string;
   address: string;
   phone: string;
+  country_code: string;
+  gst_number: string;
   timezone: string;
   members: number;
+  is_active: boolean;
   open: string;
   close: string;
 }
@@ -22,9 +25,12 @@ export interface Member {
   initials: string;
   email: string;
   phone: string;
+  countryCode: string;
   gender: string;
   age: number;
   status: MemberStatus;
+  isActive: boolean;
+  avatarPath: string | null;
   branchId: string;
   planId: string;
   joinedAt: string;
@@ -44,6 +50,8 @@ export interface Plan {
   description: string;
   durationMonths: number | null;
   autoRenew: boolean;
+  isActive: boolean;
+  branchId: string | null;
   popular?: boolean;
   perks: string[];
 }
@@ -56,6 +64,8 @@ export interface Subscription {
   status: SubStatus;
   startAt: string;
   endAt: string;
+  startAtIso: string;
+  endAtIso: string | null;
   price: number;
   currency: string;
 }

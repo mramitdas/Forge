@@ -22,6 +22,12 @@ class MembershipPlan(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     slug: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("branches.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )  # null = common plan available at every branch
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     billing_period: Mapped[str] = mapped_column(
         String(20), default="monthly", nullable=False

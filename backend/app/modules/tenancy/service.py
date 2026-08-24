@@ -15,7 +15,7 @@ from app.modules.identity.models import Credential, Role, User, UserRole
 from app.modules.identity.permissions import ROLE_TEMPLATES, template_permission_codes
 from app.modules.identity.schemas import TokenResponse
 from app.modules.identity.service import create_role
-from app.modules.members.models import Member
+from app.modules.members.models import MEMBER_STATUSES, Member
 from app.modules.membership.models import MembershipPlan, Subscription
 from app.modules.tenancy.models import (
     Branch,
@@ -68,10 +68,6 @@ async def provision_gym(
     await session.flush()
     gym.tenant_id = gym.id  # self-tenant: gym's tenant_id == gym.id
     await session.flush()
-
-    branch = Branch(gym_id=gym.id, name=f"{name} - Main", timezone=timezone)
-    branch.tenant_id = gym.id
-    session.add(branch)
 
     session.add(
         TenantEntitlement(
@@ -221,6 +217,117 @@ async def delete_gym(
         event_type="tenancy.gym.removed",
         payload={"gym_id": str(gym_id)},
     )
+
+
+async def _get_branch(
+    session: AsyncSession, *, gym_id: uuid.UUID, branch_id: uuid.UUID
+) -> Branch:
+    branch = await session.get(Branch, branch_id)
+    if branch is None or branch.deleted_at is not None or branch.gym_id != gym_id:
+        raise NotFoundError("Branch not found", code="NOT_FOUND")
+    return branch
+
+
+async def update_branch(
+    session: AsyncSession,
+    *,
+    gym_id: uuid.UUID,
+    branch_id: uuid.UUID,
+    data: dict,
+    actor_id: uuid.UUID | None = None,
+) -> Branch:
+    branch = await _get_branch(session, gym_id=gym_id, branch_id=branch_id)
+    for field in ("name", "code", "address", "phone", "country_code", "gst_number", "timezone"):
+        if field in data:
+            setattr(branch, field, data[field])
+    if data.get("is_active") is not None and data["is_active"] != branch.is_active:
+        branch.is_active = data["is_active"]
+        if branch.is_active:
+            await _enable_branch_members(session, branch_id, actor_id)
+        else:
+            await _disable_branch_members(session, branch_id, actor_id)
+    await session.flush()
+    return branch
+
+
+async def delete_branch(
+    session: AsyncSession,
+    *,
+    gym_id: uuid.UUID,
+    branch_id: uuid.UUID,
+    actor_id: uuid.UUID | None = None,
+) -> None:
+    """Soft-delete a branch and every member assigned to it."""
+    branch = await _get_branch(session, gym_id=gym_id, branch_id=branch_id)
+    now = datetime.now(UTC)
+    branch.deleted_at = now
+    branch.deleted_by = actor_id
+    branch.is_active = False
+    members = await session.scalars(
+        select(Member).where(
+            Member.branch_id == branch_id, Member.deleted_at.is_(None)
+        )
+    )
+    for member in members:
+        member.deleted_at = now
+        member.deleted_by = actor_id
+    await session.flush()
+    await bus.emit(
+        session,
+        tenant_id=gym_id,
+        aggregate_type="branch",
+        aggregate_id=branch_id,
+        event_type="tenancy.branch.removed",
+        payload={"branch_id": str(branch_id)},
+    )
+
+
+async def _disable_branch_members(
+    session: AsyncSession, branch_id: uuid.UUID, actor_id: uuid.UUID | None
+) -> None:
+    """Freeze every live member of a branch when the branch is disabled.
+
+    The member's previous status is recorded in custom_data so re-enabling
+    the branch can restore exactly who was frozen by this action.
+    """
+    now = datetime.now(UTC)
+    members = await session.scalars(
+        select(Member).where(
+            Member.branch_id == branch_id, Member.deleted_at.is_(None)
+        )
+    )
+    for member in members:
+        if member.status not in {"frozen", "lapsed", "cancelled"}:
+            custom = dict(member.custom_data or {})
+            custom["branch_frozen_prev"] = member.status
+            member.custom_data = custom
+            member.status = "frozen"
+            member.version += 1
+            member.updated_by = actor_id
+            member.updated_at = now
+
+
+async def _enable_branch_members(
+    session: AsyncSession, branch_id: uuid.UUID, actor_id: uuid.UUID | None
+) -> None:
+    """Restore members frozen by a branch disable once the branch is enabled."""
+    now = datetime.now(UTC)
+    members = await session.scalars(
+        select(Member).where(
+            Member.branch_id == branch_id, Member.deleted_at.is_(None)
+        )
+    )
+    for member in members:
+        previous = (member.custom_data or {}).get("branch_frozen_prev")
+        if previous is None or previous not in MEMBER_STATUSES:
+            continue
+        custom = dict(member.custom_data)
+        custom.pop("branch_frozen_prev", None)
+        member.custom_data = custom
+        member.status = previous
+        member.version += 1
+        member.updated_by = actor_id
+        member.updated_at = now
 
 
 async def change_gym_tier(

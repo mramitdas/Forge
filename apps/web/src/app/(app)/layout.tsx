@@ -178,7 +178,7 @@ function ThemeToggle({ theme, onToggle }: { theme: "light" | "dark"; onToggle: (
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const title = titles[pathname] ?? "FORGE";
+  const title = titles[pathname] ?? (pathname.startsWith("/billing/") ? "Invoice" : "FORGE");
   const { me, loading, logout } = useAuth();
   const { unread } = useNotificationsData();
   const [theme, setTheme] = useState<"light" | "dark">("dark");

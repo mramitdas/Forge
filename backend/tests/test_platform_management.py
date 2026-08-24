@@ -149,12 +149,12 @@ async def test_impersonate_owner_opens_gym_session(client, platform_token):
     assert body["tenant_name"] == "Gym impgym"
     assert "members.create" in body["permissions"]
 
-    # Session resolves to the gym's tenant with its seeded main branch.
+    # A freshly provisioned gym has no branches; the owner creates them.
     branches = await client.get(
         "/api/v1/branches", headers=await _headers(tokens["access_token"])
     )
     assert branches.status_code == 200
-    assert len(branches.json()) == 1
+    assert branches.json() == []
 
 
 async def test_change_gym_tier(client, platform_token):

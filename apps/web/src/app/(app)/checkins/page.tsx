@@ -192,7 +192,13 @@ function QuickCheckinCard() {
                 <Avatar name={member.full_name || member.first_name} size="sm" />
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-medium">{member.full_name || member.first_name}</p>
-                  <p className="text-[12px] text-ink-faint">{member.phone ?? "No phone"}</p>
+                  <p className="text-[12px] text-ink-faint">
+                    {member.phone
+                      ? member.phone.startsWith("+")
+                        ? member.phone
+                        : `${member.country_code || "+91"} ${member.phone}`.trim()
+                      : "No phone"}
+                  </p>
                 </div>
                 <StatusBadge status={member.status} />
               </div>

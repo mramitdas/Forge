@@ -65,3 +65,15 @@ async def capture(
         invoice=InvoiceOut.model_validate(loaded),
         idempotent_replay=replayed,
     )
+
+
+@router.post("/{invoice_id}/void", response_model=InvoiceOut)
+async def void(
+    invoice_id: uuid.UUID,
+    actor: Annotated[Actor, Depends(require_permission("billing.invoices.view"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> InvoiceOut:
+    invoice = await billing_svc.void_invoice(
+        session, tenant_id=actor.tenant_id, invoice_id=invoice_id
+    )
+    return InvoiceOut.model_validate(invoice)

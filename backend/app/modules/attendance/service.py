@@ -12,6 +12,7 @@ from app.core.errors import ValidationError
 from app.kernel.events import bus
 from app.kernel.pagination import OffsetPagination
 from app.modules.attendance.models import CHECKIN_RESULTS, CHECKIN_SOURCES, CheckIn
+from app.modules.members.models import Member
 from app.modules.membership.service import get_active_subscription
 from app.modules.tenancy.models import Gym
 
@@ -72,6 +73,26 @@ async def check_in(
             device_id=device_id,
             result="duplicate",
             reason="recent check-in exists",
+        )
+        session.add(checkin)
+        await session.flush()
+        return CheckInResult(check_in=checkin, allowed=False)
+
+    member = await session.get(Member, member_id)
+    if (
+        member is None
+        or member.deleted_at is not None
+        or not member.is_active
+        or member.status == "frozen"
+    ):
+        checkin = CheckIn(
+            tenant_id=tenant_id,
+            member_id=member_id,
+            branch_id=branch_id,
+            source=source,
+            device_id=device_id,
+            result="denied",
+            reason="member is disabled",
         )
         session.add(checkin)
         await session.flush()

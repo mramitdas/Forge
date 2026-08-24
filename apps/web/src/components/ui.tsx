@@ -203,6 +203,7 @@ export function statusTone(status: string): keyof typeof badgeTone {
     case "overdue":
     case "denied":
     case "cancelled":
+    case "void":
       return "red";
     case "lead":
       return "blue";
@@ -236,7 +237,15 @@ function hashStr(s: string): number {
   return Math.abs(h);
 }
 
-export function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg" }) {
+export function Avatar({
+  name,
+  size = "md",
+  src,
+}: {
+  name: string;
+  size?: "sm" | "md" | "lg";
+  src?: string | null;
+}) {
   const initials = name
     .split(" ")
     .map((p) => p[0])
@@ -246,6 +255,15 @@ export function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md"
   const hue = avatarHues[hashStr(name) % avatarHues.length];
   const dims =
     size === "sm" ? "h-7 w-7 text-[11px]" : size === "lg" ? "h-12 w-12 text-[16px]" : "h-9 w-9 text-[13px]";
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        className={cn("shrink-0 rounded-full object-cover", dims)}
+      />
+    );
+  }
   return (
     <div
       className={cn(

@@ -4,13 +4,13 @@ from tests.helpers import login
 
 
 async def _branch_id(client, token) -> str:
-    response = await client.get(
-        "/api/v1/branches", headers={"Authorization": f"Bearer {token}"}
+    response = await client.post(
+        "/api/v1/branches",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Test Branch", "code": "TB", "timezone": "Asia/Kolkata"},
     )
-    assert response.status_code == 200, response.text
-    branches = response.json()
-    assert len(branches) == 1
-    return branches[0]["id"]
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
 
 
 async def _create_member(client, token, branch_id: str, first_name: str) -> dict:

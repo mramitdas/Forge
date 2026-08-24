@@ -169,7 +169,20 @@ class BranchCreate(BaseModel):
     code: str | None = None
     address: str | None = None
     phone: str | None = None
+    country_code: str | None = None
+    gst_number: str | None = None
     timezone: str = "Asia/Kolkata"
+
+
+class BranchUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    code: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    country_code: str | None = None
+    gst_number: str | None = None
+    timezone: str | None = None
+    is_active: bool | None = None
 
 
 class BranchOut(BaseModel):
@@ -179,6 +192,8 @@ class BranchOut(BaseModel):
     code: str | None
     address: str | None
     phone: str | None
+    country_code: str | None
+    gst_number: str | None
     timezone: str
     is_active: bool
 

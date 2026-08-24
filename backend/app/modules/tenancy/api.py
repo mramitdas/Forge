@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
@@ -21,6 +22,7 @@ from app.modules.tenancy.models import Branch, Gym, SubscriptionTier
 from app.modules.tenancy.schemas import (
     BranchCreate,
     BranchOut,
+    BranchUpdate,
     GymOut,
     GymOwnerOut,
     GymSettingsOut,
@@ -40,12 +42,14 @@ from app.modules.tenancy.schemas import (
 from app.modules.tenancy.service import (
     change_gym_tier,
     create_tier,
+    delete_branch,
     delete_gym,
     delete_tier,
     impersonate_owner,
     list_subscription_events,
     platform_revenue,
     provision_gym,
+    update_branch,
     update_owner,
     update_tier,
 )
@@ -414,11 +418,45 @@ async def create_branch(
         code=body.code,
         address=body.address,
         phone=body.phone,
+        country_code=body.country_code,
+        gst_number=body.gst_number,
         timezone=body.timezone,
     )
     session.add(branch)
     await session.flush()
     return BranchOut.model_validate(branch)
+
+
+@tenant_router.patch("/{branch_id}", response_model=BranchOut)
+async def update_branch_endpoint(
+    branch_id: uuid.UUID,
+    body: BranchUpdate,
+    actor: Annotated[Actor, Depends(require_permission("tenancy.branches.update"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> BranchOut:
+    data = body.model_dump(exclude_unset=True)
+    branch = await update_branch(
+        session,
+        gym_id=actor.tenant_id,
+        branch_id=branch_id,
+        data=data,
+        actor_id=actor.user_id,
+    )
+    return BranchOut.model_validate(branch)
+
+
+@tenant_router.delete("/{branch_id}", status_code=204)
+async def remove_branch(
+    branch_id: uuid.UUID,
+    actor: Annotated[Actor, Depends(require_permission("tenancy.branches.delete"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> None:
+    await delete_branch(
+        session,
+        gym_id=actor.tenant_id,
+        branch_id=branch_id,
+        actor_id=actor.user_id,
+    )
 
 
 @settings_router.get("", response_model=GymSettingsOut)

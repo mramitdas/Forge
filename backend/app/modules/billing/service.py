@@ -43,7 +43,7 @@ async def _next_invoice_number(session: AsyncSession, tenant_id: uuid.UUID, now:
 
 
 async def create_invoice_for_subscription(
-    session: AsyncSession, sub: Subscription, *, entry_fee_minor: int = 0
+    session: AsyncSession, sub: Subscription, *, entry_fee_minor: int = 0, tax_rate_bp: int = 0
 ) -> Invoice:
     now = datetime.now(UTC)
     subtotal = sub.price_minor + entry_fee_minor
@@ -70,7 +70,7 @@ async def create_invoice_for_subscription(
             description="Membership subscription",
             quantity=1,
             unit_price_minor=sub.price_minor,
-            tax_rate_bp=0,
+            tax_rate_bp=tax_rate_bp,
             amount_minor=sub.price_minor,
             kind="membership",
         )
@@ -82,7 +82,7 @@ async def create_invoice_for_subscription(
                 description="Entry fee",
                 quantity=1,
                 unit_price_minor=entry_fee_minor,
-                tax_rate_bp=0,
+                tax_rate_bp=tax_rate_bp,
                 amount_minor=entry_fee_minor,
                 kind="entry_fee",
             )
@@ -90,7 +90,10 @@ async def create_invoice_for_subscription(
     for line in invoice.lines:
         session.add(line)
     invoice.subtotal_minor = sum(line.amount_minor for line in invoice.lines)
-    invoice.total_minor = invoice.subtotal_minor  # taxes applied at capture in this scaffold
+    invoice.tax_minor = sum(
+        _compute_tax(line.amount_minor, line.tax_rate_bp) for line in invoice.lines
+    )
+    invoice.total_minor = invoice.subtotal_minor + invoice.tax_minor
     await session.flush()
     return invoice
 
@@ -223,3 +226,32 @@ async def capture_payment(
             },
         )
     return payment, await get_invoice(session, invoice.id), False
+
+
+async def void_invoice(
+    session: AsyncSession, *, tenant_id: uuid.UUID, invoice_id: uuid.UUID
+) -> Invoice:
+    invoice = await get_invoice(session, invoice_id)
+    if invoice.tenant_id != tenant_id:
+        raise NotFoundError("Invoice not found", code="NOT_FOUND")
+    if invoice.status == "paid":
+        raise ConflictError(
+            "Paid invoices cannot be voided; issue a refund instead",
+            code="INVOICE_PAID",
+        )
+    if invoice.status == "void":
+        raise ConflictError("Invoice is already void", code="INVALID_STATE")
+    invoice.status = "void"
+    await bus.emit(
+        session,
+        tenant_id=tenant_id,
+        aggregate_type="invoice",
+        aggregate_id=invoice.id,
+        event_type="billing.invoice.voided",
+        payload={
+            "invoice_id": str(invoice.id),
+            "member_id": str(invoice.member_id),
+            "number": invoice.number,
+        },
+    )
+    return invoice

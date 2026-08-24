@@ -20,6 +20,25 @@ import { TableSkeleton } from "@/components/skeletons";
 import { type Member } from "@/lib/mock";
 import { byId, useBranches, useCreateMember, useMembersPage, usePlans, useSubscribe, useActivateSubscription } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { COUNTRY_CODES } from "@/lib/countries";
+
+function CountryCodeSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value)}>
+      {COUNTRY_CODES.map((c) => (
+        <option key={c.dial} value={c.dial}>
+          {c.dial} · {c.iso} · {c.name}
+        </option>
+      ))}
+    </Select>
+  );
+}
 
 const filters = ["All", "active", "paused", "expired", "lead"] as const;
 const statusParam: Record<(typeof filters)[number], string | undefined> = {
@@ -62,6 +81,7 @@ export default function MembersPage() {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    countryCode: "+91",
     phone: "",
     gender: "Male",
     branchId: "",
@@ -81,6 +101,7 @@ export default function MembersPage() {
         last_name: nameParts.slice(1).join(" ") || undefined,
         email: form.email || undefined,
         phone: form.phone || undefined,
+        country_code: form.countryCode || undefined,
         gender: form.gender,
         branch_id: form.branchId,
         status: "lead",
@@ -95,7 +116,7 @@ export default function MembersPage() {
       }
       setOpen(false);
       setToast(`${form.name.trim()} added as lead`);
-      setForm({ name: "", email: "", phone: "", gender: "Male", branchId: form.branchId, planId: "" });
+      setForm({ name: "", email: "", countryCode: "+91", phone: "", gender: "Male", branchId: form.branchId, planId: "" });
     } catch {
       setToast("Failed to add member");
     } finally {
@@ -112,7 +133,10 @@ export default function MembersPage() {
           </Count>
         </p>
         {can("members.create") && (
-          <Button onClick={() => setOpen(true)}>
+          <Button onClick={() => {
+            setForm((f) => ({ ...f, branchId: f.branchId || branches[0]?.id || "" }));
+            setOpen(true);
+          }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
               <path d="M12 5v14M5 12h14" strokeLinecap="round" />
             </svg>
@@ -264,18 +288,24 @@ export default function MembersPage() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </Field>
+          <Field label="Email">
+            <Input
+              type="email"
+              placeholder="aisha@example.com"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Email">
-              <Input
-                type="email"
-                placeholder="aisha@example.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+            <Field label="Country code">
+              <CountryCodeSelect
+                value={form.countryCode}
+                onChange={(v) => setForm({ ...form, countryCode: v })}
               />
             </Field>
-            <Field label="Phone">
+            <Field label="Phone number">
               <Input
-                placeholder="+91 90000 00000"
+                placeholder="90000 00000"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
@@ -284,9 +314,11 @@ export default function MembersPage() {
           <div className="grid grid-cols-2 gap-4">
             <Field label="Branch">
               <Select
+                required
                 value={form.branchId}
                 onChange={(e) => setForm({ ...form, branchId: e.target.value })}
               >
+                {branches.length === 0 && <option value="">No branches — add one first</option>}
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   Badge,
@@ -42,6 +43,17 @@ const methods = [
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
         <path d="M4 11h16l-8-7-8 7zM5 11v6h4v-6M10 11v6h4v-6M15 11v6h4v-6M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    id: "cash",
+    label: "Cash",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+        <rect x="2.5" y="6" width="19" height="12" rx="2" />
+        <circle cx="12" cy="12" r="2.5" />
+        <path d="M6.5 9.5h.01M17.5 14.5h.01" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -148,9 +160,11 @@ export default function BillingPage() {
             </thead>
             <tbody>
               {invoices.map((i) => (
-                <tr key={i.id} className="border-b border-line last:border-0 hover:bg-accent-soft/40 transition-colors">
+                <tr key={i.id} className="group border-b border-line last:border-0 hover:bg-accent-soft/40 transition-colors">
                   <td className="px-5 py-3">
-                    <p className="font-medium">{i.number}</p>
+                    <Link href={`/billing/${i.id}`} className="font-medium text-accent hover:underline">
+                      {i.number}
+                    </Link>
                     <p className="text-[12px] text-ink-faint">{i.lines[0]?.description}</p>
                   </td>
                   <td className="px-4 py-3 text-ink-soft">{memberName(i.memberId)}</td>

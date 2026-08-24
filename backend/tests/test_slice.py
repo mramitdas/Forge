@@ -8,11 +8,13 @@ def _headers(token: str) -> dict:
 
 
 async def _branch_id(client, token: str) -> str:
-    response = await client.get("/api/v1/branches", headers=_headers(token))
-    assert response.status_code == 200, response.text
-    branches = response.json()
-    assert len(branches) == 1
-    return branches[0]["id"]
+    response = await client.post(
+        "/api/v1/branches",
+        headers=_headers(token),
+        json={"name": "Test Branch", "code": "TB", "timezone": "Asia/Kolkata"},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
 
 
 async def _create_plan(client, token: str, slug: str) -> dict:
@@ -93,7 +95,7 @@ async def test_full_slice_member_to_checkin(client, gym_a):
     invoice = next(i for i in invoices.json() if i["member_id"] == member["id"])
     assert invoice["status"] == "open"
     assert invoice["number"].startswith("INV-")
-    assert invoice["total_minor"] == 130000  # 120000 + 10000 entry fee
+    assert invoice["total_minor"] == 153400  # (120000 + 10000) + 18% GST
 
     # Pay the invoice (MockGateway succeeds) with idempotency.
     pay = await client.post(

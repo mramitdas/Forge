@@ -90,6 +90,8 @@ export function toUiPlan(p: PlanOut): Plan {
     description: p.description ?? `${p.name} membership.`,
     durationMonths: p.duration_months,
     autoRenew: p.auto_renew,
+    isActive: p.is_active,
+    branchId: p.branch_id,
     popular: p.auto_renew && p.billing_period === "monthly",
     perks,
   };
@@ -161,9 +163,12 @@ export function toUiMember(m: MemberOut, ctx: MemberCtx): Member {
     initials: initialsOf(m),
     email: m.email ?? "",
     phone: m.phone ?? "",
+    countryCode: m.country_code ?? "",
     gender: m.gender ?? "—",
     age: 0,
     status: mapMemberStatus(m.status),
+    isActive: m.is_active,
+    avatarPath: m.avatar_path ?? null,
     branchId: m.branch_id,
     planId: sub?.plan_id ?? "",
     joinedAt: fmtListDate(m.joined_at ?? m.created_at),
@@ -200,6 +205,8 @@ export function toUiSubscription(s: SubscriptionOut): Subscription {
     status: mapSubStatus(s.status),
     startAt: fmtListDate(s.start_at),
     endAt: s.end_at ? fmtListDate(s.end_at) : "—",
+    startAtIso: s.start_at,
+    endAtIso: s.end_at ?? null,
     price: s.price_minor,
     currency: s.currency,
   };
@@ -222,6 +229,7 @@ export function toUiInvoice(i: InvoiceOut): Invoice {
   const now = Date.now();
   let status: Invoice["status"];
   if (i.status === "paid") status = "paid";
+  else if (i.status === "void") status = "void";
   else if (i.status === "open" && new Date(i.due_date).getTime() < now) status = "overdue";
   else status = "open";
   return {
@@ -300,10 +308,20 @@ export function toUiTimeline(t: MemberTimelineOut): TimelineEntry {
   if (typeof payload.plan_name === "string") detail = `Plan: ${payload.plan_name}`;
   else if (typeof payload.amount_minor === "number") detail = inr(payload.amount_minor);
   else if (typeof payload.status === "string") detail = `Status: ${payload.status}`;
+  const actor = typeof payload.actor_name === "string" ? payload.actor_name : null;
+  let who = "";
+  if (t.action === "member.updated" && Array.isArray(payload.fields)) {
+    const labels = (payload.fields as string[]).map(
+      (f) => f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    );
+    who = `Updated by ${actor ?? "unknown"} — changed: ${labels.join(", ")}`;
+  } else if (actor) {
+    who = `By ${actor}`;
+  }
   return {
     id: t.id,
     action: prettifyAction(t.action),
-    detail,
+    detail: who || detail,
     time: relativeTime(t.created_at),
   };
 }
@@ -315,8 +333,11 @@ export function toUiBranch(b: BranchOut, memberCount: number): Branch {
     code: b.code ?? "",
     address: b.address ?? "—",
     phone: b.phone ?? "—",
+    country_code: b.country_code ?? "",
+    gst_number: b.gst_number ?? "",
     timezone: b.timezone,
     members: memberCount,
+    is_active: b.is_active,
     open: "05:00",
     close: "23:00",
   };

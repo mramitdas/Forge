@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, EmptyState, Switch, Toast } from "@/components/ui";
 import { Async } from "@/components/skeleton";
 import { RoleCardSkeleton } from "@/components/skeletons";
@@ -22,8 +22,26 @@ export default function RolesPage() {
   const { permissions, isLoading: permsLoading, isError: permsError } = usePermissionCatalog();
   const updateRole = useUpdateRole();
   const [draft, setDraft] = useState<Record<string, Set<string>>>({});
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const initializedRef = useRef(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!initializedRef.current && roles.length > 0) {
+      initializedRef.current = true;
+      setCollapsed(new Set(roles.map((r) => r.id)));
+    }
+  }, [roles]);
+
+  function toggleCollapsed(roleId: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  }
 
   const isLoading = rolesLoading || permsLoading;
   const isError = rolesError || permsError;
@@ -75,39 +93,64 @@ export default function RolesPage() {
       </p>
 
       <Async loading={isLoading} error={isError} skeleton={<RoleCardSkeleton count={3} />}>
+        <div className="space-y-4">
         {roles.map((role) => {
         const base = role.permission_codes;
         const dirty = isDirty(role.id, base);
         const current = draft[role.id] ?? new Set(base);
         return (
           <Card key={role.id} className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-line bg-fill px-5 py-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-[15px] font-semibold tracking-tight">{role.name}</h3>
-                  {!role.is_editable && (
-                    <Badge tone="gray">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <rect x="5" y="11" width="14" height="9" rx="2" />
-                        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                      </svg>
-                      Locked
-                    </Badge>
-                  )}
+            <button
+              type="button"
+              onClick={() => toggleCollapsed(role.id)}
+              className="flex w-full items-center justify-between gap-3 border-b border-line bg-fill px-5 py-4 text-left transition-colors hover:bg-fill-strong"
+            >
+              <div className="flex items-center gap-2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  className={`shrink-0 text-ink-faint transition-transform duration-200 ${
+                    collapsed.has(role.id) ? "-rotate-90" : ""
+                  }`}
+                >
+                  <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[15px] font-semibold tracking-tight">{role.name}</h3>
+                    {!role.is_editable && (
+                      <Badge tone="gray">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <rect x="5" y="11" width="14" height="9" rx="2" />
+                          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                        </svg>
+                        Locked
+                      </Badge>
+                    )}
+                  </div>
+                  {role.description && <p className="text-[12px] text-ink-faint">{role.description}</p>}
                 </div>
-                {role.description && <p className="text-[12px] text-ink-faint">{role.description}</p>}
               </div>
-              {role.is_editable && dirty && (
-                <Button size="sm" disabled={saving === role.id} onClick={() => save(role.id, role.name)}>
-                  {saving === role.id ? "Saving…" : `Save (${current.size} perms)`}
-                </Button>
-              )}
-              {role.is_editable && !dirty && (
-                <span className="text-[12px] text-ink-faint">{current.size} permissions</span>
-              )}
-            </div>
+              <span
+                onClick={(e) => e.stopPropagation()}
+                className="shrink-0"
+              >
+                {role.is_editable && dirty && (
+                  <Button size="sm" disabled={saving === role.id} onClick={() => save(role.id, role.name)}>
+                    {saving === role.id ? "Saving…" : `Save (${current.size} perms)`}
+                  </Button>
+                )}
+                {role.is_editable && !dirty && (
+                  <span className="text-[12px] text-ink-faint">{current.size} permissions</span>
+                )}
+              </span>
+            </button>
 
-            {role.is_editable ? (
+            {!collapsed.has(role.id) && (role.is_editable ? (
               <div className="divide-y divide-line">
                 {Object.entries(byModule).map(([module, perms]) => (
                   <div key={module} className="px-5 py-4">
@@ -152,10 +195,11 @@ export default function RolesPage() {
                   hint="This role is fixed and cannot be overridden."
                 />
               </div>
-            )}
+            ))}
           </Card>
         );
       })}
+        </div>
       </Async>
 
       {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}

@@ -18,7 +18,7 @@ async def test_login_and_me(client, gym_a):
     assert me["is_platform"] is False
     assert "members.create" in me["permissions"]
     assert "billing.payments.capture" in me["permissions"]
-    assert len(me["branches"]) == 1
+    assert me["branches"] == []
 
 
 async def test_refresh_rotation_revokes_reuse(client, gym_a):

@@ -107,6 +107,123 @@ export function usePlans(): { plans: Plan[]; isLoading: boolean; isError: boolea
   );
 }
 
+export function useCreatePlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      slug: string;
+      branch_id?: string | null;
+      description?: string;
+      billing_period: string;
+      amount_minor: number;
+      entry_fee_minor?: number;
+      tax_rate_bp?: number;
+      duration_months?: number | null;
+      auto_renew?: boolean;
+    }) => apiFetch<PlanOut>("/plans", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plans"] });
+    },
+  });
+}
+
+export function useUpdatePlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      planId: string;
+      body: {
+        name?: string;
+        branch_id?: string | null;
+        description?: string;
+        billing_period?: string;
+        amount_minor?: number;
+        entry_fee_minor?: number;
+        tax_rate_bp?: number;
+        duration_months?: number | null;
+        auto_renew?: boolean;
+        is_active?: boolean;
+      };
+    }) =>
+      apiFetch<PlanOut>(`/plans/${args.planId}`, {
+        method: "PATCH",
+        body: JSON.stringify(args.body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plans"] });
+    },
+  });
+}
+
+export function useDeletePlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: string) =>
+      apiFetch<void>(`/plans/${planId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plans"] });
+    },
+  });
+}
+
+export function useCreateBranch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      code?: string;
+      address?: string;
+      phone?: string;
+      country_code?: string;
+      gst_number?: string;
+      timezone?: string;
+    }) => apiFetch<BranchOut>("/branches", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+    },
+  });
+}
+
+export function useUpdateBranch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      branchId: string;
+      body: {
+        name?: string;
+        code?: string;
+        address?: string;
+        phone?: string;
+        country_code?: string;
+        gst_number?: string;
+        timezone?: string;
+        is_active?: boolean;
+      };
+    }) =>
+      apiFetch<BranchOut>(`/branches/${args.branchId}`, {
+        method: "PATCH",
+        body: JSON.stringify(args.body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+      qc.invalidateQueries({ queryKey: ["members"] });
+    },
+  });
+}
+
+export function useDeleteBranch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (branchId: string) =>
+      apiFetch<void>(`/branches/${branchId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+      qc.invalidateQueries({ queryKey: ["members"] });
+    },
+  });
+}
+
 export function useMemberCtx(): {
   ctx: MemberCtx;
   members: MemberOut[];
@@ -186,6 +303,64 @@ export function useMembersPage(params: MembersPageParams): {
       isError: q.isError || ctxQ.isError,
     };
   }, [q.data, q.isLoading, q.isError, ctxQ.ctx, ctxQ.isError]);
+}
+
+export function useUpdateMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      memberId: string;
+      body: {
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+        phone?: string;
+        country_code?: string;
+        gender?: string;
+        status?: string;
+        is_active?: boolean;
+      };
+    }) =>
+      apiFetch<MemberOut>(`/members/${args.memberId}`, {
+        method: "PATCH",
+        body: JSON.stringify(args.body),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["members"] });
+      qc.invalidateQueries({ queryKey: ["member", vars.memberId] });
+      qc.invalidateQueries({ queryKey: ["checkins"] });
+    },
+  });
+}
+
+export function useDeleteMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) =>
+      apiFetch<void>(`/members/${memberId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["members"] });
+      qc.invalidateQueries({ queryKey: ["branches"] });
+    },
+  });
+}
+
+export function useUploadAvatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { memberId: string; file: File }) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      return apiFetch<{ avatar_path: string | null }>(
+        `/members/${args.memberId}/avatar`,
+        { method: "PUT", body: form },
+      );
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["members"] });
+      qc.invalidateQueries({ queryKey: ["member", vars.memberId] });
+    },
+  });
 }
 
 export function useMemberDetail(id: string): {
@@ -296,6 +471,22 @@ export function useInvoicesData(): { invoices: Invoice[]; isLoading: boolean; is
   );
 }
 
+export function useInvoiceDetail(id: string): {
+  invoice: Invoice | null;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const q = useQuery({
+    queryKey: ["invoice", id],
+    queryFn: () => apiFetch<InvoiceOut>(`/invoices/${id}`),
+    enabled: !!id,
+  });
+  return useMemo(
+    () => ({ invoice: q.data ? toUiInvoice(q.data) : null, isLoading: q.isLoading, isError: q.isError }),
+    [q.data, q.isLoading, q.isError],
+  );
+}
+
 export function useNotificationsData(): {
   notifications: Notification[];
   unread: number;
@@ -333,6 +524,7 @@ export function useCreateMember() {
       last_name?: string;
       email?: string;
       phone?: string;
+      country_code?: string;
       gender?: string;
       branch_id: string;
       status?: string;
@@ -379,6 +571,40 @@ export function useActivateSubscription() {
   });
 }
 
+export function useRenewSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; start_at?: string }) =>
+      apiFetch<SubscriptionOut>(`/plans/subscriptions/${args.id}/renew`, {
+        method: "POST",
+        body: JSON.stringify({ start_at: args.start_at ?? null }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscriptions"] });
+      qc.invalidateQueries({ queryKey: ["members"] });
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["member"] });
+    },
+  });
+}
+
+export function useUpgradeSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { subscriptionId: string; planId: string }) =>
+      apiFetch<SubscriptionOut>(`/plans/subscriptions/${args.subscriptionId}/upgrade`, {
+        method: "POST",
+        body: JSON.stringify({ plan_id: args.planId }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscriptions"] });
+      qc.invalidateQueries({ queryKey: ["members"] });
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["member"] });
+    },
+  });
+}
+
 export function usePayInvoice() {
   const qc = useQueryClient();
   return useMutation({
@@ -390,6 +616,17 @@ export function usePayInvoice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+export function useVoidInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (invoiceId: string) =>
+      apiFetch<InvoiceOut>(`/invoices/${invoiceId}/void`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
     },
   });
 }

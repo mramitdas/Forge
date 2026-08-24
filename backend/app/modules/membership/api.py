@@ -4,6 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import Actor, get_session_for_actor, require_permission
@@ -11,6 +12,8 @@ from app.modules.membership import service as membership_svc
 from app.modules.membership.schemas import (
     PlanCreate,
     PlanOut,
+    PlanUpdate,
+    RenewBody,
     SubscriptionCreate,
     SubscriptionOut,
 )
@@ -29,6 +32,7 @@ async def create_plan(
         tenant_id=actor.tenant_id,
         name=body.name,
         slug=body.slug,
+        branch_id=body.branch_id,
         description=body.description,
         billing_period=body.billing_period,
         amount_minor=body.amount_minor,
@@ -44,9 +48,37 @@ async def create_plan(
 async def list_plans(
     actor: Annotated[Actor, Depends(require_permission("membership.plans.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+    branch_id: uuid.UUID | None = None,
 ) -> list[PlanOut]:
-    plans = await membership_svc.list_plans(session, tenant_id=actor.tenant_id)
+    plans = await membership_svc.list_plans(
+        session, tenant_id=actor.tenant_id, branch_id=branch_id
+    )
     return [PlanOut.model_validate(p) for p in plans]
+
+
+@router.patch("/{plan_id}", response_model=PlanOut)
+async def update_plan(
+    plan_id: uuid.UUID,
+    body: PlanUpdate,
+    actor: Annotated[Actor, Depends(require_permission("membership.plans.update"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> PlanOut:
+    data = body.model_dump(exclude_unset=True)
+    plan = await membership_svc.update_plan(
+        session, tenant_id=actor.tenant_id, plan_id=plan_id, data=data
+    )
+    return PlanOut.model_validate(plan)
+
+
+@router.delete("/{plan_id}", status_code=204)
+async def remove_plan(
+    plan_id: uuid.UUID,
+    actor: Annotated[Actor, Depends(require_permission("membership.plans.delete"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> None:
+    await membership_svc.delete_plan(
+        session, tenant_id=actor.tenant_id, plan_id=plan_id
+    )
 
 
 @router.post("/subscribe", response_model=SubscriptionOut, status_code=201)
@@ -85,4 +117,34 @@ async def activate(
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> SubscriptionOut:
     sub = await membership_svc.activate_subscription(session, subscription_id)
+    return SubscriptionOut.model_validate(sub)
+
+
+@router.post("/subscriptions/{subscription_id}/renew", response_model=SubscriptionOut)
+async def renew(
+    subscription_id: uuid.UUID,
+    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.activate"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+    body: RenewBody | None = None,
+) -> SubscriptionOut:
+    sub = await membership_svc.renew_subscription(
+        session, subscription_id, start_at=body.start_at if body else None
+    )
+    return SubscriptionOut.model_validate(sub)
+
+
+class UpgradeBody(BaseModel):
+    plan_id: uuid.UUID
+
+
+@router.post("/subscriptions/{subscription_id}/upgrade", response_model=SubscriptionOut)
+async def upgrade(
+    subscription_id: uuid.UUID,
+    body: UpgradeBody,
+    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.activate"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> SubscriptionOut:
+    sub = await membership_svc.upgrade_subscription(
+        session, subscription_id, body.plan_id
+    )
     return SubscriptionOut.model_validate(sub)
