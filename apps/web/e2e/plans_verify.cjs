@@ -37,17 +37,29 @@ async function main() {
     await page.getByRole("button", { name: /new plan/i }).click();
     const createForm = page.locator("form").last();
     await createForm.locator("input").first().fill(PLAN_NAME);
-    await createForm.locator("input").nth(1).fill(PLAN_SLUG);
+    // Leave slug blank → should auto-generate from name (no branch → name only).
     await createForm.locator('input[placeholder*="150000"]').fill("125000");
     await createForm.locator('input[placeholder="0"]').fill("5000");
     await createForm.getByRole("button", { name: /create plan/i }).click();
     await page.getByText(PLAN_NAME, { exact: true }).waitFor({ timeout: 15000 });
     check("plan created and visible", true);
 
+    // Auto-generated slug = slugified plan name.
+    const autoSlug = PLAN_NAME.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     const planCard = (name) => page.locator("div.glass", { hasText: name }).last();
     const card = planCard(PLAN_NAME);
     await card.getByText("All branches", { exact: true }).first().waitFor({ timeout: 10000 });
     check("common plan shows All branches scope", true);
+
+    // Duplicate slug → detailed error, not a generic one.
+    await page.getByRole("button", { name: /new plan/i }).click();
+    const dupForm = page.locator("form").last();
+    await dupForm.locator("input").first().fill(`${PLAN_NAME} dup`);
+    await dupForm.locator("input").nth(1).fill(autoSlug);
+    await dupForm.getByRole("button", { name: /create plan/i }).click();
+    await page.getByText(/slug already exists/i).waitFor({ timeout: 10000 });
+    check("duplicate slug shows detailed error", true);
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
     // ── Disable / enable ──
     await card.getByRole("button", { name: "Disable" }).click();

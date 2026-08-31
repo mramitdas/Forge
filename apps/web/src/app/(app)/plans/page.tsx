@@ -33,22 +33,22 @@ const periodLabel: Record<string, string> = {
   yearly: "per year",
 };
 
-const periodValue: Record<string, string> = {
-  monthly: "monthly",
-  quarterly: "quarterly",
-  yearly: "annual",
-};
+const DURATIONS = [
+  { months: 1, period: "monthly", label: "1 month" },
+  { months: 3, period: "quarterly", label: "3 months" },
+  { months: 6, period: "quarterly", label: "6 months" },
+  { months: 12, period: "annual", label: "12 months" },
+];
 
 const emptyForm = {
   name: "",
   slug: "",
   branchId: "",
   description: "",
-  billingPeriod: "monthly",
+  durationMonths: "1",
   amountMinor: "0",
   entryFeeMinor: "0",
-  taxRateBp: "1800",
-  durationMonths: "",
+  taxPercent: "18",
   autoRenew: true,
 };
 
@@ -58,6 +58,22 @@ function slugify(s: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function autoSlug(name: string, branchName: string): string {
+  const base = slugify(name);
+  return branchName ? `${base}-${slugify(branchName)}` : base;
+}
+
+function planError(err: unknown, action: "create" | "update"): string {
+  const d = (err as { detail?: { message?: string } })?.detail;
+  if (typeof d?.message === "string" && d.message) return d.message;
+  return `Could not ${action === "create" ? "create" : "update"} plan`;
+}
+
+function durationFor(months: string): { months: number; period: string } {
+  const found = DURATIONS.find((d) => String(d.months) === months);
+  return found ? { months: found.months, period: found.period } : { months: 1, period: "monthly" };
 }
 
 export default function PlansPage() {
@@ -119,24 +135,25 @@ export default function PlansPage() {
 
   async function addPlan(e: React.FormEvent) {
     e.preventDefault();
+    const dur = durationFor(planForm.durationMonths);
     try {
       await createPlan.mutateAsync({
         name: planForm.name,
-        slug: planForm.slug || slugify(planForm.name),
+        slug: planForm.slug || autoSlug(planForm.name, planForm.branchId ? branchName(planForm.branchId) : ""),
         branch_id: planForm.branchId || null,
         description: planForm.description || undefined,
-        billing_period: periodValue[planForm.billingPeriod],
+        billing_period: dur.period,
         amount_minor: Number(planForm.amountMinor),
         entry_fee_minor: Number(planForm.entryFeeMinor),
-        tax_rate_bp: Number(planForm.taxRateBp),
-        duration_months: planForm.durationMonths ? Number(planForm.durationMonths) : null,
+        tax_rate_bp: Math.round(Number(planForm.taxPercent) * 100),
+        duration_months: dur.months,
         auto_renew: planForm.autoRenew,
       });
       setCreateOpen(false);
       setPlanForm(emptyForm);
       setToast("Plan created");
-    } catch {
-      setToast("Could not create plan");
+    } catch (err) {
+      setToast(planError(err, "create"));
     }
   }
 
@@ -147,11 +164,10 @@ export default function PlansPage() {
       slug: "",
       branchId: p.branchId ?? "",
       description: p.description,
-      billingPeriod: p.period,
+      durationMonths: p.durationMonths ? String(p.durationMonths) : "1",
       amountMinor: String(p.price),
       entryFeeMinor: String(p.entryFee),
-      taxRateBp: String(p.taxBp),
-      durationMonths: p.durationMonths ? String(p.durationMonths) : "",
+      taxPercent: String(p.taxBp / 100),
       autoRenew: p.autoRenew,
     });
   }
@@ -159,6 +175,7 @@ export default function PlansPage() {
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
+    const dur = durationFor(editForm.durationMonths);
     try {
       await updatePlan.mutateAsync({
         planId: editing.id,
@@ -166,18 +183,18 @@ export default function PlansPage() {
           name: editForm.name,
           branch_id: editForm.branchId || null,
           description: editForm.description || undefined,
-          billing_period: periodValue[editForm.billingPeriod],
+          billing_period: dur.period,
           amount_minor: Number(editForm.amountMinor),
           entry_fee_minor: Number(editForm.entryFeeMinor),
-          tax_rate_bp: Number(editForm.taxRateBp),
-          duration_months: editForm.durationMonths ? Number(editForm.durationMonths) : null,
+          tax_rate_bp: Math.round(Number(editForm.taxPercent) * 100),
+          duration_months: dur.months,
           auto_renew: editForm.autoRenew,
         },
       });
       setEditing(null);
       setToast("Plan updated");
-    } catch {
-      setToast("Could not update plan");
+    } catch (err) {
+      setToast(planError(err, "update"));
     }
   }
 
@@ -428,7 +445,7 @@ export default function PlansPage() {
             </Field>
             <Field label="Slug">
               <Input
-                placeholder={planForm.name ? slugify(planForm.name) : "auto-generated"}
+                placeholder={planForm.name ? autoSlug(planForm.name, planForm.branchId ? branchName(planForm.branchId) : "") : "auto-generated"}
                 value={planForm.slug}
                 onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })}
               />
@@ -453,27 +470,16 @@ export default function PlansPage() {
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Billing period">
+            <Field label="Duration">
               <Select
-                value={planForm.billingPeriod}
-                onChange={(e) => setPlanForm({ ...planForm, billingPeriod: e.target.value })}
-              >
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="yearly">Annual</option>
-              </Select>
-            </Field>
-            <Field label="Duration (months)">
-              <Input
-                type="number"
-                min="1"
-                placeholder="e.g. 1"
                 value={planForm.durationMonths}
                 onChange={(e) => setPlanForm({ ...planForm, durationMonths: e.target.value })}
-              />
+              >
+                {DURATIONS.map((d) => (
+                  <option key={d.months} value={String(d.months)}>{d.label}</option>
+                ))}
+              </Select>
             </Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Price (₹, paise)">
               <Input
                 type="number"
@@ -484,6 +490,8 @@ export default function PlansPage() {
                 onChange={(e) => setPlanForm({ ...planForm, amountMinor: e.target.value })}
               />
             </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Entry fee (₹, paise)">
               <Input
                 type="number"
@@ -493,26 +501,17 @@ export default function PlansPage() {
                 onChange={(e) => setPlanForm({ ...planForm, entryFeeMinor: e.target.value })}
               />
             </Field>
-            <Field label="Tax (bp)">
+            <Field label="Tax (%)">
               <Input
                 type="number"
                 min="0"
-                max="10000"
-                placeholder="1800"
-                value={planForm.taxRateBp}
-                onChange={(e) => setPlanForm({ ...planForm, taxRateBp: e.target.value })}
+                max="100"
+                placeholder="e.g. 18"
+                value={planForm.taxPercent}
+                onChange={(e) => setPlanForm({ ...planForm, taxPercent: e.target.value })}
               />
             </Field>
           </div>
-          <label className="flex items-center gap-2 text-[13px] text-ink-soft">
-            <input
-              type="checkbox"
-              checked={planForm.autoRenew}
-              onChange={(e) => setPlanForm({ ...planForm, autoRenew: e.target.checked })}
-              className="h-4 w-4 rounded border-line accent-accent"
-            />
-            Auto-renew
-          </label>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={createPlan.isPending}>
@@ -532,14 +531,14 @@ export default function PlansPage() {
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
               />
             </Field>
-            <Field label="Billing period">
+            <Field label="Duration">
               <Select
-                value={editForm.billingPeriod}
-                onChange={(e) => setEditForm({ ...editForm, billingPeriod: e.target.value })}
+                value={editForm.durationMonths}
+                onChange={(e) => setEditForm({ ...editForm, durationMonths: e.target.value })}
               >
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="yearly">Annual</option>
+                {DURATIONS.map((d) => (
+                  <option key={d.months} value={String(d.months)}>{d.label}</option>
+                ))}
               </Select>
             </Field>
           </div>
@@ -561,14 +560,6 @@ export default function PlansPage() {
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Duration (months)">
-              <Input
-                type="number"
-                min="1"
-                value={editForm.durationMonths}
-                onChange={(e) => setEditForm({ ...editForm, durationMonths: e.target.value })}
-              />
-            </Field>
             <Field label="Price (₹, paise)">
               <Input
                 type="number"
@@ -578,8 +569,6 @@ export default function PlansPage() {
                 onChange={(e) => setEditForm({ ...editForm, amountMinor: e.target.value })}
               />
             </Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Entry fee (₹, paise)">
               <Input
                 type="number"
@@ -588,27 +577,16 @@ export default function PlansPage() {
                 onChange={(e) => setEditForm({ ...editForm, entryFeeMinor: e.target.value })}
               />
             </Field>
-            <Field label="Tax (bp)">
-              <Input
-                type="number"
-                min="0"
-                max="10000"
-                value={editForm.taxRateBp}
-                onChange={(e) => setEditForm({ ...editForm, taxRateBp: e.target.value })}
-              />
-            </Field>
-            <div className="flex items-end pb-1">
-              <label className="flex items-center gap-2 text-[13px] text-ink-soft">
-                <input
-                  type="checkbox"
-                  checked={editForm.autoRenew}
-                  onChange={(e) => setEditForm({ ...editForm, autoRenew: e.target.checked })}
-                  className="h-4 w-4 rounded border-line accent-accent"
-                />
-                Auto-renew
-              </label>
-            </div>
           </div>
+          <Field label="Tax (%)">
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              value={editForm.taxPercent}
+              onChange={(e) => setEditForm({ ...editForm, taxPercent: e.target.value })}
+            />
+          </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
             <Button type="submit" disabled={updatePlan.isPending}>
