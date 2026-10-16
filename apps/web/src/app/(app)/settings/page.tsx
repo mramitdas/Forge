@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { Badge, Button, Card, Field, Input, SectionTitle, Switch, Toast } from "@/components/ui";
+import { useEffect, useRef, useState } from "react";
+import { Badge, Button, Card, Field, Input, SectionTitle, Select, Switch, Toast } from "@/components/ui";
 import { Async } from "@/components/skeleton";
 import { SettingsBranchSkeleton } from "@/components/skeletons";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCan } from "@/lib/permissions";
 import { useGymSettings, useUpdateGymSettings, useUpdateMe } from "@/lib/hooks";
+import { TIMEZONES } from "@/lib/timezones";
 
 function prettifyPermission(p: string): string {
   return p
@@ -30,6 +31,17 @@ export default function SettingsPage() {
   const can = useCan();
   const { settings: gymSettings, isLoading: settingsLoading, isError: settingsError } = useGymSettings();
   const updateGymSettings = useUpdateGymSettings();
+  const [gymName, setGymName] = useState("");
+  const [gymTimezone, setGymTimezone] = useState("Asia/Kolkata");
+  const settingsSeededRef = useRef(false);
+
+  useEffect(() => {
+    if (gymSettings && !settingsSeededRef.current) {
+      settingsSeededRef.current = true;
+      setGymName(gymSettings.name);
+      setGymTimezone(gymSettings.timezone);
+    }
+  }, [gymSettings]);
 
   async function saveProfile() {
     setSavingProfile(true);
@@ -64,6 +76,22 @@ export default function SettingsPage() {
       setToast(next ? "Members can now use any branch" : "Members restricted to their home branch");
     } catch {
       setToast("Could not update branch access");
+    }
+  }
+
+  async function saveGymProfile() {
+    try {
+      const updated = await updateGymSettings.mutateAsync({
+        name: gymName.trim(),
+        timezone: gymTimezone,
+      });
+      // Feed the PATCH response into the auth context (pattern from Task 2b) —
+      // the sidebar's tenant_name comes from `me`, and a plain refreshMe() GET
+      // would be an extra round trip with a partial-failure window.
+      if (me) await refreshMe({ ...me, tenant_name: updated.name });
+      setToast("Gym profile updated");
+    } catch {
+      setToast("Could not save gym profile");
     }
   }
 
@@ -126,26 +154,54 @@ export default function SettingsPage() {
           error={settingsError}
           skeleton={<SettingsBranchSkeleton />}
         >
-          <Card className="p-6">
-            <div className="flex items-start justify-between gap-6">
-              <div>
-                <SectionTitle
-                  title="Branch access"
-                  subtitle="Let members with an active membership train at any of your branches"
-                />
-                <p className="mt-2 text-[13px] text-ink-soft">
-                  When off, memberships are scoped to the branch they were purchased at and
-                  check-ins at other branches are denied.
-                </p>
-              </div>
-              <Switch
-                checked={gymSettings?.cross_branch_access ?? false}
-                onChange={toggleCrossBranch}
-                disabled={updateGymSettings.isPending}
-                label="Cross-branch access"
+          <div className="space-y-6">
+            <Card className="p-6">
+              <SectionTitle
+                title="Gym profile"
+                subtitle="Name and timezone shown across the workspace"
               />
-            </div>
-          </Card>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Gym name">
+                  <Input value={gymName} onChange={(e) => setGymName(e.target.value)} />
+                </Field>
+                <Field label="Timezone">
+                  <Select value={gymTimezone} onChange={(e) => setGymTimezone(e.target.value)}>
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz}>
+                        {tz}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button onClick={saveGymProfile} disabled={updateGymSettings.isPending}>
+                  {updateGymSettings.isPending ? "Saving…" : "Save gym profile"}
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-start justify-between gap-6">
+                <div>
+                  <SectionTitle
+                    title="Branch access"
+                    subtitle="Let members with an active membership train at any of your branches"
+                  />
+                  <p className="mt-2 text-[13px] text-ink-soft">
+                    When off, memberships are scoped to the branch they were purchased at and
+                    check-ins at other branches are denied.
+                  </p>
+                </div>
+                <Switch
+                  checked={gymSettings?.cross_branch_access ?? false}
+                  onChange={toggleCrossBranch}
+                  disabled={updateGymSettings.isPending}
+                  label="Cross-branch access"
+                />
+              </div>
+            </Card>
+          </div>
         </Async>
       )}
 

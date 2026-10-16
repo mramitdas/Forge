@@ -201,6 +201,40 @@ async function main() {
     await profileCard.getByRole("button", { name: "Save changes" }).click();
     await page.locator("aside").getByText(origName, { exact: true }).waitFor({ timeout: 15000 });
 
+    // ── Gym profile save persists (name + timezone) ──
+    const gymCard = page.locator("div.glass", { hasText: "Gym profile" }).first();
+    await gymCard.waitFor({ timeout: 15000 });
+    const gName = gymCard.locator("input").first();
+    const gTz = gymCard.locator("select").first();
+    const origGymName = await gName.inputValue();
+    const origTz = await gTz.inputValue();
+    await gName.fill(`${origGymName} E2E`);
+    await gTz.selectOption("Asia/Dubai");
+    await gymCard.getByRole("button", { name: /save gym profile/i }).click();
+    await page.getByText("Gym profile updated", { exact: true }).waitFor({ timeout: 10000 });
+    // Sidebar tenant name must refresh WITHOUT a reload — proves the save landed
+    // and refreshMe ran (adjust the locator to the actual sidebar element if its
+    // text isn't exactly the gym name).
+    await page.locator("aside").getByText(`${origGymName} E2E`, { exact: true }).waitFor({ timeout: 15000 });
+    check("settings: gym profile save refreshes sidebar tenant name", true);
+    await page.reload();
+    await settle(page);
+    const gymCard2 = page.locator("div.glass", { hasText: "Gym profile" }).first();
+    const persistedName = await gymCard2.locator("input").first().inputValue();
+    const persistedTz = await gymCard2.locator("select").first().inputValue();
+    check(
+      "settings: gym name + timezone persist after reload",
+      persistedName === `${origGymName} E2E` && persistedTz === "Asia/Dubai",
+      `${persistedName} / ${persistedTz}`,
+    );
+    await gymCard2.locator("input").first().fill(origGymName);
+    await gymCard2.locator("select").first().selectOption(origTz);
+    await gymCard2.getByRole("button", { name: /save gym profile/i }).click();
+    // Toast does NOT auto-dismiss — waiting for text here would match the stale
+    // pre-restore toast. Assert the restored name in the sidebar instead.
+    await page.locator("aside").getByText(origGymName, { exact: true }).waitFor({ timeout: 15000 });
+    check("settings: gym profile restored", true);
+
     // ── Notifications ──
     // Fixture: pay an open invoice (creates a server-side "Payment received"
     // notification for every tenant user). If none is open, mint one via a

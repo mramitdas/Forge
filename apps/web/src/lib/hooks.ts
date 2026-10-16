@@ -999,7 +999,11 @@ export function useGymSettings(): {
 export function useUpdateGymSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { cross_branch_access: boolean }) =>
+    mutationFn: (body: {
+      cross_branch_access?: boolean;
+      name?: string;
+      timezone?: string;
+    }) =>
       apiFetch<GymSettingsOut>("/settings", { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });
