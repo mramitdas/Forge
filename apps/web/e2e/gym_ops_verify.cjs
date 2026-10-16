@@ -110,6 +110,20 @@ async function main() {
     await ownerCard.getByText("Locked system role").waitFor({ timeout: 10000 });
     check("roles: Gym Owner shows Locked badge + locked empty state", true);
 
+    // The header's Save button only renders when a card has unsaved edits —
+    // make Receptionist dirty so the nested-button bug is observable.
+    const recvCard = page
+      .locator("div.glass", { has: page.getByRole("heading", { name: "Receptionist", exact: true }) })
+      .first();
+    await page.getByRole("heading", { name: "Receptionist", exact: true }).click();
+    await recvCard.getByRole("switch", { name: "reports.view" }).click();
+    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ timeout: 10000 });
+    const nestedButtons = await page.locator("button button").count();
+    check("roles: no nested <button> elements", nestedButtons === 0, `count=${nestedButtons}`);
+    // Revert the toggle without saving so the card is clean again.
+    await recvCard.getByRole("switch", { name: "reports.view" }).click();
+    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 10000 });
+
     // Create the custom role through the UI form.
     await page.getByRole("button", { name: /new role/i }).click();
     const roleModal = page.locator("div.fixed.inset-0"); // Modal root, unique while open

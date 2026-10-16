@@ -150,10 +150,17 @@ export default function RolesPage() {
         const current = draft[role.id] ?? new Set(base);
         return (
           <Card key={role.id} className="overflow-hidden">
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => toggleCollapsed(role.id)}
-              className="flex w-full items-center justify-between gap-3 border-b border-line bg-fill px-5 py-4 text-left transition-colors hover:bg-fill-strong"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleCollapsed(role.id);
+                }
+              }}
+              className="flex w-full cursor-pointer items-center justify-between gap-3 border-b border-line bg-fill px-5 py-4 text-left transition-colors hover:bg-fill-strong"
             >
               <div className="flex items-center gap-2">
                 <svg
@@ -198,7 +205,7 @@ export default function RolesPage() {
                   <span className="text-[12px] text-ink-faint">{current.size} permissions</span>
                 )}
               </span>
-            </button>
+            </div>
 
             {!collapsed.has(role.id) && (role.is_editable ? (
               <div className="divide-y divide-line">
