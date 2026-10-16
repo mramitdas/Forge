@@ -118,10 +118,20 @@ export interface TimelineEntry {
   time: string;
 }
 
-export function inr(n: number): string {
+export function inr(minor: number): string {
+  // Amounts arrive from the API in minor units (paise); divide before
+  // formatting so ₹1,50,000 doesn't stand in for ₹1,500.
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(n);
+  }).format(minor / 100);
+}
+
+export function money(minor: number, currency: string): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(minor / 100);
 }

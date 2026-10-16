@@ -111,19 +111,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="flex items-center justify-between text-[12px]">
-            <button type="button" className="text-ink-faint transition-colors hover:text-accent">
-              Forgot password?
-            </button>
-            <button type="button" className="text-ink-faint transition-colors hover:text-accent">
-              Use Touch ID
-            </button>
-          </div>
         </form>
-
-        <p className="mt-10 text-center text-[11px] text-ink-faint">
-          Demo build · sign in with any email and password
-        </p>
       </div>
     </main>
   );

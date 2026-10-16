@@ -3,6 +3,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { apiFetch } from "./api";
+import { useCan } from "./permissions";
 import {
   toUiBranch,
   toUiCheckin,
@@ -72,13 +73,16 @@ export function useBranches(): {
   isLoading: boolean;
   isError: boolean;
 } {
+  const can = useCan();
   const branchesQ = useQuery({
     queryKey: ["branches"],
     queryFn: () => apiFetch<BranchOut[]>("/branches"),
+    enabled: can("tenancy.branches.view"),
   });
   const membersQ = useQuery({
     queryKey: ["members", "all"],
     queryFn: () => fetchPaged<MemberOut>("/members"),
+    enabled: can("members.view"),
   });
 
   return useMemo(() => {
@@ -230,21 +234,26 @@ export function useMemberCtx(): {
   isLoading: boolean;
   isError: boolean;
 } {
+  const can = useCan();
   const membersQ = useQuery({
     queryKey: ["members", "all"],
     queryFn: () => fetchPaged<MemberOut>("/members"),
+    enabled: can("members.view"),
   });
   const subsQ = useQuery({
     queryKey: ["subscriptions"],
     queryFn: () => apiFetch<SubscriptionOut[]>("/plans/subscriptions"),
+    enabled: can("membership.subscriptions.view"),
   });
   const checkinsQ = useQuery({
     queryKey: ["checkins", "all"],
     queryFn: () => fetchPaged<CheckInOut>("/checkin"),
+    enabled: can("attendance.records.view"),
   });
   const invoicesQ = useQuery({
     queryKey: ["invoices"],
     queryFn: () => apiFetch<InvoiceOut[]>("/invoices"),
+    enabled: can("billing.invoices.view"),
   });
 
   return useMemo(
@@ -383,11 +392,12 @@ export function useMemberDetail(id: string): {
     enabled: !!id,
   });
   const ctxQ = useMemberCtx();
+  const can = useCan();
   const subsQ = useQuery({
     queryKey: ["subscriptions", id],
     queryFn: () =>
       apiFetch<SubscriptionOut[]>(`/plans/subscriptions?member_id=${id}`),
-    enabled: !!id,
+    enabled: !!id && can("membership.subscriptions.view"),
   });
   const timelineQ = useQuery({
     queryKey: ["member", id, "timeline"],
@@ -436,14 +446,17 @@ export function useSubscriptionsData(): {
 }
 
 export function useCheckins(): { items: CheckinRecord[]; isLoading: boolean; isError: boolean } {
+  const can = useCan();
   const q = useQuery({
     queryKey: ["checkins", "all"],
     queryFn: () => fetchPaged<CheckInOut>("/checkin"),
+    enabled: can("attendance.records.view"),
   });
   const ctxQ = useMemberCtx();
   const branchesQ = useQuery({
     queryKey: ["branches"],
     queryFn: () => apiFetch<BranchOut[]>("/branches"),
+    enabled: can("tenancy.branches.view"),
   });
 
   return useMemo(() => {

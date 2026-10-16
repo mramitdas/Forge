@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ConflictError, NotFoundError
 from app.kernel.events import bus
 from app.kernel.pagination import OffsetPagination
+from app.modules.attendance.models import CheckIn
+from app.modules.billing.models import Invoice, Payment
 from app.modules.members.models import MEMBER_STATUSES, Member, MemberTimeline
+from app.modules.membership.models import Subscription
 
 
 def _validate_status(status: str) -> str:
@@ -145,6 +148,29 @@ async def delete_member(
     member = await get_member(session, member_id)
     member.deleted_at = datetime.now()
     member.version += 1
+
+    # Retire the member's financial records with them so counts, MRR and
+    # billing lists never show rows for a member that no longer exists.
+    for model in (Subscription, Invoice, Payment):
+        rows = (
+            await session.scalars(
+                select(model).where(
+                    model.member_id == member_id, model.deleted_at.is_(None)
+                )
+            )
+        ).all()
+        for row in rows:
+            row.deleted_at = member.deleted_at
+            row.deleted_by = actor_id
+
+    # Check-ins have no soft delete; drop them outright so attendance feeds
+    # stop rendering orphans ("Unknown member") after the member is gone.
+    check_ins = (
+        await session.scalars(select(CheckIn).where(CheckIn.member_id == member_id))
+    ).all()
+    for row in check_ins:
+        await session.delete(row)
+
     session.add(
         MemberTimeline(
             tenant_id=member.tenant_id,

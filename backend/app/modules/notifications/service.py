@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.billing.models import Invoice
 from app.modules.identity.models import User
 from app.modules.notifications.models import InAppNotification
 
@@ -98,10 +99,20 @@ async def on_payment_succeeded(
     payload: dict,
 ) -> None:
     amount = payload.get("amount_minor", 0) / 100.0
+    # Prefer the human-readable invoice number (INV-2026-000005) over the raw
+    # UUID, which means nothing to gym staff reading the feed.
+    reference = payload.get("invoice_id")
+    if reference:
+        try:
+            invoice = await session.get(Invoice, uuid.UUID(str(reference)))
+        except ValueError:
+            invoice = None
+        if invoice is not None:
+            reference = invoice.number
     await notify_all_tenant_users(
         session,
         title="Payment received",
-        body=f"Payment of ₹{amount:.2f} succeeded for invoice {payload.get('invoice_id')}",
+        body=f"Payment of ₹{amount:.2f} succeeded for invoice {reference}",
         type="billing",
         payload=payload,
     )

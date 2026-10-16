@@ -42,23 +42,33 @@ Makefile            Dev helper targets (db, migrate, seed, test, lint, dev, web)
 
 ## Quickstart
 
-Prerequisites: Python 3.11, Node 22, a local PostgreSQL 15 cluster.
+Prerequisites: Python 3.11+, Node 22+, and a local PostgreSQL cluster (14 or 15).
 
 ```bash
-# 1. Start Postgres and prepare the DB
+# 1. Start Postgres, then create the role + databases the app connects with.
+#    db-up works on Debian (pg_ctlcluster) and macOS (Homebrew); db-init is
+#    idempotent and safe to re-run.
 make db-up
+make db-init
 make migrate
 make seed
 
 # 2. Backend on :8000 (FastAPI with --reload)
 make dev
 
-# 3. Frontend on :3000 (Next.js dev server, proxies /api to the backend)
+# 3. Frontend on :3000 (Next.js dev server, proxies /api and /health to :8000)
 make web
 ```
 
 Open http://localhost:3000 and sign in as the platform admin
 (`admin@gym-erp.dev` / `admin-pass-123`, seeded by `make seed`).
+
+If port 3000 is already taken, Next.js falls back to the next free port (e.g.
+3001). Point the e2e gates at it with `FORGE_BASE_URL`:
+
+```bash
+cd apps/web && FORGE_BASE_URL=http://localhost:3001 node e2e/platform_admin_verify.cjs
+```
 
 ### Tests & lint
 

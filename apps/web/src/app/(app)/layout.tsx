@@ -178,13 +178,31 @@ function ThemeToggle({ theme, onToggle }: { theme: "light" | "dark"; onToggle: (
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const title = titles[pathname] ?? (pathname.startsWith("/billing/") ? "Invoice" : "FORGE");
+  const title =
+    titles[pathname] ??
+    (pathname.startsWith("/billing/")
+      ? "Invoice"
+      : pathname.startsWith("/members/")
+        ? "Member"
+        : "FORGE");
   const { me, loading, logout } = useAuth();
   const { unread } = useNotificationsData();
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [impersonating] = useState(
     () => typeof window !== "undefined" && getImpersonationOrigin() !== null,
   );
+  const [healthy, setHealthy] = useState(true);
+  const [headerDate, setHeaderDate] = useState("");
+
+  useEffect(() => {
+    setHeaderDate(
+      new Date().toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }),
+    );
+  }, []);
 
   useEffect(() => {
     if (!loading && !me) router.replace("/login");
@@ -192,6 +210,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const t = document.documentElement.classList.contains("dark") ? "dark" : "light";
     setTheme(t);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const ping = async () => {
+      try {
+        const res = await fetch("/health/ready", { cache: "no-store" });
+        if (!cancelled) setHealthy(res.ok);
+      } catch {
+        if (!cancelled) setHealthy(false);
+      }
+    };
+    ping();
+    const id = setInterval(ping, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   if (loading || !me) {
@@ -339,10 +374,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <h1 className="font-display text-[15px] font-semibold tracking-tight">{title}</h1>
           <div className="flex items-center gap-4 text-[12px] text-ink-faint">
             <span className="flex items-center gap-2">
-              <span className="pulse-dot h-2 w-2 rounded-full bg-green" />
-              All systems live
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  healthy ? "pulse-dot bg-green" : "bg-amber",
+                )}
+              />
+              {healthy ? "All systems live" : "Reconnecting…"}
             </span>
-            <span className="hidden sm:inline">Wed, Aug 3</span>
+            <span className="hidden sm:inline">{headerDate}</span>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto px-6 py-6">

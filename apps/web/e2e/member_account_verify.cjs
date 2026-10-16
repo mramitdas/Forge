@@ -3,7 +3,7 @@
 // Requires backend + frontend dev servers and the seeded dev DB.
 const { chromium } = require("playwright");
 
-const BASE = "http://localhost:3000";
+const BASE = process.env.FORGE_BASE_URL || "http://localhost:3000";
 const OWNER = { email: "demo-owner@gym-erp.dev", password: "owner-pass-123" };
 const ts = Date.now().toString(36);
 const MEMBER_NAME = `E2E Acct ${ts}`;

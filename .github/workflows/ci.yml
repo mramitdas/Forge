@@ -35,8 +35,7 @@ jobs:
         working-directory: backend
         run: |
           python -m venv .venv
-          .venv/bin/pip install -e .
-          .venv/bin/pip install pytest pytest-asyncio pytest-cov httpx ruff psycopg2-binary
+          .venv/bin/pip install -e . --group dev
 
       - name: Prepare test roles
         working-directory: backend

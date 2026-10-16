@@ -55,9 +55,9 @@ export default function RolesPage() {
     return map;
   }, [permissions]);
 
-  function toggle(roleId: string, code: string) {
+  function toggle(roleId: string, code: string, base: string[]) {
     setDraft((d) => {
-      const next = new Set(d[roleId] ?? new Set<string>());
+      const next = new Set(d[roleId] ?? base);
       if (next.has(code)) next.delete(code);
       else next.add(code);
       return { ...d, [roleId]: next };
@@ -163,11 +163,11 @@ export default function RolesPage() {
                             key={p.code}
                             role="button"
                             tabIndex={0}
-                            onClick={() => toggle(role.id, p.code)}
+                            onClick={() => toggle(role.id, p.code, base)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
-                                toggle(role.id, p.code);
+                                toggle(role.id, p.code, base);
                               }
                             }}
                             className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-fill"
@@ -179,7 +179,7 @@ export default function RolesPage() {
                               <span className="block font-mono text-[10px] text-ink-faint">{p.code}</span>
                             </span>
                             <span onClick={(e) => e.stopPropagation()}>
-                              <Switch checked={on} onChange={() => toggle(role.id, p.code)} label={p.code} />
+                              <Switch checked={on} onChange={() => toggle(role.id, p.code, base)} label={p.code} />
                             </span>
                           </div>
                         );

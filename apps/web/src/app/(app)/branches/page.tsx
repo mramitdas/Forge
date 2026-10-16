@@ -233,18 +233,6 @@ export default function BranchesPage() {
                     GSTIN {b.gst_number}
                   </p>
                 )}
-                <div className="mt-3">
-                  <div className="mb-1 flex justify-between text-[12px] text-ink-faint">
-                    <span>Capacity</span>
-                    <span>{Math.round((b.members / 500) * 100)}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-fill-strong">
-                    <div
-                      className={`h-full rounded-full ${b.members > 400 ? "bg-amber" : "bg-accent"}`}
-                      style={{ width: `${Math.min(100, (b.members / 500) * 100)}%` }}
-                    />
-                  </div>
-                </div>
                 {(can("tenancy.branches.update") || can("tenancy.branches.delete")) && (
                   <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
                     {can("tenancy.branches.update") && (

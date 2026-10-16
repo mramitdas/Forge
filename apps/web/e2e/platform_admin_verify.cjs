@@ -6,12 +6,15 @@
 // lib/hooks, lib/api, (app)/layout) or anything under /platform, you MUST
 // run it and get 100% PASS.
 //
-//   cd apps/web && NODE_PATH="$(npm root -g)" node e2e/platform_admin_verify.cjs
+//   cd apps/web && node e2e/platform_admin_verify.cjs
+//
+// Set FORGE_BASE_URL to point at a non-default origin (e.g. when the dev
+// server falls back off port 3000): FORGE_BASE_URL=http://localhost:3001
 //
 // Requires the backend + frontend dev servers running locally.
 const { chromium } = require("playwright");
 
-const BASE = "http://localhost:3000";
+const BASE = process.env.FORGE_BASE_URL || "http://localhost:3000";
 const ADMIN = { email: "admin@gym-erp.dev", password: "admin-pass-123" };
 const ts = Date.now().toString(36);
 const SLUG = `verify-${ts}`;
@@ -84,9 +87,12 @@ async function main() {
     oRow = page.locator("tr", { hasText: OWNER_EMAIL }).first();
     await oRow.getByRole("button", { name: "Disable" }).click();
     await page.getByText("access disabled").waitFor({ timeout: 10000 });
+    // The row refetches after the mutation; wait for the Enable button (the
+    // refetched state) before reading the status text, to avoid a stale read.
+    oRow = page.locator("tr", { hasText: OWNER_EMAIL }).first();
+    await oRow.getByRole("button", { name: "Enable" }).waitFor({ timeout: 10000 });
     const disabledText = await page.locator("tr", { hasText: OWNER_EMAIL }).first().innerText();
     check("owner disabled", disabledText.includes("disabled"), disabledText.slice(0, 80));
-    oRow = page.locator("tr", { hasText: OWNER_EMAIL }).first();
     await oRow.getByRole("button", { name: "Enable" }).click();
     await page.getByText("can now log in").waitFor({ timeout: 10000 });
     check("owner enabled again", true);
@@ -137,7 +143,9 @@ async function main() {
     await page.locator('input[placeholder="e.g. 799"]').fill("599");
     await page.locator('input[placeholder="e.g. For growing operators"]').fill("Tier created during verification");
     await page.getByRole("button", { name: /create tier/i }).click();
-    await page.getByText("Tier created").waitFor({ timeout: 10000 });
+    // Exact match: the new card's description is "Tier created during
+    // verification", which would otherwise collide with the toast.
+    await page.getByText("Tier created", { exact: true }).waitFor({ timeout: 10000 });
     await page.getByText("Verify Tier", { exact: true }).waitFor({ timeout: 15000 });
     check("tier created via modal", true);
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -607,9 +607,12 @@ async def platform_revenue(
 
     now = datetime.now(UTC)
     series: list[RevenuePointOut] = []
-    for i in range(months - 1, -1, -1):
-        start = (now.replace(day=1) - timedelta(days=i * 31)).replace(day=1)
-        key = start.strftime("%Y-%m")
+    # Zero-based month index; stepping by calendar months keeps the axis
+    # consecutive regardless of month lengths (31-day math skips Februarys).
+    start_index = now.year * 12 + (now.month - 1) - (months - 1)
+    for i in range(months):
+        year, month_index = divmod(start_index + i, 12)
+        key = f"{year:04d}-{month_index + 1:02d}"
         revenue, count = by_month.get(key, (0, 0))
         series.append(
             RevenuePointOut(month=key, revenue_minor=revenue, subscriptions_sold=count)

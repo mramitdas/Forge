@@ -161,6 +161,70 @@ async def test_member_delete_tenant_scoped(client, gym_acct, gym_b):
     assert other.status_code == 404
 
 
+async def test_member_delete_cascades_to_children(client, gym_acct):
+    """Deleting a member must also retire their subscription, invoices and check-ins."""
+    owner = await login(client, "owner-acct@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch = await _create_branch(client, token)
+    member = await _create_member(client, token, branch["id"])
+
+    plan = await client.post(
+        "/api/v1/plans",
+        headers=_headers(token),
+        json={
+            "name": "Cascade Plan",
+            "slug": "cascade-plan",
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    sub = await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
+    await client.post(
+        f"/api/v1/plans/subscriptions/{sub['id']}/activate", headers=_headers(token)
+    )
+
+    invoices = await client.get("/api/v1/invoices", headers=_headers(token))
+    invoice = next(i for i in invoices.json() if i["member_id"] == member["id"])
+    paid = await client.post(
+        f"/api/v1/invoices/{invoice['id']}/pay",
+        headers=_headers(token),
+        json={"method": "upi", "idempotency_key": "idem-cascade-0001"},
+    )
+    assert paid.status_code == 200, paid.text
+
+    checkin = await client.post(
+        "/api/v1/checkin",
+        headers=_headers(token),
+        json={"member_id": member["id"], "branch_id": branch["id"], "source": "manual"},
+    )
+    assert checkin.status_code == 201, checkin.text
+
+    deleted = await client.delete(
+        f"/api/v1/members/{member['id']}", headers=_headers(token)
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    subs = await client.get(
+        "/api/v1/plans/subscriptions",
+        headers=_headers(token),
+        params={"member_id": member["id"]},
+    )
+    assert subs.status_code == 200, subs.text
+    assert subs.json() == [], subs.text
+
+    invoices = await client.get("/api/v1/invoices", headers=_headers(token))
+    assert [i for i in invoices.json() if i["member_id"] == member["id"]] == []
+
+    attendance = await client.get(
+        "/api/v1/checkin",
+        headers=_headers(token),
+        params={"member_id": member["id"]},
+    )
+    assert attendance.status_code == 200, attendance.text
+    assert attendance.json()["items"] == [], attendance.text
+
+
 async def _subscribe(client, token, member_id: str, branch_id: str, plan_id: str) -> dict:
     response = await client.post(
         "/api/v1/plans/subscribe",

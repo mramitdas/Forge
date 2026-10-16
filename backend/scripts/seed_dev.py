@@ -21,7 +21,7 @@ from app.modules.identity.models import Credential, Role, User, UserRole
 from app.modules.identity.permissions import ROLE_TEMPLATES
 from app.modules.identity.service import assign_role, seed_platform_roles
 from app.modules.membership.service import create_plan
-from app.modules.tenancy.models import Gym
+from app.modules.tenancy.models import Branch, Gym
 from app.modules.tenancy.service import provision_gym
 from sqlalchemy import select
 
@@ -32,6 +32,13 @@ GYM_NAME = "Demo Fitness"
 OWNER_EMAIL = "demo-owner@gym-erp.dev"
 OWNER_NAME = "Demo Owner"
 OWNER_PASSWORD = "owner-pass-123"
+
+# Demo gym's default branch. Idempotent by `code`.
+DEFAULT_BRANCH = {
+    "name": "Main Branch",
+    "code": "MAIN",
+    "timezone": "Asia/Kolkata",
+}
 
 # Demo staff users, one per role template. Emails/passwords for local exploration.
 DEMO_STAFF = [
@@ -161,7 +168,30 @@ async def seed() -> None:
         finally:
             reset_tenant_context(token)
 
-    # 4. Demo staff users, one per role (idempotent by email).
+    # 4. Default branch (idempotent by code), in the gym's tenant scope.
+    if gym_id is not None:
+        ctx = TenantContext(tenant_id=gym_id, platform_scope=False)
+        token = set_tenant_context(ctx)
+        try:
+            async with maker() as session:
+                await session.begin()
+                existing = await session.scalar(
+                    select(Branch.id).where(
+                        Branch.gym_id == gym_id,
+                        Branch.code == DEFAULT_BRANCH["code"],
+                        Branch.deleted_at.is_(None),
+                    )
+                )
+                if existing is None:
+                    session.add(Branch(gym_id=gym_id, **DEFAULT_BRANCH))
+                    print(f"created branch {DEFAULT_BRANCH['code']}")
+                else:
+                    print(f"branch {DEFAULT_BRANCH['code']} already exists")
+                await session.commit()
+        finally:
+            reset_tenant_context(token)
+
+    # 5. Demo staff users, one per role (idempotent by email).
     if gym_id is not None:
         ctx = TenantContext(tenant_id=gym_id, platform_scope=False)
         token = set_tenant_context(ctx)
@@ -205,7 +235,7 @@ async def seed() -> None:
         finally:
             reset_tenant_context(token)
 
-    # 5. Platform Owner role (idempotent by name) assigned to the platform admin.
+    # 6. Platform Owner role (idempotent by name) assigned to the platform admin.
     ctx = TenantContext(
         tenant_id=uuid.UUID(settings.platform_tenant_id), platform_scope=True
     )
@@ -233,7 +263,7 @@ async def seed() -> None:
     finally:
         reset_tenant_context(token)
 
-    # 6. Sync role flags from templates (locks Gym Owner, keeps staff editable).
+    # 7. Sync role flags from templates (locks Gym Owner, keeps staff editable).
     if gym_id is not None:
         ctx = TenantContext(tenant_id=gym_id, platform_scope=False)
         token = set_tenant_context(ctx)

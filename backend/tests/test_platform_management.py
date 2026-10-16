@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from itertools import pairwise
+
 from tests.helpers import login, provision_gym
 
 
@@ -314,3 +317,94 @@ async def test_platform_revenue_shape(client, platform_token):
     assert len(body["series"]) == 12
     assert isinstance(body["sold"], list)
     assert isinstance(body["total_minor"], int)
+
+
+async def test_revenue_series_months_are_consecutive(client, platform_token):
+    """The 12-month axis must be 12 consecutive calendar months ending now."""
+    response = await client.get(
+        "/api/v1/platform/revenue", headers=await _headers(platform_token)
+    )
+    assert response.status_code == 200, response.text
+    months = [p["month"] for p in response.json()["series"]]
+
+    assert len(set(months)) == 12, f"duplicate months in {months}"
+    assert months[-1] == datetime.now(UTC).strftime("%Y-%m"), months
+    parsed = [(int(m[:4]), int(m[5:7])) for m in months]
+    for (y1, m1), (y2, m2) in pairwise(parsed):
+        assert (y2 * 12 + m2) - (y1 * 12 + m1) == 1, f"gap in {months}"
+
+
+async def test_gym_subscription_counts_exclude_soft_deleted(client, platform_token):
+    """Members/subscriptions counts must ignore soft-deleted rows."""
+    gym = await provision_gym(client, platform_token, "countgym")
+    owner = await login(client, "owner-countgym@example.com", "owner-pass-123")
+    owner_headers = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    async def counts() -> tuple[int, int]:
+        listing = await client.get(
+            "/api/v1/platform/subscriptions", headers=await _headers(platform_token)
+        )
+        assert listing.status_code == 200, listing.text
+        row = next(g for g in listing.json() if g["gym_id"] == gym["id"])
+        return row["members_count"], row["active_subscriptions"]
+
+    assert await counts() == (0, 0)
+
+    branch = await client.post(
+        "/api/v1/branches",
+        headers=owner_headers,
+        json={
+            "name": "Main",
+            "code": "CM",
+            "timezone": "Asia/Kolkata",
+            "country_code": "+91",
+        },
+    )
+    assert branch.status_code == 201, branch.text
+    member = await client.post(
+        "/api/v1/members",
+        headers=owner_headers,
+        json={
+            "first_name": "Count",
+            "last_name": "Test",
+            "email": "count-test@example.com",
+            "phone": "9000000000",
+            "country_code": "+91",
+            "branch_id": branch.json()["id"],
+            "status": "active",
+        },
+    )
+    assert member.status_code == 201, member.text
+    plan = await client.post(
+        "/api/v1/plans",
+        headers=owner_headers,
+        json={
+            "name": "Count Monthly",
+            "slug": "count-monthly",
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    sub = await client.post(
+        "/api/v1/plans/subscribe",
+        headers=owner_headers,
+        json={
+            "member_id": member.json()["id"],
+            "plan_id": plan.json()["id"],
+            "branch_id": branch.json()["id"],
+        },
+    )
+    assert sub.status_code == 201, sub.text
+    activated = await client.post(
+        f"/api/v1/plans/subscriptions/{sub.json()['id']}/activate",
+        headers=owner_headers,
+    )
+    assert activated.status_code == 200, activated.text
+    assert await counts() == (1, 1)
+
+    deleted = await client.delete(
+        f"/api/v1/members/{member.json()['id']}", headers=owner_headers
+    )
+    assert deleted.status_code == 204, deleted.text
+    assert await counts() == (0, 0)

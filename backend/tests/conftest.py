@@ -9,7 +9,6 @@ import pytest
 
 # Point the app at the test database BEFORE any app module is imported.
 TEST_DB_URL = "postgresql+asyncpg://gym:gym_dev_pass@127.0.0.1:5432/gym_erp_test"
-TEST_ADMIN_SYNC_URL = "postgresql://gym_admin:gym_admin_pass@127.0.0.1:5432/gym_erp_test"
 os.environ.setdefault("GYM_DATABASE_URL", TEST_DB_URL)
 os.environ.setdefault("GYM_ENVIRONMENT", "test")
 os.environ.setdefault("GYM_DEBUG", "true")
@@ -29,22 +28,48 @@ from tests.helpers import provision_gym  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
+# The schema reset needs a role that can DROP/CREATE the public schema. CI
+# provisions `gym_admin` as a superuser; locally it may not exist yet, so fall
+# back to the app role (`gym`), which owns the schema after the first reset.
+_TEST_SYNC_URLS = (
+    "postgresql://gym_admin:gym_admin_pass@127.0.0.1:5432/gym_erp_test",
+    "postgresql://gym:gym_dev_pass@127.0.0.1:5432/gym_erp_test",
+)
+
+
+def _reset_test_schema() -> None:
+    """Drop and recreate the public schema, handing ownership to `gym`."""
+    import psycopg2
+
+    last_exc: Exception | None = None
+    for url in _TEST_SYNC_URLS:
+        try:
+            conn = psycopg2.connect(url)
+        except psycopg2.OperationalError as exc:
+            last_exc = exc
+            continue
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("DROP SCHEMA public CASCADE")
+            cur.execute("CREATE SCHEMA public")
+            cur.execute("ALTER SCHEMA public OWNER TO gym")
+            cur.execute("GRANT USAGE, CREATE ON SCHEMA public TO gym")
+            cur.execute(
+                "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO gym"
+            )
+        conn.close()
+        return
+    raise RuntimeError(
+        "Could not connect to the test database as gym_admin or gym. "
+        "Start Postgres and ensure the `gym` role/database exist "
+        "(see README Quickstart)."
+    ) from last_exc
+
 
 @pytest.fixture(scope="session", autouse=True)
 def migrated_database():
     """Drop and rebuild the test schema once per session."""
-    import psycopg2
-
-    conn = psycopg2.connect(TEST_ADMIN_SYNC_URL)
-    conn.autocommit = True
-    with conn.cursor() as cur:
-        cur.execute("DROP SCHEMA public CASCADE")
-        cur.execute("CREATE SCHEMA public")
-        cur.execute("GRANT USAGE, CREATE ON SCHEMA public TO gym")
-        cur.execute(
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO gym"
-        )
-    conn.close()
+    _reset_test_schema()
     # Run alembic against the test DB as the app role.
     env = dict(os.environ, GYM_DATABASE_URL=TEST_DB_URL)
     subprocess.run(

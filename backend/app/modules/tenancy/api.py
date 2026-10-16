@@ -266,13 +266,24 @@ async def _gym_subscription_out(
         select(func.count())
         .select_from(Member)
         .join(Branch, Branch.id == Member.branch_id)
-        .where(Branch.gym_id == gym.id)
+        .where(
+            Branch.gym_id == gym.id,
+            Branch.deleted_at.is_(None),
+            Member.deleted_at.is_(None),
+        )
     )
     active_count = await session.scalar(
         select(func.count())
         .select_from(Subscription)
         .join(Branch, Branch.id == Subscription.branch_id)
-        .where(Branch.gym_id == gym.id, Subscription.status == "active")
+        .join(Member, Member.id == Subscription.member_id)
+        .where(
+            Branch.gym_id == gym.id,
+            Branch.deleted_at.is_(None),
+            Subscription.status == "active",
+            Subscription.deleted_at.is_(None),
+            Member.deleted_at.is_(None),
+        )
     )
     return GymSubscriptionOut(
         gym_id=gym.id,

@@ -4,15 +4,8 @@ import { Card, EmptyState } from "@/components/ui";
 import { Async, Count } from "@/components/skeleton";
 import { BarChartSkeleton, TableSkeleton } from "@/components/skeletons";
 import { usePlatformRevenue } from "@/lib/hooks";
+import { money } from "@/lib/mock";
 import type { SoldSubscriptionOut } from "@/lib/types";
-
-function money(minor: number, currency: string): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(minor);
-}
 
 function shortLabel(month: string): string {
   const [y, m] = month.split("-").map(Number);

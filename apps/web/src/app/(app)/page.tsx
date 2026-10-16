@@ -1,13 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Avatar,
   Badge,
   Button,
   Card,
+  EmptyState,
+  Field,
+  Input,
+  Modal,
   SectionTitle,
+  Select,
   StatusBadge,
   Toast,
 } from "@/components/ui";
@@ -21,18 +26,10 @@ import {
 } from "@/components/skeletons";
 import { inr } from "@/lib/mock";
 import { useAuth } from "@/lib/auth";
-import { useBranches, useCheckins, useMemberCtx, useNotificationsData } from "@/lib/hooks";
+import { useBranches, useCheckinMutation, useCheckins, useMemberCtx, useNotificationsData } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 
-const revenueBars = [
-  { d: "Mon", v: 62 },
-  { d: "Tue", v: 74 },
-  { d: "Wed", v: 55 },
-  { d: "Thu", v: 88 },
-  { d: "Fri", v: 71 },
-  { d: "Sat", v: 94 },
-  { d: "Sun", v: 46 },
-];
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const todayStr = () =>
   new Date().toLocaleDateString("en-US", {
@@ -46,7 +43,56 @@ function OverviewHeader() {
   const can = useCan();
   const { branches, isLoading: bl, isError: be } = useBranches();
   const { items: checkins, isLoading: cl, isError: ce } = useCheckins();
-  const [toast, setToast] = useState<string | null>(null);
+  const { members: rawMembers } = useMemberCtx();
+  const checkinMut = useCheckinMutation();
+  const [open, setOpen] = useState(false);
+  const [memberId, setMemberId] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [source, setSource] = useState("manual");
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (open && !branchId && branches[0]) setBranchId(branches[0].id);
+  }, [open, branches, branchId]);
+
+  const member = memberId ? rawMembers.find((m) => m.id === memberId) : undefined;
+
+  async function submitCheckin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!member || !(branchId || member.branch_id)) return;
+    const targetBranch = branchId || member.branch_id;
+    setBusy(true);
+    try {
+      const res = await checkinMut.mutateAsync({
+        member_id: member.id,
+        branch_id: targetBranch,
+        source,
+      });
+      const outcome =
+        res.result === "allowed" ? "granted" : res.result === "denied" ? "denied" : "duplicate";
+      const name = member.full_name || member.first_name;
+      setToast({
+        type: outcome === "granted" ? "success" : outcome === "denied" ? "error" : "info",
+        message: `${name} — ${
+          outcome === "granted"
+            ? "access granted"
+            : outcome === "denied"
+              ? "access denied (no active membership)"
+              : "duplicate check-in"
+        }`,
+      });
+      setOpen(false);
+      setMemberId("");
+    } catch {
+      setToast({ type: "error", message: "Check-in failed — could not reach the server" });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const todayAllowed = checkins.filter(
     (c) => c.result === "granted" && c.time.startsWith("Today"),
@@ -54,6 +100,8 @@ function OverviewHeader() {
   const firstName = me?.user.full_name?.split(" ")[0] ?? "there";
   const maxBranch = Math.max(...branches.map((b) => b.members), 1);
   const b0 = branches[0];
+  const showOccupancy = can("tenancy.branches.view");
+  const showCheckins = can("attendance.records.view");
 
   return (
     <>
@@ -66,16 +114,25 @@ function OverviewHeader() {
             <h2 className="font-display text-[28px] font-bold tracking-tight">
               Good morning, <span className="text-gradient">{firstName}</span>
             </h2>
-            <p className="mt-1.5 text-[13px] text-ink-faint">
-              {b0?.name ?? "Workspace"} is{" "}
-              <span className="font-semibold text-ink-soft">
-                {b0 ? Math.min(100, Math.round((b0.members / maxBranch) * 100)) : 0}% full
-              </span>{" "}
-              right now · {todayAllowed} check-ins today
-            </p>
+            {(showOccupancy || showCheckins) && (
+              <p className="mt-1.5 text-[13px] text-ink-faint">
+                {showOccupancy && b0 ? (
+                  <>
+                    {b0.name} is{" "}
+                    <span className="font-semibold text-ink-soft">
+                      {Math.min(100, Math.round((b0.members / maxBranch) * 100))}% full
+                    </span>{" "}
+                    right now{showCheckins && " · "}
+                  </>
+                ) : null}
+                {showCheckins && (
+                  <span className="font-medium">{todayAllowed} check-ins today</span>
+                )}
+              </p>
+            )}
           </div>
-          {can("members.checkin") && (
-            <Button onClick={() => setToast("Member checked in successfully")}>
+          {can("attendance.checkin") && (
+            <Button onClick={() => setOpen(true)}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" />
               </svg>
@@ -84,12 +141,90 @@ function OverviewHeader() {
           )}
         </div>
       </Async>
-      {toast && <Toast type="success" message={toast} onClose={() => setToast(null)} />}
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Check in member"
+        subtitle="Search for a member to record an entry"
+      >
+        <form onSubmit={submitCheckin} className="space-y-4">
+          <Field label="Member">
+            <div className="relative">
+              <Input
+                placeholder="Search member…"
+                value={member ? member.full_name || member.first_name : ""}
+                onChange={(e) => {
+                  const q = e.target.value.toLowerCase();
+                  const hit = rawMembers.find((m) =>
+                    (m.full_name || m.first_name).toLowerCase().includes(q),
+                  );
+                  setMemberId(hit?.id ?? "");
+                }}
+                list="overview-member-list"
+                autoFocus
+              />
+              <datalist id="overview-member-list">
+                {rawMembers.map((m) => (
+                  <option key={m.id} value={m.full_name || m.first_name} />
+                ))}
+              </datalist>
+            </div>
+          </Field>
+          {member && (
+            <div className="flex items-center gap-3 rounded-xl bg-accent-soft/50 px-3.5 py-2.5">
+              <Avatar name={member.full_name || member.first_name} size="sm" />
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-medium">
+                  {member.full_name || member.first_name}
+                </p>
+                <p className="text-[12px] text-ink-faint">{member.email || "No email"}</p>
+              </div>
+              <StatusBadge status={member.status} />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            {branches.length > 0 && (
+              <Field label="Branch">
+                <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            <Field label="Source">
+              <Select value={source} onChange={(e) => setSource(e.target.value)}>
+                <option value="biometric">Biometric</option>
+                <option value="qr">QR</option>
+                <option value="rfid">RFID</option>
+                <option value="manual">Manual</option>
+              </Select>
+            </Field>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1" disabled={!member || !(branchId || member.branch_id) || busy}>
+              {busy ? "Checking in…" : "Check in"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      {toast && (
+        <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
+      )}
     </>
   );
 }
 
 function StatsGrid() {
+  const can = useCan();
   const { items: checkins, isLoading: cl, isError: ce } = useCheckins();
   const { ctx, members: rawMembers, isLoading: ml, isError: me } = useMemberCtx();
 
@@ -116,25 +251,35 @@ function StatsGrid() {
   const overdueAmount = overdueInvoices.reduce((s, i) => s + i.total_minor, 0);
 
   const stats = [
-    {
-      label: "Total members",
-      value: rawMembers.length.toLocaleString("en-IN"),
-      delta: `+${newThisMonth}`,
-      up: true,
-    },
-    { label: "Active today", value: String(todayAllowed), delta: "Today", up: true },
-    {
-      label: "Monthly revenue",
-      value: inr(revenueThisMonth),
-      delta: "This month",
-      up: true,
-    },
-    {
-      label: "Overdue invoices",
-      value: inr(overdueAmount),
-      delta: `${overdueInvoices.length} open`,
-      up: false,
-    },
+    ...(can("members.view")
+      ? [
+          {
+            label: "Total members",
+            value: rawMembers.length.toLocaleString("en-IN"),
+            delta: `+${newThisMonth}`,
+            up: true,
+          },
+        ]
+      : []),
+    ...(can("attendance.records.view")
+      ? [{ label: "Active today", value: String(todayAllowed), delta: "Today", up: true }]
+      : []),
+    ...(can("billing.invoices.view")
+      ? [
+          {
+            label: "Monthly revenue",
+            value: inr(revenueThisMonth),
+            delta: "This month",
+            up: true,
+          },
+          {
+            label: "Overdue invoices",
+            value: inr(overdueAmount),
+            delta: `${overdueInvoices.length} open`,
+            up: false,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -180,6 +325,29 @@ function RevenueCard() {
     })
     .reduce((s, i) => s + i.total_minor, 0);
 
+  const { bars, weekTotal } = useMemo(() => {
+    const now = new Date();
+    const mondayOffset = (now.getDay() + 6) % 7;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7);
+    const sums = new Array<number>(7).fill(0);
+    for (const i of ctx.invoices) {
+      if (i.status !== "paid") continue;
+      const d = new Date(i.issue_date);
+      if (d < monday || d >= sunday) continue;
+      sums[(d.getDay() + 6) % 7] += i.total_minor;
+    }
+    const max = Math.max(...sums, 1);
+    return {
+      bars: sums.map((v, idx) => ({
+        d: WEEKDAYS[idx],
+        amount: v,
+        v: Math.round((v / max) * 100),
+      })),
+      weekTotal: sums.reduce((s, v) => s + v, 0),
+    };
+  }, [ctx.invoices]);
+
   return (
     <Card className="p-5 xl:col-span-2">
       <SectionTitle
@@ -198,19 +366,27 @@ function RevenueCard() {
         }
       />
       <Async loading={isLoading} error={isError} skeleton={<Skeleton className="h-40 w-full rounded-xl" />}>
-        <div className="mt-4 flex h-40 items-end gap-3">
-          {revenueBars.map((b) => (
-            <div key={b.d} className="group flex flex-1 flex-col items-center gap-2">
-              <div className="flex w-full flex-1 items-end">
-                <div
-                  className="w-full rounded-md bg-gradient-to-t from-accent-deep to-accent transition-all duration-200 group-hover:from-accent-deep group-hover:to-accent-hover group-hover:shadow-[0_0_18px_var(--color-glow-strong)]"
-                  style={{ height: `${b.v}%` }}
-                />
+        {weekTotal === 0 ? (
+          <EmptyState
+            title="No collections this week"
+            hint="Paid invoices issued this week will appear here."
+          />
+        ) : (
+          <div className="mt-4 flex h-40 items-end gap-3">
+            {bars.map((b) => (
+              <div key={b.d} className="group flex flex-1 flex-col items-center gap-2">
+                <div className="flex w-full flex-1 items-end">
+                  <div
+                    title={inr(b.amount)}
+                    className="w-full rounded-md bg-gradient-to-t from-accent-deep to-accent transition-all duration-200 group-hover:from-accent-deep group-hover:to-accent-hover group-hover:shadow-[0_0_18px_var(--color-glow-strong)]"
+                    style={{ height: `${Math.max(4, b.v)}%` }}
+                  />
+                </div>
+                <span className="text-[11px] text-ink-faint">{b.d}</span>
               </div>
-              <span className="text-[11px] text-ink-faint">{b.d}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </Async>
     </Card>
   );
@@ -329,19 +505,29 @@ function LeaderboardBar() {
 }
 
 export default function OverviewPage() {
+  const can = useCan();
+  const showRevenue = can("billing.invoices.view");
+  const showOccupancy = can("tenancy.branches.view");
+  const showCheckins = can("attendance.records.view");
+  const showNotifications = can("notifications.view");
+
   return (
     <div className="space-y-6">
       <OverviewHeader />
       <StatsGrid />
-      <div className="grid gap-6 xl:grid-cols-3">
-        <RevenueCard />
-        <OccupancyCard />
-      </div>
-      <div className="grid gap-6 xl:grid-cols-3">
-        <RecentCheckinsCard />
-        <NotificationsCard />
-      </div>
-      <LeaderboardBar />
+      {(showRevenue || showOccupancy) && (
+        <div className="grid gap-6 xl:grid-cols-3">
+          {showRevenue && <RevenueCard />}
+          {showOccupancy && <OccupancyCard />}
+        </div>
+      )}
+      {(showCheckins || showNotifications) && (
+        <div className="grid gap-6 xl:grid-cols-3">
+          {showCheckins && <RecentCheckinsCard />}
+          {showNotifications && <NotificationsCard />}
+        </div>
+      )}
+      {showCheckins && <LeaderboardBar />}
     </div>
   );
 }

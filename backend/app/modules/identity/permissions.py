@@ -155,6 +155,7 @@ ROLE_TEMPLATES: dict[str, dict] = {
         "name": "Receptionist",
         "description": "Front-desk: check-ins, member intake, sales",
         "permissions": [
+            "tenancy.branches.view",
             "members.create",
             "members.view",
             "members.update",
@@ -164,6 +165,7 @@ ROLE_TEMPLATES: dict[str, dict] = {
             "billing.invoices.view",
             "billing.invoices.create",
             "billing.payments.capture",
+            "attendance.records.view",
             "attendance.checkin",
             "notifications.view",
         ],
@@ -176,6 +178,7 @@ ROLE_TEMPLATES: dict[str, dict] = {
         "permissions": [
             "members.view",
             "membership.plans.view",
+            "tenancy.branches.view",
             "attendance.records.view",
             "attendance.checkin",
             "notifications.view",
