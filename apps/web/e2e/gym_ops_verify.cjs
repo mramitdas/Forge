@@ -183,6 +183,9 @@ async function main() {
     check("settings: cross-branch toggle restored to original", restored === before, restored);
 
     // ── Profile save persists (was a local-toast no-op) ──
+    // Toast does not auto-dismiss and the page has a single toast slot, so a
+    // second "Profile updated" wait would resolve against the FIRST toast.
+    // Assert the restore landed by reading the sidebar instead.
     const profileCard = page
       .locator("div.glass", { has: page.getByText("Your account details across the organization") })
       .first();
@@ -191,12 +194,12 @@ async function main() {
     const origName = await nameInput.inputValue();
     await nameInput.fill(`${origName} E2E`);
     await profileCard.getByRole("button", { name: "Save changes" }).click();
-    await page.getByText("Profile updated").waitFor({ timeout: 10000 });
-    await page.locator("aside").getByText(`${origName} E2E`).waitFor({ timeout: 15000 });
+    await page.getByText("Profile updated", { exact: true }).waitFor({ timeout: 10000 });
+    await page.locator("aside").getByText(`${origName} E2E`, { exact: true }).waitFor({ timeout: 15000 });
     check("settings: profile name save persists (sidebar refreshes)", true);
     await nameInput.fill(origName);
     await profileCard.getByRole("button", { name: "Save changes" }).click();
-    await page.getByText("Profile updated").waitFor({ timeout: 10000 });
+    await page.locator("aside").getByText(origName, { exact: true }).waitFor({ timeout: 15000 });
 
     // ── Notifications ──
     // Fixture: pay an open invoice (creates a server-side "Payment received"

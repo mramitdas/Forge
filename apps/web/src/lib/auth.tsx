@@ -10,7 +10,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<MeOut>;
   logout: () => Promise<void>;
-  refreshMe: () => Promise<void>;
+  refreshMe: (data?: MeOut) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -33,6 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   }, []);
+
+  const refreshMe = useCallback(
+    async (data?: MeOut) => {
+      if (data) {
+        setMe(data);
+        return;
+      }
+      await loadMe();
+    },
+    [loadMe],
+  );
 
   useEffect(() => {
     void loadMe();
@@ -73,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ me, loading, login, logout, refreshMe: loadMe }}>
+    <AuthContext.Provider value={{ me, loading, login, logout, refreshMe }}>
       {children}
     </AuthContext.Provider>
   );

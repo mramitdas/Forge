@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge, Button, Card, Field, Input, SectionTitle, Switch, Toast } from "@/components/ui";
 import { Async } from "@/components/skeleton";
 import { SettingsBranchSkeleton } from "@/components/skeletons";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCan } from "@/lib/permissions";
 import { useGymSettings, useUpdateGymSettings, useUpdateMe } from "@/lib/hooks";
@@ -33,11 +34,25 @@ export default function SettingsPage() {
   async function saveProfile() {
     setSavingProfile(true);
     try {
-      await updateMe.mutateAsync({ full_name: name.trim(), email: email.trim() });
-      await refreshMe();
+      const updated = await updateMe.mutateAsync({
+        full_name: name.trim(),
+        email: email.trim(),
+      });
+      // The PATCH response is the full MeOut — feed it straight into the
+      // context so a flaky follow-up GET can't bounce the user to /login
+      // while the toast claims success.
+      await refreshMe(updated);
+      setName(name.trim());
+      setEmail(email.trim());
       setToast("Profile updated");
-    } catch {
-      setToast("Could not save profile — the email may be taken");
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setToast("That email is already taken");
+      } else if (e instanceof ApiError && e.status === 422) {
+        setToast("Check the name and email format");
+      } else {
+        setToast("Could not save profile — check your connection");
+      }
     } finally {
       setSavingProfile(false);
     }
