@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class ProvisionGymRequest(BaseModel):
@@ -35,7 +35,12 @@ class GymSettingsUpdate(BaseModel):
     # All fields optional: PATCH is partial, omitted fields stay unchanged.
     cross_branch_access: bool | None = None
     name: str | None = Field(default=None, min_length=2, max_length=200)
-    timezone: str | None = None
+    timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
 
 
 class GymSettingsOut(BaseModel):
