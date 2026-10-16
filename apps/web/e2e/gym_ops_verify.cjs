@@ -213,8 +213,7 @@ async function main() {
     await gymCard.getByRole("button", { name: /save gym profile/i }).click();
     await page.getByText("Gym profile updated", { exact: true }).waitFor({ timeout: 10000 });
     // Sidebar tenant name must refresh WITHOUT a reload — proves the save landed
-    // and refreshMe ran (adjust the locator to the actual sidebar element if its
-    // text isn't exactly the gym name).
+    // and refreshMe ran.
     await page.locator("aside").getByText(`${origGymName} E2E`, { exact: true }).waitFor({ timeout: 15000 });
     check("settings: gym profile save refreshes sidebar tenant name", true);
     await page.reload();

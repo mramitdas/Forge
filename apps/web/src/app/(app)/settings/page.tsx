@@ -33,11 +33,11 @@ export default function SettingsPage() {
   const updateGymSettings = useUpdateGymSettings();
   const [gymName, setGymName] = useState("");
   const [gymTimezone, setGymTimezone] = useState("Asia/Kolkata");
-  const settingsSeededRef = useRef(false);
+  const seededRef = useRef<{ name: string; timezone: string } | null>(null);
 
   useEffect(() => {
-    if (gymSettings && !settingsSeededRef.current) {
-      settingsSeededRef.current = true;
+    if (gymSettings && !seededRef.current) {
+      seededRef.current = { name: gymSettings.name, timezone: gymSettings.timezone };
       setGymName(gymSettings.name);
       setGymTimezone(gymSettings.timezone);
     }
@@ -80,18 +80,28 @@ export default function SettingsPage() {
   }
 
   async function saveGymProfile() {
+    const snapshot = seededRef.current;
+    const body: { name?: string; timezone?: string } = {};
+    if (!snapshot || gymName.trim() !== snapshot.name) body.name = gymName.trim();
+    if (!snapshot || gymTimezone !== snapshot.timezone) body.timezone = gymTimezone;
     try {
-      const updated = await updateGymSettings.mutateAsync({
-        name: gymName.trim(),
-        timezone: gymTimezone,
-      });
+      const updated = await updateGymSettings.mutateAsync(body);
+      // Re-sync both fields from the server response (normalization, and any
+      // external edits to untouched fields), and advance the diff snapshot.
+      seededRef.current = { name: updated.name, timezone: updated.timezone };
+      setGymName(updated.name);
+      setGymTimezone(updated.timezone);
       // Feed the PATCH response into the auth context (pattern from Task 2b) —
       // the sidebar's tenant_name comes from `me`, and a plain refreshMe() GET
       // would be an extra round trip with a partial-failure window.
       if (me) await refreshMe({ ...me, tenant_name: updated.name });
       setToast("Gym profile updated");
-    } catch {
-      setToast("Could not save gym profile");
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 422) {
+        setToast("Gym name must be 2–200 characters");
+      } else {
+        setToast("Could not save gym profile");
+      }
     }
   }
 
@@ -162,7 +172,11 @@ export default function SettingsPage() {
               />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Gym name">
-                  <Input value={gymName} onChange={(e) => setGymName(e.target.value)} />
+                  <Input
+                    value={gymName}
+                    maxLength={200}
+                    onChange={(e) => setGymName(e.target.value)}
+                  />
                 </Field>
                 <Field label="Timezone">
                   <Select value={gymTimezone} onChange={(e) => setGymTimezone(e.target.value)}>
@@ -175,7 +189,10 @@ export default function SettingsPage() {
                 </Field>
               </div>
               <div className="mt-4 flex justify-end">
-                <Button onClick={saveGymProfile} disabled={updateGymSettings.isPending}>
+                <Button
+                  onClick={saveGymProfile}
+                  disabled={updateGymSettings.isPending || gymName.trim().length < 2}
+                >
                   {updateGymSettings.isPending ? "Saving…" : "Save gym profile"}
                 </Button>
               </div>
