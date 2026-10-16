@@ -495,7 +495,12 @@ async def update_settings(
     gym = await session.get(Gym, actor.tenant_id)
     if gym is None:
         raise NotFoundError("Gym not found", code="NOT_FOUND")
-    gym.cross_branch_access = body.cross_branch_access
+    if body.name is not None:
+        gym.name = body.name.strip()
+    if body.timezone is not None:
+        gym.timezone = body.timezone
+    if body.cross_branch_access is not None:
+        gym.cross_branch_access = body.cross_branch_access
     await session.flush()
     return GymSettingsOut(
         name=gym.name,

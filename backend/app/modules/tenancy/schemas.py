@@ -32,7 +32,10 @@ class GymOut(BaseModel):
 
 
 class GymSettingsUpdate(BaseModel):
-    cross_branch_access: bool = False
+    # All fields optional: PATCH is partial, omitted fields stay unchanged.
+    cross_branch_access: bool | None = None
+    name: str | None = Field(default=None, min_length=2, max_length=200)
+    timezone: str | None = None
 
 
 class GymSettingsOut(BaseModel):
