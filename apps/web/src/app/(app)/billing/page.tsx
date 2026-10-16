@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Input,
   Modal,
   StatusBadge,
   Toast,
@@ -107,6 +108,7 @@ export default function BillingPage() {
   const [paying, setPaying] = useState<string | null>(null);
   const [method, setMethod] = useState("upi");
   const [toast, setToast] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const { invoices, isLoading, isError } = useInvoicesData();
   const { members: rawMembers } = useMemberCtx();
@@ -118,6 +120,16 @@ export default function BillingPage() {
     [rawMembers],
   );
   const memberName = (id: string) => memberMap.get(id) ?? "Unknown";
+
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return invoices;
+    return invoices.filter(
+      (i) =>
+        i.number.toLowerCase().includes(needle) ||
+        memberName(i.memberId).toLowerCase().includes(needle),
+    );
+  }, [invoices, search, memberMap]);
 
   const invoice = invoices.find((i) => i.id === paying);
 
@@ -142,9 +154,19 @@ export default function BillingPage() {
 
       <Async loading={isLoading} error={isError} skeleton={<TableSkeleton columns={7} rows={8} />}>
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
             <h2 className="text-[15px] font-semibold tracking-tight">Invoices</h2>
-            <Badge tone="gray">{invoices.length} total</Badge>
+            <div className="flex items-center gap-3">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search invoice # or member"
+                className="h-8 w-52 text-[12px]"
+              />
+              <Badge tone="gray">
+                {search.trim() ? `${filtered.length} of ${invoices.length}` : `${invoices.length} total`}
+              </Badge>
+            </div>
           </div>
           <table className="w-full text-left text-[13px]">
             <thead>
@@ -159,7 +181,7 @@ export default function BillingPage() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map((i) => (
+              {filtered.map((i) => (
                 <tr key={i.id} className="group border-b border-line last:border-0 hover:bg-accent-soft/40 transition-colors">
                   <td className="px-5 py-3">
                     <Link href={`/billing/${i.id}`} className="font-medium text-accent hover:underline">
@@ -183,6 +205,13 @@ export default function BillingPage() {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-8 text-center text-[13px] text-ink-faint">
+                    No invoices match “{search}”.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </Card>
