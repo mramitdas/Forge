@@ -5,6 +5,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -20,6 +21,8 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
+from app.db.session import get_sessionmaker
 from app.modules.identity.models import (
     Credential,
     PermissionCatalog,
@@ -109,6 +112,31 @@ async def authenticate(
     return await issue_tokens(session, user, ip=ip, user_agent=user_agent)
 
 
+async def _email_taken_elsewhere(email: str, *, exclude_user_id: uuid.UUID) -> bool:
+    """Cross-tenant uniqueness probe for the global login key.
+
+    The request session is stamped with the actor's tenant and `users` has
+    FORCE ROW LEVEL SECURITY, so it cannot see other tenants' rows. The check
+    runs on a short-lived platform-scoped session instead (same pattern as
+    `resolve_actor`), while the UPDATE stays on the request session.
+    """
+    maker = get_sessionmaker()
+    token = set_tenant_context(TenantContext(tenant_id=None, platform_scope=True))
+    try:
+        async with maker() as session:
+            await session.begin()
+            existing = await session.scalar(
+                select(User.id).where(
+                    User.email == email,
+                    User.id != exclude_user_id,
+                    User.deleted_at.is_(None),
+                )
+            )
+            return existing is not None
+    finally:
+        reset_tenant_context(token)
+
+
 async def update_me(
     session: AsyncSession,
     *,
@@ -123,19 +151,18 @@ async def update_me(
         user.full_name = full_name.strip()
     if email is not None:
         normalized = email.lower()
-        if normalized != user.email:
-            # Email is the global login key — uniqueness is cross-tenant.
-            existing = await session.scalar(
-                select(User.id).where(
-                    User.email == normalized,
-                    User.id != user.id,
-                    User.deleted_at.is_(None),
-                )
-            )
-            if existing is not None:
-                raise ConflictError("User already exists", code="EMAIL_TAKEN")
+        if normalized != user.email and await _email_taken_elsewhere(
+            normalized, exclude_user_id=user.id
+        ):
+            raise ConflictError("User already exists", code="EMAIL_TAKEN")
         user.email = normalized
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:
+        # Concurrent claim of the same same-tenant email races past the
+        # check-then-update probe and trips uq_users_tenant_email_active.
+        await session.rollback()
+        raise ConflictError("User already exists", code="EMAIL_TAKEN") from None
     return user
 
 

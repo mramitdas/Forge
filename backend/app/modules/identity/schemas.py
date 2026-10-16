@@ -70,10 +70,10 @@ class MeUpdateRequest(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=200)
     email: EmailStr | None = None
 
-    @field_validator("full_name")
+    @field_validator("full_name", mode="before")
     @classmethod
-    def normalize_name(cls, v: str | None) -> str | None:
-        return v.strip() if v is not None else v
+    def normalize_name(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
 
 
 class CreateEmployeeRequest(BaseModel):

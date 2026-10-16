@@ -147,3 +147,82 @@ async def test_update_me_profile(client, gym_a):
         "/api/v1/auth/me", headers=headers, json={"full_name": original_name}
     )
     assert restore.status_code == 200, restore.text
+
+
+async def test_update_me_email_conflict_other_tenant(client, gym_a, gym_b):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    before = await client.get("/api/v1/auth/me", headers=headers)
+    assert before.status_code == 200
+    original_email = before.json()["user"]["email"]
+
+    # owner-gymb@example.com belongs to a DIFFERENT tenant — the per-tenant
+    # unique index cannot catch it, and login matches email globally.
+    response = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"email": "owner-gymb@example.com"}
+    )
+    if response.status_code != 409:
+        # Regression guard: undo the cross-tenant email so the rest of the
+        # suite can still log in as owner-gyma@example.com.
+        await client.patch(
+            "/api/v1/auth/me", headers=headers, json={"email": original_email}
+        )
+    assert response.status_code == 409, response.text
+
+
+async def test_update_me_email_change_lowercased(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    before = await client.get("/api/v1/auth/me", headers=headers)
+    assert before.status_code == 200
+    original_email = before.json()["user"]["email"]
+
+    response = await client.patch(
+        "/api/v1/auth/me",
+        headers=headers,
+        json={"email": "Mixed.Case.Me@Test.COM"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["email"] == "mixed.case.me@test.com"
+
+    me = await client.get("/api/v1/auth/me", headers=headers)
+    assert me.json()["user"]["email"] == "mixed.case.me@test.com"
+
+    restore = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"email": original_email}
+    )
+    assert restore.status_code == 200, restore.text
+    restored = await client.get("/api/v1/auth/me", headers=headers)
+    assert restored.json()["user"]["email"] == original_email
+
+
+async def test_update_me_validation_errors(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    before = await client.get("/api/v1/auth/me", headers=headers)
+    assert before.status_code == 200
+    original_name = before.json()["user"]["full_name"]
+
+    bad_email = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"email": "not-an-email"}
+    )
+    assert bad_email.status_code == 422, bad_email.text
+
+    short = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"full_name": "a"}
+    )
+    assert short.status_code == 422, short.text
+
+    # min_length must apply AFTER stripping: " a " (3 raw chars) must not
+    # slip through as a 1-char name.
+    padded_short = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"full_name": " a "}
+    )
+    if padded_short.status_code == 200:
+        await client.patch(
+            "/api/v1/auth/me", headers=headers, json={"full_name": original_name}
+        )
+    assert padded_short.status_code == 422, padded_short.text
