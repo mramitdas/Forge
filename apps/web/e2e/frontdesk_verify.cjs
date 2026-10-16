@@ -159,12 +159,13 @@ async function main() {
     await page.getByText("Invoices", { exact: true }).waitFor({ timeout: 10000 });
     check("billing page renders summary cards + invoices table", true);
 
-    const searchBox = page.getByPlaceholder(/search/i);
+    const searchBox = page.getByPlaceholder("Search invoice # or member");
     await searchBox.fill(invAOpen.number);
     await page.locator("tbody tr", { hasText: invAOpen.number }).first().waitFor({ timeout: 10000 });
     const rowsWithB = await page.locator("tbody tr", { hasText: invBOpen.number }).count();
     check("billing search narrows to one invoice", rowsWithB === 0, `other rows=${rowsWithB}`);
     await searchBox.fill(MEMBER_A);
+    await page.locator("tbody tr", { hasText: invAOpen.number }).first().waitFor({ timeout: 10000 });
     const memberRowsB = await page.locator("tbody tr", { hasText: invBOpen.number }).count();
     check("billing search by member name filters rows", memberRowsB === 0, `other rows=${memberRowsB}`);
     await searchBox.fill("");

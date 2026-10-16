@@ -161,7 +161,7 @@ export default function BillingPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search invoice # or member"
-                className="h-8 w-52 text-[12px]"
+                className="h-8! w-52! text-[12px]!"
               />
               <Badge tone="gray">
                 {search.trim() ? `${filtered.length} of ${invoices.length}` : `${invoices.length} total`}
@@ -205,10 +205,17 @@ export default function BillingPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {search.trim() && filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-8 text-center text-[13px] text-ink-faint">
                     No invoices match “{search}”.
+                  </td>
+                </tr>
+              )}
+              {!search.trim() && invoices.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-8 text-center text-[13px] text-ink-faint">
+                    No invoices yet.
                   </td>
                 </tr>
               )}
