@@ -110,16 +110,16 @@ async function main() {
     await ownerCard.getByText("Locked system role").waitFor({ timeout: 10000 });
     check("roles: Gym Owner shows Locked badge + locked empty state", true);
 
-    // UI has no create-role form — create via API, then verify it renders.
-    const roleRes = await api.post(`${BASE}/api/v1/permissions/roles`, {
-      headers: auth,
-      data: {
-        name: ROLE_NAME,
-        description: "E2E custom role",
-        permission_codes: ["members.view", "notifications.view"],
-      },
-    });
-    check("roles: custom role created via API", roleRes.status() === 201);
+    // Create the custom role through the UI form.
+    await page.getByRole("button", { name: /new role/i }).click();
+    const roleModal = page.locator("div.fixed.inset-0"); // Modal root, unique while open
+    await roleModal.getByPlaceholder("Front Desk Lead").fill(ROLE_NAME);
+    await roleModal.getByPlaceholder("Optional").fill("E2E custom role");
+    await roleModal.getByRole("switch", { name: "members.view" }).click();
+    await roleModal.getByRole("switch", { name: "notifications.view" }).click();
+    await roleModal.getByRole("button", { name: /^Create role \(/ }).click();
+    await page.getByText(`Created ${ROLE_NAME}`).waitFor({ timeout: 15000 });
+    check("roles: custom role created via UI form", true);
 
     await page.reload();
     await settle(page);

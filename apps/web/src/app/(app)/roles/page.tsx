@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Card, EmptyState, Switch, Toast } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Modal, Switch, Toast } from "@/components/ui";
 import { Async } from "@/components/skeleton";
 import { RoleCardSkeleton } from "@/components/skeletons";
-import { usePermissionCatalog, useRoles, useUpdateRole } from "@/lib/hooks";
+import { useCreateRole, usePermissionCatalog, useRoles, useUpdateRole } from "@/lib/hooks";
 
 const MODULE_LABELS: Record<string, string> = {
   members: "Members",
@@ -21,11 +21,16 @@ export default function RolesPage() {
   const { roles, isLoading: rolesLoading, isError: rolesError } = useRoles();
   const { permissions, isLoading: permsLoading, isError: permsError } = usePermissionCatalog();
   const updateRole = useUpdateRole();
+  const createRole = useCreateRole();
   const [draft, setDraft] = useState<Record<string, Set<string>>>({});
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newPerms, setNewPerms] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!initializedRef.current && roles.length > 0) {
@@ -86,11 +91,46 @@ export default function RolesPage() {
     }
   }
 
+  function toggleNewPerm(code: string) {
+    setNewPerms((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
+
+  async function submitNewRole() {
+    if (newName.trim().length < 2) {
+      setToast("Role name must be at least 2 characters");
+      return;
+    }
+    try {
+      await createRole.mutateAsync({
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+        permission_codes: [...newPerms],
+      });
+      setCreating(false);
+      setNewName("");
+      setNewDesc("");
+      setNewPerms(new Set());
+      setToast(`Created ${newName.trim()}`);
+    } catch {
+      setToast("Could not create role");
+    }
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <p className="text-[13px] text-ink-faint">
-        Tune what each staff role can view, edit and delete. The Gym Owner role is locked.
-      </p>
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-[13px] text-ink-faint">
+          Tune what each staff role can view, edit and delete. The Gym Owner role is locked.
+        </p>
+        <Button size="sm" onClick={() => setCreating(true)}>
+          New role
+        </Button>
+      </div>
 
       <Async loading={isLoading} error={isError} skeleton={<RoleCardSkeleton count={3} />}>
         <div className="space-y-4">
@@ -201,6 +241,78 @@ export default function RolesPage() {
       })}
         </div>
       </Async>
+
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="New role"
+        subtitle="Pick the permissions this role starts with"
+        width="max-w-2xl"
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Name</span>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Front Desk Lead"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Description</span>
+              <Input
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
+          </div>
+          <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1">
+            {Object.entries(byModule).map(([module, perms]) => (
+              <div key={module}>
+                <p className="kicker mb-1.5">{MODULE_LABELS[module] ?? module}</p>
+                <div className="grid gap-x-5 gap-y-1 sm:grid-cols-2">
+                  {perms.map((p) => (
+                    <div
+                      key={p.code}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleNewPerm(p.code)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          toggleNewPerm(p.code);
+                        }
+                      }}
+                      className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-fill"
+                    >
+                      <span className={`block text-[13px] ${newPerms.has(p.code) ? "text-ink" : "text-ink-faint"}`}>
+                        {p.description}
+                      </span>
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <Switch
+                          checked={newPerms.has(p.code)}
+                          onChange={() => toggleNewPerm(p.code)}
+                          label={p.code}
+                        />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitNewRole} disabled={createRole.isPending}>
+              {createRole.isPending ? "Creating…" : `Create role (${newPerms.size} perms)`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
     </div>

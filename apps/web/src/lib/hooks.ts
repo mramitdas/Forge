@@ -1054,3 +1054,14 @@ export function useUpdateRole() {
     },
   });
 }
+
+export function useCreateRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; description?: string; permission_codes: string[] }) =>
+      apiFetch<RoleOut>("/permissions/roles", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["roles"] });
+    },
+  });
+}
