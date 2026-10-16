@@ -558,7 +558,12 @@ In `apps/web/e2e/gym_ops_verify.cjs`, insert directly after the profile block ad
     await gName.fill(`${origGymName} E2E`);
     await gTz.selectOption("Asia/Dubai");
     await gymCard.getByRole("button", { name: /save gym profile/i }).click();
-    await page.getByText("Gym profile updated").waitFor({ timeout: 10000 });
+    await page.getByText("Gym profile updated", { exact: true }).waitFor({ timeout: 10000 });
+    // Sidebar tenant name must refresh WITHOUT a reload — proves the save landed
+    // and refreshMe ran (adjust the locator to the actual sidebar element if its
+    // text isn't exactly the gym name).
+    await page.locator("aside").getByText(`${origGymName} E2E`, { exact: true }).waitFor({ timeout: 15000 });
+    check("settings: gym profile save refreshes sidebar tenant name", true);
     await page.reload();
     await settle(page);
     const gymCard2 = page.locator("div.glass", { hasText: "Gym profile" }).first();
@@ -572,7 +577,9 @@ In `apps/web/e2e/gym_ops_verify.cjs`, insert directly after the profile block ad
     await gymCard2.locator("input").first().fill(origGymName);
     await gymCard2.locator("select").first().selectOption(origTz);
     await gymCard2.getByRole("button", { name: /save gym profile/i }).click();
-    await page.getByText("Gym profile updated").waitFor({ timeout: 10000 });
+    // Toast does NOT auto-dismiss — waiting for text here would match the stale
+    // pre-restore toast. Assert the restored name in the sidebar instead.
+    await page.locator("aside").getByText(origGymName, { exact: true }).waitFor({ timeout: 15000 });
     check("settings: gym profile restored", true);
 ```
 
@@ -622,13 +629,22 @@ In `apps/web/src/app/(app)/settings/page.tsx`:
 ```tsx
   async function saveGymProfile() {
     try {
-      await updateGymSettings.mutateAsync({ name: gymName.trim(), timezone: gymTimezone });
+      const updated = await updateGymSettings.mutateAsync({
+        name: gymName.trim(),
+        timezone: gymTimezone,
+      });
+      // Feed the PATCH response into the auth context (pattern from Task 2b) —
+      // the sidebar's tenant_name comes from `me`, and a plain refreshMe() GET
+      // would be an extra round trip with a partial-failure window.
+      if (me) await refreshMe({ ...me, tenant_name: updated.name });
       setToast("Gym profile updated");
     } catch {
       setToast("Could not save gym profile");
     }
   }
 ```
+
+(`me` and `refreshMe` are already destructured in the settings page from Task 2b. If `useUpdateGymSettings` response typing doesn't expose `name`, widen its return type — it resolves to `GymSettingsOut` which includes `name`.)
 
 4. Card — insert **inside** the existing `{can("tenancy.settings.manage") && (...)}` block, as a sibling of the Branch access card, wrapping both in the existing `Async` (move `Async` to wrap a `<div className="space-y-6">` containing both cards):
 
