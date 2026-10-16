@@ -130,6 +130,24 @@ async function main() {
     await roleCard.getByText("2 permissions", { exact: true }).waitFor({ timeout: 10000 });
     check("roles: custom role visible in UI list", true);
 
+    // Cancel must reset modal state (no stale draft on reopen).
+    await page.getByRole("button", { name: /new role/i }).click();
+    const modal2 = page.locator("div.fixed.inset-0");
+    await modal2.getByPlaceholder("Front Desk Lead").fill("Stale Draft");
+    await modal2.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("button", { name: /new role/i }).click();
+    const modal3 = page.locator("div.fixed.inset-0");
+    const draftVal = await modal3.getByPlaceholder("Front Desk Lead").inputValue();
+    check("roles: modal state resets on cancel", draftVal === "", `value=${draftVal}`);
+
+    // Duplicate names must be blocked client-side (backend has NO uniqueness
+    // check — POST would silently 201 a second identical role).
+    await modal3.getByPlaceholder("Front Desk Lead").fill("Receptionist");
+    await modal3.getByRole("button", { name: /^Create role \(/ }).click();
+    await page.getByText("Could not create role").waitFor({ timeout: 10000 });
+    check("roles: duplicate role name blocked", true);
+    await modal3.getByRole("button", { name: "Cancel" }).click();
+
     await page.getByRole("heading", { name: ROLE_NAME, exact: true }).click();
     await roleCard.getByRole("switch", { name: "reports.view" }).waitFor({ timeout: 10000 });
     await roleCard.getByRole("switch", { name: "reports.view" }).click();

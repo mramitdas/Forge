@@ -100,9 +100,22 @@ export default function RolesPage() {
     });
   }
 
+  function closeCreateModal() {
+    setCreating(false);
+    setNewName("");
+    setNewDesc("");
+    setNewPerms(new Set());
+  }
+
   async function submitNewRole() {
+    if (createRole.isPending) return;
     if (newName.trim().length < 2) {
-      setToast("Role name must be at least 2 characters");
+      setToast("Could not create role — name must be at least 2 characters");
+      return;
+    }
+    const dupe = roles.some((r) => r.name.trim().toLowerCase() === newName.trim().toLowerCase());
+    if (dupe) {
+      setToast(`Could not create role — a role named ${newName.trim()} already exists`);
       return;
     }
     try {
@@ -111,10 +124,7 @@ export default function RolesPage() {
         description: newDesc.trim() || undefined,
         permission_codes: [...newPerms],
       });
-      setCreating(false);
-      setNewName("");
-      setNewDesc("");
-      setNewPerms(new Set());
+      closeCreateModal();
       setToast(`Created ${newName.trim()}`);
     } catch {
       setToast("Could not create role");
@@ -244,7 +254,7 @@ export default function RolesPage() {
 
       <Modal
         open={creating}
-        onClose={() => setCreating(false)}
+        onClose={closeCreateModal}
         title="New role"
         subtitle="Pick the permissions this role starts with"
         width="max-w-2xl"
@@ -257,6 +267,7 @@ export default function RolesPage() {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="Front Desk Lead"
+                maxLength={100}
               />
             </label>
             <label className="block">
@@ -304,7 +315,7 @@ export default function RolesPage() {
             ))}
           </div>
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
+            <Button type="button" variant="secondary" onClick={closeCreateModal}>
               Cancel
             </Button>
             <Button onClick={submitNewRole} disabled={createRole.isPending}>
