@@ -153,8 +153,11 @@ export default function RolesPage() {
             <div
               role="button"
               tabIndex={0}
+              aria-expanded={!collapsed.has(role.id)}
               onClick={() => toggleCollapsed(role.id)}
               onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.repeat) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   toggleCollapsed(role.id);

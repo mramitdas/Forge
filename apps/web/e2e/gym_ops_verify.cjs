@@ -120,9 +120,22 @@ async function main() {
     await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ timeout: 10000 });
     const nestedButtons = await page.locator("button button").count();
     check("roles: no nested <button> elements", nestedButtons === 0, `count=${nestedButtons}`);
-    // Revert the toggle without saving so the card is clean again.
+
+    // Keyboard path: Enter on the focused Save must SAVE, not collapse the card.
+    // (If the header swallows the keydown, the card collapses, the Save button
+    // unmounts — the detached wait alone would pass — so also assert the card
+    // content is still visible.)
+    await recvCard.getByRole("button", { name: /^Save \(/ }).focus();
+    await page.keyboard.press("Enter");
+    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 15000 });
+    await recvCard.getByRole("switch", { name: "reports.view" }).waitFor({ timeout: 5000 });
+    check("roles: Enter on Save saves (header does not swallow keys)", true);
+
+    // Restore Receptionist's original permissions: toggle reports.view back off and save.
     await recvCard.getByRole("switch", { name: "reports.view" }).click();
-    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 10000 });
+    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ timeout: 10000 });
+    await recvCard.getByRole("button", { name: /^Save \(/ }).click();
+    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 15000 });
 
     // Create the custom role through the UI form.
     await page.getByRole("button", { name: /new role/i }).click();
