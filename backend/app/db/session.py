@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ssl
 import uuid
 from collections.abc import AsyncIterator
+from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -20,6 +22,17 @@ _engine = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
+def _ssl_connect_args(database_url: str) -> dict:
+    """Managed Postgres (Supabase, RDS, …) requires TLS. Honour
+    `?ssl=require` / `?sslmode=require` in the URL by handing asyncpg a
+    default SSL context; local dev URLs without the flag stay plain."""
+    query = parse_qs(urlparse(database_url).query)
+    mode = (query.get("ssl") or query.get("sslmode") or [""])[0].lower()
+    if mode in ("require", "verify-ca", "verify-full", "prefer"):
+        return {"ssl": ssl.create_default_context()}
+    return {}
+
+
 def get_engine():
     global _engine
     if _engine is None:
@@ -30,6 +43,7 @@ def get_engine():
             max_overflow=20,
             pool_pre_ping=True,
             echo=False,
+            connect_args=_ssl_connect_args(settings.database_url),
         )
     return _engine
 

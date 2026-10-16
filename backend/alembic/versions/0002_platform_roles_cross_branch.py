@@ -87,6 +87,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     bind = op.get_bind()
     bind.execute(text("ALTER TABLE gyms DROP COLUMN IF EXISTS cross_branch_access"))
+    # role_permissions (from 0001) references these catalog codes — remove the
+    # grants first or the catalog DELETE hits a foreign-key violation.
+    bind.execute(text("SELECT set_config('app.platform_scope', 'on', false)"))
     for code, _module, _description in [
         ("platform.gyms.create", "platform", "Provision a new gym"),
         ("platform.gyms.view", "platform", "View gym registry"),
@@ -98,6 +101,10 @@ def downgrade() -> None:
         ("platform.reports.view", "platform", "View platform-wide reports"),
         ("platform.settings.manage", "platform", "Manage platform settings"),
     ]:
+        bind.execute(
+            text("DELETE FROM role_permissions WHERE permission_code = :code"),
+            {"code": code},
+        )
         bind.execute(
             text("DELETE FROM permission_catalog WHERE code = :code"),
             {"code": code},

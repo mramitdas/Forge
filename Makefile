@@ -2,7 +2,7 @@ PY := .venv/bin/python
 RUFF := .venv/bin/ruff
 ALEMBIC := .venv/bin/alembic
 
-.PHONY: db-up db-init db-psql migrate migrate-downgrade seed test test-backend test-web lint fmt dev web help
+.PHONY: db-up db-init db-psql migrate migrate-downgrade seed reset test test-backend test-web lint fmt dev web help
 
 help:
 	@echo "Targets:"
@@ -11,6 +11,7 @@ help:
 	@echo "  db-psql      open psql shell as gym role"
 	@echo "  migrate      run alembic upgrade head on dev DB"
 	@echo "  seed         seed dev DB (platform user, demo gym, branch, plans)"
+	@echo "  reset        wipe ALL dev data, re-migrate, re-seed (single-shot cleanup)"
 	@echo "  test         run backend (pytest -q) + web unit tests (npm test)"
 	@echo "  test-backend run backend test suite (pytest -q)"
 	@echo "  test-web     run frontend unit tests (node --test)"
@@ -51,6 +52,9 @@ migrate-downgrade:
 
 seed:
 	cd backend && $(PY) -m scripts.seed_dev
+
+reset:
+	cd backend && bash scripts/reset_dev.sh
 
 test: test-backend test-web
 
