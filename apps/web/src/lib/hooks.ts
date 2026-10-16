@@ -33,6 +33,7 @@ import type {
   PlanOut,
   PlatformRevenueOut,
   PlatformSummaryOut,
+  MeOut,
   RoleOut,
   SubscriptionEventOut,
   SubscriptionOut,
@@ -710,6 +711,13 @@ export function useMarkNotificationRead() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
     },
+  });
+}
+
+export function useUpdateMe() {
+  return useMutation({
+    mutationFn: (body: { full_name?: string; email?: string }) =>
+      apiFetch<MeOut>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
   });
 }
 

@@ -6,7 +6,7 @@ import { Async } from "@/components/skeleton";
 import { SettingsBranchSkeleton } from "@/components/skeletons";
 import { useAuth } from "@/lib/auth";
 import { useCan } from "@/lib/permissions";
-import { useGymSettings, useUpdateGymSettings } from "@/lib/hooks";
+import { useGymSettings, useUpdateGymSettings, useUpdateMe } from "@/lib/hooks";
 
 function prettifyPermission(p: string): string {
   return p
@@ -16,17 +16,32 @@ function prettifyPermission(p: string): string {
 }
 
 export default function SettingsPage() {
-  const { me } = useAuth();
+  const { me, refreshMe } = useAuth();
   const user = me?.user;
   const [name, setName] = useState(user?.full_name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [toast, setToast] = useState<string | null>(null);
+  const updateMe = useUpdateMe();
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const permissions = me?.permissions ?? [];
   const scope = me?.tenant_name ?? "All branches";
   const can = useCan();
   const { settings: gymSettings, isLoading: settingsLoading, isError: settingsError } = useGymSettings();
   const updateGymSettings = useUpdateGymSettings();
+
+  async function saveProfile() {
+    setSavingProfile(true);
+    try {
+      await updateMe.mutateAsync({ full_name: name.trim(), email: email.trim() });
+      await refreshMe();
+      setToast("Profile updated");
+    } catch {
+      setToast("Could not save profile — the email may be taken");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   async function toggleCrossBranch(next: boolean) {
     try {
@@ -50,7 +65,9 @@ export default function SettingsPage() {
           </Field>
         </div>
         <div className="mt-4 flex justify-end">
-          <Button onClick={() => setToast("Profile updated")}>Save changes</Button>
+          <Button onClick={saveProfile} disabled={savingProfile}>
+            {savingProfile ? "Saving…" : "Save changes"}
+          </Button>
         </div>
       </Card>
 

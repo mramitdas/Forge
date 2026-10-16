@@ -182,6 +182,22 @@ async function main() {
       .getAttribute("aria-checked");
     check("settings: cross-branch toggle restored to original", restored === before, restored);
 
+    // ── Profile save persists (was a local-toast no-op) ──
+    const profileCard = page
+      .locator("div.glass", { has: page.getByText("Your account details across the organization") })
+      .first();
+    await profileCard.waitFor({ timeout: 15000 });
+    const nameInput = profileCard.locator("input").first();
+    const origName = await nameInput.inputValue();
+    await nameInput.fill(`${origName} E2E`);
+    await profileCard.getByRole("button", { name: "Save changes" }).click();
+    await page.getByText("Profile updated").waitFor({ timeout: 10000 });
+    await page.locator("aside").getByText(`${origName} E2E`).waitFor({ timeout: 15000 });
+    check("settings: profile name save persists (sidebar refreshes)", true);
+    await nameInput.fill(origName);
+    await profileCard.getByRole("button", { name: "Save changes" }).click();
+    await page.getByText("Profile updated").waitFor({ timeout: 10000 });
+
     // ── Notifications ──
     // Fixture: pay an open invoice (creates a server-side "Payment received"
     // notification for every tenant user). If none is open, mint one via a
