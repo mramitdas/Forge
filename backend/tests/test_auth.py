@@ -107,3 +107,43 @@ async def test_permission_catalog_and_roles(client, gym_a):
         },
     )
     assert response.status_code == 422
+
+
+async def test_update_me_profile(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    before = await client.get("/api/v1/auth/me", headers=headers)
+    assert before.status_code == 200
+    original_name = before.json()["user"]["full_name"]
+
+    response = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"full_name": "Renamed Owner"}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["full_name"] == "Renamed Owner"
+
+    me = await client.get("/api/v1/auth/me", headers=headers)
+    assert me.json()["user"]["full_name"] == "Renamed Owner"
+
+    # Email belonging to another user → 409.
+    emp = await client.post(
+        "/api/v1/employees",
+        headers=headers,
+        json={
+            "email": "taken-me-profile@example.com",
+            "full_name": "Temp Employee",
+            "password": "temp-pass-123",
+        },
+    )
+    assert emp.status_code == 201, emp.text
+    conflict = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"email": "taken-me-profile@example.com"}
+    )
+    assert conflict.status_code == 409, conflict.text
+
+    # Restoring the original name keeps the suite state clean for gym_a.
+    restore = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"full_name": original_name}
+    )
+    assert restore.status_code == 200, restore.text

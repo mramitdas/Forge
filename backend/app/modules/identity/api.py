@@ -18,6 +18,7 @@ from app.modules.identity.schemas import (
     LoginRequest,
     LogoutRequest,
     MeOut,
+    MeUpdateRequest,
     PermissionOut,
     RefreshRequest,
     RoleOut,
@@ -69,12 +70,7 @@ async def logout(
     await identity_svc.logout(session, refresh_token=body.refresh_token)
 
 
-@router.get("/me", response_model=MeOut)
-async def me(
-    actor: Annotated[Actor, Depends(get_actor_context)],
-    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
-) -> MeOut:
-    user = await session.get(User, actor.user_id)
+async def _me_payload(session: AsyncSession, actor: Actor, user: User) -> MeOut:
     perms = await identity_svc.get_effective_permissions(session, actor.user_id)
     tenant_name = None
     branches: list[dict] = []
@@ -95,6 +91,30 @@ async def me(
         permissions=sorted(perms.keys()),
         branches=branches,
     )
+
+
+@router.get("/me", response_model=MeOut)
+async def me(
+    actor: Annotated[Actor, Depends(get_actor_context)],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> MeOut:
+    user = await session.get(User, actor.user_id)
+    return await _me_payload(session, actor, user)
+
+
+@router.patch("/me", response_model=MeOut)
+async def update_me_route(
+    body: MeUpdateRequest,
+    actor: Annotated[Actor, Depends(get_actor_context)],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> MeOut:
+    user = await identity_svc.update_me(
+        session,
+        user_id=actor.user_id,
+        full_name=body.full_name,
+        email=body.email,
+    )
+    return await _me_payload(session, actor, user)
 
 
 @roles_router.get("", response_model=list[PermissionOut])

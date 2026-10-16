@@ -66,6 +66,16 @@ class MeOut(BaseModel):
     branches: list[dict] = []
 
 
+class MeUpdateRequest(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=200)
+    email: EmailStr | None = None
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_name(cls, v: str | None) -> str | None:
+        return v.strip() if v is not None else v
+
+
 class CreateEmployeeRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=200)

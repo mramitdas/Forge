@@ -109,6 +109,36 @@ async def authenticate(
     return await issue_tokens(session, user, ip=ip, user_agent=user_agent)
 
 
+async def update_me(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    full_name: str | None = None,
+    email: str | None = None,
+) -> User:
+    user = await session.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise NotFoundError("User not found", code="NOT_FOUND")
+    if full_name is not None:
+        user.full_name = full_name.strip()
+    if email is not None:
+        normalized = email.lower()
+        if normalized != user.email:
+            # Email is the global login key — uniqueness is cross-tenant.
+            existing = await session.scalar(
+                select(User.id).where(
+                    User.email == normalized,
+                    User.id != user.id,
+                    User.deleted_at.is_(None),
+                )
+            )
+            if existing is not None:
+                raise ConflictError("User already exists", code="EMAIL_TAKEN")
+        user.email = normalized
+    await session.flush()
+    return user
+
+
 async def refresh_tokens(
     session: AsyncSession,
     *,
