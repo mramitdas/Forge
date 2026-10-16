@@ -194,8 +194,9 @@ async function main() {
     await page.getByText(`Cancel ${invBOpen.number}?`, { exact: true }).waitFor({ timeout: 10000 });
     await page.getByRole("button", { name: "Void invoice" }).click();
     await page.getByText(`${invBOpen.number} voided`).waitFor({ timeout: 15000 });
-    // useVoidInvoice only invalidates the list query, not the detail query, so
-    // the detail card keeps the stale status — check the Void badge on the list.
+    // The detail query must refresh after void — no navigation needed.
+    await page.getByText("Void", { exact: true }).first().waitFor({ timeout: 15000 });
+    check("invoice B void: detail badge updates in place", true, invBOpen.number);
     await page.locator('main a[href="/billing"]').click();
     await page.waitForURL(/\/billing$/, { timeout: 10000 });
     const voidRow = page.locator("tbody tr", { hasText: invBOpen.number });

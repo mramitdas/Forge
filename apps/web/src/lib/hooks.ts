@@ -670,8 +670,9 @@ export function usePayInvoice() {
         method: "POST",
         body: JSON.stringify({ method: body.method, idempotency_key: body.idempotency_key }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, body) => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["invoice", body.invoice_id] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
@@ -682,8 +683,9 @@ export function useVoidInvoice() {
   return useMutation({
     mutationFn: (invoiceId: string) =>
       apiFetch<InvoiceOut>(`/invoices/${invoiceId}/void`, { method: "POST" }),
-    onSuccess: () => {
+    onSuccess: (_data, invoiceId) => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["invoice", invoiceId] });
     },
   });
 }
