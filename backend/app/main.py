@@ -16,6 +16,7 @@ from app.db.session import get_engine
 from app.kernel.events import Dispatcher
 from app.modules.attendance.api import router as attendance_router
 from app.modules.billing.api import router as billing_router
+from app.modules.expenses.api import router as expenses_router
 from app.modules.identity.api import employees_router, roles_router
 from app.modules.identity.api import router as auth_router
 from app.modules.members.api import router as members_router
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
     app.include_router(members_router, prefix=settings.api_prefix)
     app.include_router(membership_router, prefix=settings.api_prefix)
     app.include_router(billing_router, prefix=settings.api_prefix)
+    app.include_router(expenses_router, prefix=settings.api_prefix)
     app.include_router(attendance_router, prefix=settings.api_prefix)
     app.include_router(notifications_router, prefix=settings.api_prefix)
     return app

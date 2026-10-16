@@ -18,6 +18,7 @@ import {
 import type {
   BranchOut,
   CheckInOut,
+  ExpenseOut,
   GymOut,
   GymOwnerOut,
   GymSettingsOut,
@@ -482,6 +483,49 @@ export function useInvoicesData(): { invoices: Invoice[]; isLoading: boolean; is
     () => ({ invoices: (q.data ?? []).map(toUiInvoice), isLoading: q.isLoading, isError: q.isError }),
     [q.data, q.isLoading, q.isError],
   );
+}
+
+export function useExpensesData(): {
+  expenses: ExpenseOut[];
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
+  const q = useQuery({
+    queryKey: ["expenses"],
+    queryFn: () => fetchPaged<ExpenseOut>("/expenses"),
+    enabled: can("expenses.view"),
+  });
+  return useMemo(
+    () => ({ expenses: q.data ?? [], isLoading: q.isLoading, isError: q.isError }),
+    [q.data, q.isLoading, q.isError],
+  );
+}
+
+export function useCreateExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      category: string;
+      description?: string;
+      amount_minor: number;
+      method: string;
+      paid_at?: string;
+    }) => apiFetch<ExpenseOut>("/expenses", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+    },
+  });
+}
+
+export function useDeleteExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/expenses/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+    },
+  });
 }
 
 export function useInvoiceDetail(id: string): {

@@ -97,6 +97,17 @@ export interface CheckInOut {
   reason: string | null;
 }
 
+export interface ExpenseOut {
+  id: string;
+  branch_id: string | null;
+  category: string;
+  description: string | null;
+  amount_minor: number;
+  currency: string;
+  method: string;
+  paid_at: string;
+}
+
 export interface PageOut<T> {
   items: T[];
   total: number | null;

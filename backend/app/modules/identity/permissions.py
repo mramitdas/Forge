@@ -92,6 +92,9 @@ PERMISSIONS: list[dict[str, str]] = [
     {"code": "billing.payments.capture", "module": "billing", "description": "Capture payments"},
     {"code": "billing.payments.refund", "module": "billing", "description": "Refund payments"},
     {"code": "billing.settings.view", "module": "billing", "description": "View billing settings"},
+    # expenses
+    {"code": "expenses.view", "module": "expenses", "description": "View expenses"},
+    {"code": "expenses.manage", "module": "expenses", "description": "Record and delete expenses"},
     # attendance
     {
         "code": "attendance.records.view",
@@ -143,6 +146,8 @@ ROLE_TEMPLATES: dict[str, dict] = {
             "billing.invoices.view",
             "billing.invoices.create",
             "billing.payments.capture",
+            "expenses.view",
+            "expenses.manage",
             "attendance.records.view",
             "attendance.checkin",
             "notifications.view",

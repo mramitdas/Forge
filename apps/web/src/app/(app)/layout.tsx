@@ -57,6 +57,13 @@ const icons: Record<string, React.ReactNode> = {
       <path d="M10 19a2 2 0 0 0 4 0" />
     </svg>
   ),
+  expenses: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <path d="M4 5h16v14H4z" />
+      <path d="M4 9h16M9 3v4M15 3v4" strokeLinecap="round" />
+      <path d="M8 13h3M8 16h5" strokeLinecap="round" />
+    </svg>
+  ),
   branches: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
       <path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11z" />
@@ -104,6 +111,7 @@ const nav: {
   { href: "/plans", label: "Plans", icon: "plans", perm: "membership.plans.view" },
   { href: "/subscriptions", label: "Subscriptions", icon: "subscriptions", perm: "membership.subscriptions.view" },
   { href: "/billing", label: "Billing", icon: "billing", perm: "billing.invoices.view" },
+  { href: "/expenses", label: "Expenses", icon: "expenses", perm: "expenses.view" },
   { href: "/notifications", label: "Notifications", icon: "notifications", perm: "notifications.view" },
   { href: "/branches", label: "Branches", icon: "branches", perm: "tenancy.branches.view" },
   { href: "/roles", label: "Roles", icon: "roles", perm: "roles.manage" },
@@ -128,6 +136,7 @@ const titles: Record<string, string> = {
   "/plans": "Plans",
   "/subscriptions": "Subscriptions",
   "/billing": "Billing",
+  "/expenses": "Expenses",
   "/notifications": "Notifications",
   "/branches": "Branches",
   "/roles": "Roles",
