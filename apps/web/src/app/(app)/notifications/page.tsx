@@ -63,6 +63,7 @@ export default function NotificationsPage() {
   function markOne(n: Notification) {
     if (n.read) return;
     markRead.mutate(n.id);
+    setToast("Notification marked as read");
   }
 
   return (

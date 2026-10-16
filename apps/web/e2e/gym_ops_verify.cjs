@@ -122,9 +122,9 @@ async function main() {
     check("roles: no nested <button> elements", nestedButtons === 0, `count=${nestedButtons}`);
 
     // Keyboard path: Enter on the focused Save must SAVE, not collapse the card.
-    // (If the header swallows the keydown, the card collapses, the Save button
-    // unmounts — the detached wait alone would pass — so also assert the card
-    // content is still visible.)
+    // (If the header swallows the keydown, the card collapses while the dirty
+    // header's Save button stays mounted — so the detached wait times out and
+    // the check fails. The switch-visibility wait is belt-and-braces.)
     await recvCard.getByRole("button", { name: /^Save \(/ }).focus();
     await page.keyboard.press("Enter");
     await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 15000 });
@@ -178,8 +178,8 @@ async function main() {
     await page.getByRole("heading", { name: ROLE_NAME, exact: true }).click();
     await roleCard.getByRole("switch", { name: "reports.view" }).waitFor({ timeout: 10000 });
     await roleCard.getByRole("switch", { name: "reports.view" }).click();
-    // The card header is also a <button> whose accessible name embeds the
-    // nested Save label — match the inner button exactly to avoid ambiguity.
+    // The card header (div[role=button]) accessible name embeds the nested
+    // Save label — match the inner button exactly to avoid ambiguity.
     await roleCard.getByRole("button", { name: "Save (3 perms)", exact: true }).click();
     await page.getByText(`Saved ${ROLE_NAME} permissions`).waitFor({ timeout: 10000 });
     await roleCard.getByText("3 permissions", { exact: true }).waitFor({ timeout: 10000 });
@@ -340,6 +340,8 @@ async function main() {
     await notifRow.click();
     await notifRow.locator("span.bg-accent").waitFor({ state: "detached", timeout: 10000 });
     check("notifications: mark-read clears unread indicator", dotsBefore === 1, `dots before=${dotsBefore}`);
+    await page.getByText("Notification marked as read", { exact: true }).waitFor({ timeout: 10000 });
+    check("notifications: single mark-read shows toast", true);
   } catch (err) {
     check("unexpected failure", false, String(err).slice(0, 200));
   } finally {
