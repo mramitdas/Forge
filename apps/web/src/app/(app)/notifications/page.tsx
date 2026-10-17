@@ -52,6 +52,7 @@ export default function NotificationsPage() {
   const { notifications, unread, isLoading, isError } = useNotificationsData();
   const markRead = useMarkNotificationRead();
   const can = useCan();
+  const [isMarkingAll, setMarkingAll] = useState(false);
 
   const list = useMemo(
     () => (filter === "all" ? notifications : notifications.filter((n) => !n.read)),
@@ -60,13 +61,18 @@ export default function NotificationsPage() {
 
   async function markAll() {
     const ids = notifications.filter((n) => !n.read).map((n) => n.id);
-    if (ids.length === 0) return;
-    const results = await Promise.allSettled(ids.map((id) => markRead.mutateAsync(id)));
-    const failed = results.filter((r) => r.status === "rejected").length;
-    if (failed > 0) {
-      notify(`Could not mark ${failed} notification${failed === 1 ? "" : "s"} as read`, "error");
-    } else {
-      notify("All notifications marked as read");
+    if (ids.length === 0 || isMarkingAll) return;
+    setMarkingAll(true);
+    try {
+      const results = await Promise.allSettled(ids.map((id) => markRead.mutateAsync(id)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed > 0) {
+        notify(`Could not mark ${failed} notification${failed === 1 ? "" : "s"} as read`, "error");
+      } else {
+        notify("All notifications marked as read");
+      }
+    } finally {
+      setMarkingAll(false);
     }
   }
 
@@ -100,7 +106,7 @@ export default function NotificationsPage() {
           onChange={setFilter}
         />
         {can("notifications.view") && (
-          <Button variant="ghost" size="sm" onClick={markAll} disabled={unread === 0}>
+          <Button variant="ghost" size="sm" onClick={markAll} disabled={unread === 0 || isMarkingAll}>
             Mark all read
           </Button>
         )}
