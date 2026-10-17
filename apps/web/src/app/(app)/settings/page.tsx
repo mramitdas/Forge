@@ -22,7 +22,10 @@ export default function SettingsPage() {
   const user = me?.user;
   const [name, setName] = useState(user?.full_name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  function notify(message: string, type: "success" | "error" = "success") {
+    setToast({ message, type });
+  }
   const updateMe = useUpdateMe();
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -54,16 +57,18 @@ export default function SettingsPage() {
       // context so a flaky follow-up GET can't bounce the user to /login
       // while the toast claims success.
       await refreshMe(updated);
-      setName(name.trim());
-      setEmail(email.trim());
-      setToast("Profile updated");
+      // Seed the inputs from the server response (it lowercases email) —
+      // re-seeding from local state would show casing the server rejected.
+      setName(updated.user.full_name);
+      setEmail(updated.user.email);
+      notify("Profile updated");
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        setToast("That email is already taken");
+        notify("That email is already taken", "error");
       } else if (e instanceof ApiError && e.status === 422) {
-        setToast("Check the name and email format");
+        notify("Check the name and email format", "error");
       } else {
-        setToast("Could not save profile — check your connection");
+        notify("Could not save profile — check your connection", "error");
       }
     } finally {
       setSavingProfile(false);
@@ -73,9 +78,9 @@ export default function SettingsPage() {
   async function toggleCrossBranch(next: boolean) {
     try {
       await updateGymSettings.mutateAsync({ cross_branch_access: next });
-      setToast(next ? "Members can now use any branch" : "Members restricted to their home branch");
+      notify(next ? "Members can now use any branch" : "Members restricted to their home branch");
     } catch {
-      setToast("Could not update branch access");
+      notify("Could not update branch access", "error");
     }
   }
 
@@ -95,12 +100,12 @@ export default function SettingsPage() {
       // the sidebar's tenant_name comes from `me`, and a plain refreshMe() GET
       // would be an extra round trip with a partial-failure window.
       if (me) await refreshMe({ ...me, tenant_name: updated.name });
-      setToast("Gym profile updated");
+      notify("Gym profile updated");
     } catch (e) {
       if (e instanceof ApiError && e.status === 422) {
-        setToast("Gym name must be 2–200 characters");
+        notify("Gym name must be 2–200 characters", "error");
       } else {
-        setToast("Could not save gym profile");
+        notify("Could not save gym profile", "error");
       }
     }
   }
@@ -232,7 +237,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {toast && <Toast type="success" message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }
