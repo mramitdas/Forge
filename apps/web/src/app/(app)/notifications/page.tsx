@@ -45,7 +45,10 @@ const typeIcon: Record<Notification["type"], React.ReactNode> = {
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<"all" | "unread">("all");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  function notify(message: string, type: "success" | "error" = "success") {
+    setToast({ message, type });
+  }
   const { notifications, unread, isLoading, isError } = useNotificationsData();
   const markRead = useMarkNotificationRead();
   const can = useCan();
@@ -55,15 +58,24 @@ export default function NotificationsPage() {
     [filter, notifications],
   );
 
-  function markAll() {
-    notifications.filter((n) => !n.read).forEach((n) => markRead.mutate(n.id));
-    setToast("All notifications marked as read");
+  async function markAll() {
+    const ids = notifications.filter((n) => !n.read).map((n) => n.id);
+    if (ids.length === 0) return;
+    const results = await Promise.allSettled(ids.map((id) => markRead.mutateAsync(id)));
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) {
+      notify(`Could not mark ${failed} notification${failed === 1 ? "" : "s"} as read`, "error");
+    } else {
+      notify("All notifications marked as read");
+    }
   }
 
   function markOne(n: Notification) {
     if (n.read) return;
-    markRead.mutate(n.id);
-    setToast("Notification marked as read");
+    markRead.mutate(n.id, {
+      onSuccess: () => notify("Notification marked as read"),
+      onError: () => notify("Could not mark notification as read", "error"),
+    });
   }
 
   return (
@@ -120,7 +132,7 @@ export default function NotificationsPage() {
         </Card>
       </Async>
 
-      {toast && <Toast type="success" message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }
