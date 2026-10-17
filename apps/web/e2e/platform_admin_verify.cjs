@@ -26,6 +26,19 @@ function check(name, ok, extra = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? `  (${extra})` : ""}`);
 }
 
+// Await a wait-then-check pair so a timeout fails under the check's own
+// name instead of surfacing as a generic "unexpected failure".
+async function must(name, p, extra = "") {
+  try {
+    await p;
+    check(name, true, extra);
+  } catch (e) {
+    check(name, false, String(e).slice(0, 200));
+    if (e && typeof e === "object") e.named = true;
+    throw e;
+  }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -49,8 +62,7 @@ async function main() {
     await page.locator('input[placeholder="owner@gym.com"]').fill(OWNER_EMAIL);
     await page.locator('input[placeholder="min 8 chars"]').fill("verify-pass-123");
     await page.getByRole("button", { name: /provision gym/i }).last().click();
-    await page.getByText(`Verify Gym ${ts}`, { exact: true }).first().waitFor({ timeout: 20000 });
-    check("gym provisioned and appears in table", true);
+    await must("gym provisioned and appears in table", page.getByText(`Verify Gym ${ts}`, { exact: true }).first().waitFor({ timeout: 20000 }));
 
     // ── Gyms: edit (timezone + currency dropdowns) ──
     let row = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
@@ -66,12 +78,10 @@ async function main() {
     // ── Gyms: suspend / enable ──
     row = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
     await row.getByRole("button", { name: "Suspend" }).click();
-    await page.getByText(new RegExp(`Verify Gym ${ts} suspended`)).waitFor({ timeout: 10000 });
-    check("gym suspended", true);
+    await must("gym suspended", page.getByText(new RegExp(`Verify Gym ${ts} suspended`)).waitFor({ timeout: 10000 }));
     row = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
     await row.getByRole("button", { name: "Enable" }).click();
-    await page.getByText(new RegExp(`Verify Gym ${ts} is now active`)).waitFor({ timeout: 10000 });
-    check("gym enabled again", true);
+    await must("gym enabled again", page.getByText(new RegExp(`Verify Gym ${ts} is now active`)).waitFor({ timeout: 10000 }));
 
     // ── Owners: edit (password reset) ──
     await page.goto(`${BASE}/platform/owners`);
@@ -80,8 +90,7 @@ async function main() {
     await oRow.getByRole("button", { name: "Edit" }).click();
     await page.locator('input[placeholder="Leave blank to keep current"]').fill("verify-pass-456");
     await page.getByRole("button", { name: /save changes/i }).click();
-    await page.getByText("Owner updated").waitFor({ timeout: 10000 });
-    check("owner edit (password reset) succeeds", true);
+    await must("owner edit (password reset) succeeds", page.getByText("Owner updated").waitFor({ timeout: 10000 }));
 
     // ── Owners: disable / enable ──
     oRow = page.locator("tr", { hasText: OWNER_EMAIL }).first();
@@ -94,15 +103,13 @@ async function main() {
     const disabledText = await page.locator("tr", { hasText: OWNER_EMAIL }).first().innerText();
     check("owner disabled", disabledText.includes("disabled"), disabledText.slice(0, 80));
     await oRow.getByRole("button", { name: "Enable" }).click();
-    await page.getByText("can now log in").waitFor({ timeout: 10000 });
-    check("owner enabled again", true);
+    await must("owner enabled again", page.getByText("can now log in").waitFor({ timeout: 10000 }));
 
     // ── Owners: login as owner + exit ──
     oRow = page.locator("tr", { hasText: OWNER_EMAIL }).first();
     await oRow.getByRole("button", { name: "Login" }).click();
     await page.waitForURL(/\/$/, { timeout: 20000 });
-    await page.getByText(/Viewing the gym workspace as/).waitFor({ timeout: 10000 });
-    check("login-as-owner enters gym workspace with banner", true, page.url());
+    await must("login-as-owner enters gym workspace with banner", page.getByText(/Viewing the gym workspace as/).waitFor({ timeout: 10000 }), page.url());
     check("gym nav visible (Members link)", (await page.locator("a", { hasText: "Members" }).count()) > 0);
 
     await page.getByRole("button", { name: "Exit to platform" }).click();
@@ -127,8 +134,7 @@ async function main() {
     await page.getByText("Gym subscriptions").waitFor({ timeout: 10000 });
     const tierSelect = page.locator('table select').first();
     await tierSelect.selectOption({ label: "Pro" });
-    await page.getByText("Subscription tier updated").waitFor({ timeout: 10000 });
-    check("subscription tier changed via overview dropdown", true);
+    await must("subscription tier changed via overview dropdown", page.getByText("Subscription tier updated").waitFor({ timeout: 10000 }));
 
     // ── Platform subscriptions: pricing cards + tier CRUD ──
     await page.goto(`${BASE}/platform/subscriptions`);
@@ -146,25 +152,21 @@ async function main() {
     // Exact match: the new card's description is "Tier created during
     // verification", which would otherwise collide with the toast.
     await page.getByText("Tier created", { exact: true }).waitFor({ timeout: 10000 });
-    await page.getByText("Verify Tier", { exact: true }).waitFor({ timeout: 15000 });
-    check("tier created via modal", true);
+    await must("tier created via modal", page.getByText("Verify Tier", { exact: true }).waitFor({ timeout: 15000 }));
 
     let tierCard = page.locator("div.rounded-2xl").filter({ hasText: "Verify Tier" }).first();
     await tierCard.getByRole("button", { name: "Edit" }).click();
     await page.locator('input[placeholder="e.g. Premium"]').fill("Verify Tier Plus");
     await page.getByRole("button", { name: /save changes/i }).click();
     await page.getByText("Tier updated").waitFor({ timeout: 10000 });
-    await page.getByText("Verify Tier Plus", { exact: true }).waitFor({ timeout: 15000 });
-    check("tier edited via modal", true);
+    await must("tier edited via modal", page.getByText("Verify Tier Plus", { exact: true }).waitFor({ timeout: 15000 }));
 
     tierCard = page.locator("div.rounded-2xl").filter({ hasText: "Verify Tier Plus" }).first();
     await tierCard.getByRole("switch", { name: "Toggle Verify Tier Plus" }).click();
-    await page.getByText("Verify Tier Plus is now disabled").waitFor({ timeout: 10000 });
-    check("tier disabled via switch", true);
+    await must("tier disabled via switch", page.getByText("Verify Tier Plus is now disabled").waitFor({ timeout: 10000 }));
     tierCard = page.locator("div.rounded-2xl").filter({ hasText: "Verify Tier Plus" }).first();
     await tierCard.getByRole("switch", { name: "Toggle Verify Tier Plus" }).click();
-    await page.getByText("Verify Tier Plus is now active").waitFor({ timeout: 10000 });
-    check("tier re-enabled via switch", true);
+    await must("tier re-enabled via switch", page.getByText("Verify Tier Plus is now active").waitFor({ timeout: 10000 }));
 
     tierCard = page.locator("div.rounded-2xl").filter({ hasText: "Verify Tier Plus" }).first();
     await tierCard.getByRole("button", { name: "Delete" }).click();
@@ -182,10 +184,11 @@ async function main() {
     await page.waitForTimeout(800);
     const firstBar = await page.locator(".flex.h-44 > div").first().locator("> div").first().boundingBox();
     check("revenue bars have visible height", !!firstBar && firstBar.height > 2, firstBar ? `h=${firstBar.height.toFixed(1)}` : "no box");
-    await page.getByText("Subscriptions sold", { exact: true }).waitFor({ timeout: 15000 });
-    check("revenue sold list section renders", true);
+    await must("revenue sold list section renders", page.getByText("Subscriptions sold", { exact: true }).waitFor({ timeout: 15000 }));
   } catch (err) {
-    check("unexpected failure", false, String(err).slice(0, 300));
+    if (!(err && typeof err === "object" && err.named)) {
+      check("unexpected failure", false, String(err).slice(0, 300));
+    }
     await page.screenshot({ path: "/tmp/opencode/platform_verify_fail.png", fullPage: true }).catch(() => {});
   }
 

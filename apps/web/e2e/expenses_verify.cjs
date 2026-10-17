@@ -16,6 +16,19 @@ function check(name, ok, extra = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? `  (${extra})` : ""}`);
 }
 
+// Await a wait-then-check pair so a timeout fails under the check's own
+// name instead of surfacing as a generic "unexpected failure".
+async function must(name, p, extra = "") {
+  try {
+    await p;
+    check(name, true, extra);
+  } catch (e) {
+    check(name, false, String(e).slice(0, 200));
+    if (e && typeof e === "object") e.named = true;
+    throw e;
+  }
+}
+
 async function login(page, user) {
   await page.goto(`${BASE}/login`);
   await page.locator('input[type="email"]').fill(user.email);
@@ -39,8 +52,7 @@ async function main() {
     check("owner login lands on dashboard", true, page.url());
 
     await page.goto(`${BASE}/expenses`);
-    await page.getByRole("heading", { name: "Expenses", exact: true }).first().waitFor({ timeout: 15000 });
-    check("expenses page renders", true);
+    await must("expenses page renders", page.getByRole("heading", { name: "Expenses", exact: true }).first().waitFor({ timeout: 15000 }));
 
     const startsAt = await rowCount(page);
     check("table present (empty or existing rows)", true, `start=${startsAt}`);
@@ -56,8 +68,7 @@ async function main() {
     check("expense created via modal", (await rowCount(page)) === startsAt + 1);
 
     // Row content: ₹25,000 rendered with inr formatting
-    await page.getByText("₹25,000").first().waitFor({ timeout: 10000 });
-    check("amount renders in INR format", true);
+    await must("amount renders in INR format", page.getByText("₹25,000").first().waitFor({ timeout: 10000 }));
 
     // Summary total includes it
     const totalCard = await page.locator("p").filter({ hasText: /^Total spent/ }).first().textContent();
@@ -68,8 +79,7 @@ async function main() {
     await page.locator('input[type="number"]').waitFor({ timeout: 10000 });
     await page.locator('input[type="number"]').fill("0");
     await page.getByRole("button", { name: "Save expense" }).click();
-    await page.getByText(/Enter a valid amount/).waitFor({ timeout: 10000 });
-    check("invalid amount shows error toast", true);
+    await must("invalid amount shows error toast", page.getByText(/Enter a valid amount/).waitFor({ timeout: 10000 }));
     // Modal has no Escape handler — close via Cancel button.
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.locator('input[type="number"]').waitFor({ state: "detached", timeout: 10000 });
@@ -105,7 +115,9 @@ async function main() {
     const delButtons = await page.locator("table tbody tr button:has-text('Delete')").count();
     check("delete affordance present (owner has expenses.manage)", delButtons > 0);
   } catch (err) {
-    check("unexpected failure", false, String(err).slice(0, 200));
+    if (!(err && typeof err === "object" && err.named)) {
+      check("unexpected failure", false, String(err).slice(0, 200));
+    }
   } finally {
     await browser.close();
   }

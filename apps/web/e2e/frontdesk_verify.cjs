@@ -18,6 +18,19 @@ function check(name, ok, extra = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? `  (${extra})` : ""}`);
 }
 
+// Await a wait-then-check pair so a timeout fails under the check's own
+// name instead of surfacing as a generic "unexpected failure".
+async function must(name, p, extra = "") {
+  try {
+    await p;
+    check(name, true, extra);
+  } catch (e) {
+    check(name, false, String(e).slice(0, 200));
+    if (e && typeof e === "object") e.named = true;
+    throw e;
+  }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -115,8 +128,7 @@ async function main() {
     await page.goto(`${BASE}/members`);
     await page.locator('input[placeholder="Search name, email, phone"]').waitFor({ timeout: 20000 });
     await page.getByText(/\d+ members/).waitFor({ timeout: 20000 });
-    await page.getByRole("button", { name: "Add member" }).waitFor({ timeout: 10000 });
-    check("members page renders with total count + Add member", true);
+    await must("members page renders with total count + Add member", page.getByRole("button", { name: "Add member" }).waitFor({ timeout: 10000 }));
 
     const searchInput = page.locator('input[placeholder="Search name, email, phone"]');
     await searchInput.fill(MEMBER_A);
@@ -124,14 +136,12 @@ async function main() {
     await memberRow.first().waitFor({ timeout: 15000 });
     check("search by name finds member A in table", true, `${await memberRow.count()} row(s)`);
 
-    await memberRow.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 });
-    check("member A row shows Active status badge", true);
+    await must("member A row shows Active status badge", memberRow.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 }));
 
     await memberRow.first().hover();
     await memberRow.first().getByRole("link", { name: "View" }).click();
     await page.waitForURL(new RegExp(`/members/${memberA.body.id}`), { timeout: 10000 });
-    await page.getByRole("heading", { name: MEMBER_A }).waitFor({ timeout: 15000 });
-    check("member detail opens from list View link", true, page.url());
+    await must("member detail opens from list View link", page.getByRole("heading", { name: MEMBER_A }).waitFor({ timeout: 15000 }), page.url());
 
     await page.locator('main a[href="/members"]').click();
     await page.waitForURL(/\/members$/, { timeout: 10000 });
@@ -140,24 +150,20 @@ async function main() {
     // ── 2. Check-ins ──
     await page.goto(`${BASE}/checkins`);
     await page.getByRole("heading", { name: "Quick check-in" }).waitFor({ timeout: 20000 });
-    await page.getByRole("heading", { name: "Recent activity" }).waitFor({ timeout: 10000 });
-    check("check-ins page renders Quick check-in + Recent activity", true);
+    await must("check-ins page renders Quick check-in + Recent activity", page.getByRole("heading", { name: "Recent activity" }).waitFor({ timeout: 10000 }));
 
     await page.locator('input[placeholder="Search member…"]').fill(MEMBER_A);
     await page.getByRole("button", { name: "Check in", exact: true }).click();
-    await page.getByRole("heading", { name: "Access granted" }).waitFor({ timeout: 15000 });
-    check("record check-in through check-ins page UI (granted)", true);
+    await must("record check-in through check-ins page UI (granted)", page.getByRole("heading", { name: "Access granted" }).waitFor({ timeout: 15000 }));
 
     const activityRow = page.locator("div.divide-y > div", { hasText: MEMBER_A }).first();
     await activityRow.waitFor({ timeout: 15000 });
-    await activityRow.getByText("Granted", { exact: true }).waitFor({ timeout: 10000 });
-    check("check-in record appears in Recent activity list", true);
+    await must("check-in record appears in Recent activity list", activityRow.getByText("Granted", { exact: true }).waitFor({ timeout: 10000 }));
 
     // ── 3. Billing: list → detail → pay → void ──
     await page.goto(`${BASE}/billing`);
     await page.getByText("Outstanding").waitFor({ timeout: 20000 });
-    await page.getByText("Invoices", { exact: true }).waitFor({ timeout: 10000 });
-    check("billing page renders summary cards + invoices table", true);
+    await must("billing page renders summary cards + invoices table", page.getByText("Invoices", { exact: true }).waitFor({ timeout: 10000 }));
 
     const searchBox = page.getByPlaceholder("Search invoice # or member");
     await searchBox.fill(invAOpen.number);
@@ -169,21 +175,18 @@ async function main() {
     const memberRowsB = await page.locator("tbody tr", { hasText: invBOpen.number }).count();
     check("billing search by member name filters rows", memberRowsB === 0, `other rows=${memberRowsB}`);
     await searchBox.fill("");
-    await page.locator("tbody tr", { hasText: invBOpen.number }).first().waitFor({ timeout: 10000 });
-    check("billing search clear restores rows", true);
+    await must("billing search clear restores rows", page.locator("tbody tr", { hasText: invBOpen.number }).first().waitFor({ timeout: 10000 }));
 
     const invRowA = page.locator("tbody tr", { hasText: invAOpen.number });
     await invRowA.first().waitFor({ timeout: 15000 });
     await invRowA.first().getByText("Open", { exact: true }).waitFor({ timeout: 10000 });
-    await invRowA.first().getByText(MEMBER_A).waitFor({ timeout: 10000 });
-    check("invoice A listed with Open badge + member name", true, invAOpen.number);
+    await must("invoice A listed with Open badge + member name", invRowA.first().getByText(MEMBER_A).waitFor({ timeout: 10000 }), invAOpen.number);
 
     await invRowA.first().getByRole("link", { name: invAOpen.number }).click();
     await page.waitForURL(new RegExp(`/billing/${invAOpen.id}`), { timeout: 10000 });
     await page.getByRole("heading", { name: invAOpen.number }).waitFor({ timeout: 15000 });
     await page.getByText("Line items", { exact: true }).waitFor({ timeout: 10000 });
-    await page.getByRole("button", { name: "Cancel invoice" }).waitFor({ timeout: 10000 });
-    check("invoice A detail renders (line items + Cancel invoice)", true, page.url());
+    await must("invoice A detail renders (line items + Cancel invoice)", page.getByRole("button", { name: "Cancel invoice" }).waitFor({ timeout: 10000 }), page.url());
 
     await page.locator('main a[href="/billing"]').click();
     await page.waitForURL(/\/billing$/, { timeout: 10000 });
@@ -195,8 +198,7 @@ async function main() {
     await page
       .getByText(`${invAOpen.number} marked as paid via upi`)
       .waitFor({ timeout: 15000 });
-    await payRow.first().getByText("Paid", { exact: true }).waitFor({ timeout: 10000 });
-    check("invoice A paid via Pay now UI (Paid badge)", true, invAOpen.number);
+    await must("invoice A paid via Pay now UI (Paid badge)", payRow.first().getByText("Paid", { exact: true }).waitFor({ timeout: 10000 }), invAOpen.number);
 
     const invRowB = page.locator("tbody tr", { hasText: invBOpen.number });
     await invRowB.first().getByRole("link", { name: invBOpen.number }).waitFor({ timeout: 15000 });
@@ -213,34 +215,31 @@ async function main() {
       .locator("div.glass")
       .filter({ has: page.getByRole("heading", { name: invBOpen.number }) })
       .first();
-    await invBCard.getByText("Void", { exact: true }).waitFor({ timeout: 15000 });
-    check("invoice B void: detail badge updates in place", true, invBOpen.number);
+    await must("invoice B void: detail badge updates in place", invBCard.getByText("Void", { exact: true }).waitFor({ timeout: 15000 }), invBOpen.number);
     await page.locator('main a[href="/billing"]').click();
     await page.waitForURL(/\/billing$/, { timeout: 10000 });
     const voidRow = page.locator("tbody tr", { hasText: invBOpen.number });
-    await voidRow.first().getByText("Void", { exact: true }).waitFor({ timeout: 15000 });
-    check("invoice B voided via detail UI (Void badge on billing list)", true, invBOpen.number);
+    await must("invoice B voided via detail UI (Void badge on billing list)", voidRow.first().getByText("Void", { exact: true }).waitFor({ timeout: 15000 }), invBOpen.number);
 
     // ── 4. Subscriptions ──
     await page.goto(`${BASE}/subscriptions`);
-    await page.getByText(/\d+ subscriptions/).waitFor({ timeout: 20000 });
-    check("subscriptions page renders with count", true);
+    await must("subscriptions page renders with count", page.getByText(/\d+ subscriptions/).waitFor({ timeout: 20000 }));
 
     const subRowA = page.locator("tbody tr", { hasText: MEMBER_A });
     await subRowA.first().waitFor({ timeout: 15000 });
     await subRowA.first().getByText(PLAN_A, { exact: true }).waitFor({ timeout: 10000 });
-    await subRowA.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 });
-    check("member A subscription shows Active badge + plan name", true);
+    await must("member A subscription shows Active badge + plan name", subRowA.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 }));
 
     const subRowB = page.locator("tbody tr", { hasText: MEMBER_B });
     await subRowB.first().waitFor({ timeout: 15000 });
     await subRowB.first().getByText("Pending", { exact: true }).waitFor({ timeout: 10000 });
     await subRowB.first().getByRole("button", { name: "Activate" }).click();
     await page.getByText("subscription activated").waitFor({ timeout: 15000 });
-    await subRowB.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 });
-    check("member B pending subscription activated via UI", true);
+    await must("member B pending subscription activated via UI", subRowB.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 }));
   } catch (err) {
-    check("unexpected failure", false, String(err).slice(0, 300));
+    if (!(err && typeof err === "object" && err.named)) {
+      check("unexpected failure", false, String(err).slice(0, 300));
+    }
   } finally {
     await browser.close();
   }

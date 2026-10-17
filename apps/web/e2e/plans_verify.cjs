@@ -16,6 +16,19 @@ function check(name, ok, extra = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? `  (${extra})` : ""}`);
 }
 
+// Await a wait-then-check pair so a timeout fails under the check's own
+// name instead of surfacing as a generic "unexpected failure".
+async function must(name, p, extra = "") {
+  try {
+    await p;
+    check(name, true, extra);
+  } catch (e) {
+    check(name, false, String(e).slice(0, 200));
+    if (e && typeof e === "object") e.named = true;
+    throw e;
+  }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -30,8 +43,7 @@ async function main() {
     check("owner login lands on dashboard", true, page.url());
 
     await page.goto(`${BASE}/plans`);
-    await page.getByRole("heading", { name: /plans/i }).first().waitFor({ timeout: 20000 });
-    check("plans page renders", true);
+    await must("plans page renders", page.getByRole("heading", { name: /plans/i }).first().waitFor({ timeout: 20000 }));
 
     // ── Create plan ──
     await page.getByRole("button", { name: /new plan/i }).click();
@@ -41,15 +53,13 @@ async function main() {
     await createForm.locator('input[placeholder*="150000"]').fill("125000");
     await createForm.locator('input[placeholder="0"]').fill("5000");
     await createForm.getByRole("button", { name: /create plan/i }).click();
-    await page.getByText(PLAN_NAME, { exact: true }).waitFor({ timeout: 15000 });
-    check("plan created and visible", true);
+    await must("plan created and visible", page.getByText(PLAN_NAME, { exact: true }).waitFor({ timeout: 15000 }));
 
     // Auto-generated slug = slugified plan name.
     const autoSlug = PLAN_NAME.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     const planCard = (name) => page.locator("div.glass", { hasText: name }).last();
     const card = planCard(PLAN_NAME);
-    await card.getByText("All branches", { exact: true }).first().waitFor({ timeout: 10000 });
-    check("common plan shows All branches scope", true);
+    await must("common plan shows All branches scope", card.getByText("All branches", { exact: true }).first().waitFor({ timeout: 10000 }));
 
     // Duplicate slug → detailed error, not a generic one.
     await page.getByRole("button", { name: /new plan/i }).click();
@@ -57,21 +67,18 @@ async function main() {
     await dupForm.locator("input").first().fill(`${PLAN_NAME} dup`);
     await dupForm.locator("input").nth(1).fill(autoSlug);
     await dupForm.getByRole("button", { name: /create plan/i }).click();
-    await page.getByText(/slug already exists/i).waitFor({ timeout: 10000 });
-    check("duplicate slug shows detailed error", true);
+    await must("duplicate slug shows detailed error", page.getByText(/slug already exists/i).waitFor({ timeout: 10000 }));
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
     // ── Disable / enable ──
     await card.getByRole("button", { name: "Disable" }).click();
     await page.getByRole("button", { name: /disable plan/i }).click();
-    await page.getByText("Disabled", { exact: true }).waitFor({ timeout: 10000 });
-    check("plan disabled (badge visible)", true);
+    await must("plan disabled (badge visible)", page.getByText("Disabled", { exact: true }).waitFor({ timeout: 10000 }));
 
     const disabledCard = planCard(PLAN_NAME);
     await disabledCard.getByRole("button", { name: "Enable" }).click();
     await page.getByRole("button", { name: /new plan/i }).waitFor({ timeout: 10000 });
-    await disabledCard.getByRole("button", { name: "Subscribe" }).waitFor({ timeout: 10000 });
-    check("plan enabled and subscribe button back", true);
+    await must("plan enabled and subscribe button back", disabledCard.getByRole("button", { name: "Subscribe" }).waitFor({ timeout: 10000 }));
 
     // ── Edit plan ──
     const editCard = planCard(PLAN_NAME);
@@ -79,19 +86,22 @@ async function main() {
     const editForm = page.locator("form").last();
     await editForm.locator("input").first().fill(`${PLAN_NAME} v2`);
     await editForm.getByRole("button", { name: /save changes/i }).click();
-    await page.getByText(`${PLAN_NAME} v2`, { exact: true }).waitFor({ timeout: 10000 });
-    check("plan edited (name updated)", true);
+    await must("plan edited (name updated)", page.getByText(`${PLAN_NAME} v2`, { exact: true }).waitFor({ timeout: 10000 }));
 
     // ── Delete plan ──
     const deleteCard = planCard(`${PLAN_NAME} v2`);
     await deleteCard.getByRole("button", { name: "Delete" }).click();
     await page.getByRole("button", { name: /delete plan/i }).click();
-    await page
-      .getByText(`${PLAN_NAME} v2`, { exact: true })
-      .waitFor({ state: "detached", timeout: 10000 });
-    check("plan deleted from grid", true);
+    await must(
+      "plan deleted from grid",
+      page
+        .getByText(`${PLAN_NAME} v2`, { exact: true })
+        .waitFor({ state: "detached", timeout: 10000 }),
+    );
   } catch (err) {
-    check("unexpected failure", false, String(err).slice(0, 200));
+    if (!(err && typeof err === "object" && err.named)) {
+      check("unexpected failure", false, String(err).slice(0, 200));
+    }
   } finally {
     await browser.close();
   }

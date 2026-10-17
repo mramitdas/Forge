@@ -21,6 +21,19 @@ function check(name, ok, extra = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? `  (${extra})` : ""}`);
 }
 
+// Await a wait-then-check pair so a timeout fails under the check's own
+// name instead of surfacing as a generic "unexpected failure".
+async function must(name, p, extra = "") {
+  try {
+    await p;
+    check(name, true, extra);
+  } catch (e) {
+    check(name, false, String(e).slice(0, 200));
+    if (e && typeof e === "object") e.named = true;
+    throw e;
+  }
+}
+
 // Wait for the app shell header (renders only once `me` is loaded), then a
 // short settle for page content.
 async function settle(page) {
@@ -53,19 +66,16 @@ async function main() {
     // ── Overview dashboard ──
     await page.getByText(/good morning/i).waitFor({ timeout: 20000 });
     await page.getByText("Total members", { exact: true }).waitFor({ timeout: 15000 });
-    await page.getByText("Monthly revenue", { exact: true }).waitFor({ timeout: 15000 });
-    check("overview: greeting + stat cards render", true);
+    await must("overview: greeting + stat cards render", page.getByText("Monthly revenue", { exact: true }).waitFor({ timeout: 15000 }));
 
     await page.getByText("Occupancy", { exact: true }).waitFor({ timeout: 15000 });
-    await page.getByText("Recent check-ins", { exact: true }).waitFor({ timeout: 15000 });
-    check("overview: activity widgets render", true);
+    await must("overview: activity widgets render", page.getByText("Recent check-ins", { exact: true }).waitFor({ timeout: 15000 }));
 
     // ── Branches: create / edit / delete (never MAIN) ──
     await page.goto(`${BASE}/branches`);
     await settle(page);
     await page.getByRole("button", { name: /add branch/i }).waitFor({ timeout: 15000 });
-    await page.getByRole("heading", { name: "Main Branch", exact: true }).waitFor({ timeout: 15000 });
-    check("branches: page renders with MAIN branch intact", true);
+    await must("branches: page renders with MAIN branch intact", page.getByRole("heading", { name: "Main Branch", exact: true }).waitFor({ timeout: 15000 }));
 
     const branchCard = (name) =>
       page.locator("div.glass", { has: page.getByRole("heading", { name, exact: true }) }).first();
@@ -76,39 +86,34 @@ async function main() {
     await createForm.locator('input[placeholder="e.g. DT"]').fill(BR_CODE);
     await createForm.getByRole("button", { name: /add branch/i }).click();
     await page.getByText("Branch added").waitFor({ timeout: 10000 });
-    await page.getByRole("heading", { name: BR_NAME, exact: true }).waitFor({ timeout: 10000 });
-    check("branches: created branch appears via UI", true);
+    await must("branches: created branch appears via UI", page.getByRole("heading", { name: BR_NAME, exact: true }).waitFor({ timeout: 10000 }));
 
     await branchCard(BR_NAME).getByRole("button", { name: "Edit" }).click();
     const editForm = page.locator("form").last();
     await editForm.locator("input").first().fill(BR_NAME_V2);
     await editForm.getByRole("button", { name: /save changes/i }).click();
     await page.getByText("Branch updated").waitFor({ timeout: 10000 });
-    await page.getByRole("heading", { name: BR_NAME_V2, exact: true }).waitFor({ timeout: 10000 });
-    check("branches: edited branch name persists", true);
+    await must("branches: edited branch name persists", page.getByRole("heading", { name: BR_NAME_V2, exact: true }).waitFor({ timeout: 10000 }));
 
     await branchCard(BR_NAME_V2).getByRole("button", { name: "Delete" }).click();
     await page.getByRole("button", { name: "Delete branch", exact: true }).click();
     await page
       .getByRole("heading", { name: BR_NAME_V2, exact: true })
       .waitFor({ state: "detached", timeout: 10000 });
-    await page.getByRole("heading", { name: "Main Branch", exact: true }).waitFor({ timeout: 10000 });
-    check("branches: deleted branch removed (MAIN untouched)", true);
+    await must("branches: deleted branch removed (MAIN untouched)", page.getByRole("heading", { name: "Main Branch", exact: true }).waitFor({ timeout: 10000 }));
 
     // ── Roles ──
     await page.goto(`${BASE}/roles`);
     await settle(page);
     await page.getByRole("heading", { name: "Gym Owner", exact: true }).waitFor({ timeout: 15000 });
-    await page.getByRole("heading", { name: "Receptionist", exact: true }).waitFor({ timeout: 15000 });
-    check("roles: page renders role catalog cards", true);
+    await must("roles: page renders role catalog cards", page.getByRole("heading", { name: "Receptionist", exact: true }).waitFor({ timeout: 15000 }));
 
     const ownerCard = page
       .locator("div.glass", { has: page.getByRole("heading", { name: "Gym Owner", exact: true }) })
       .first();
     await ownerCard.getByText("Locked", { exact: true }).waitFor({ timeout: 10000 });
     await page.getByRole("heading", { name: "Gym Owner", exact: true }).click();
-    await ownerCard.getByText("Locked system role").waitFor({ timeout: 10000 });
-    check("roles: Gym Owner shows Locked badge + locked empty state", true);
+    await must("roles: Gym Owner shows Locked badge + locked empty state", ownerCard.getByText("Locked system role").waitFor({ timeout: 10000 }));
 
     // The header's Save button only renders when a card has unsaved edits —
     // make Receptionist dirty so Save exists for the nested-button and
@@ -138,8 +143,7 @@ async function main() {
     await recvCard.getByRole("button", { name: /^Save \(/ }).focus();
     await page.keyboard.press("Enter");
     await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 15000 });
-    await recvCard.getByRole("switch", { name: "reports.view" }).waitFor({ timeout: 5000 });
-    check("roles: Enter on Save saves (header does not swallow keys)", true);
+    await must("roles: Enter on Save saves (header does not swallow keys)", recvCard.getByRole("switch", { name: "reports.view" }).waitFor({ timeout: 5000 }));
 
     // Restore Receptionist's original permissions: toggle reports.view back off and save.
     await recvCard.getByRole("switch", { name: "reports.view" }).click();
@@ -155,8 +159,7 @@ async function main() {
     await roleModal.getByRole("switch", { name: "members.view" }).click();
     await roleModal.getByRole("switch", { name: "notifications.view" }).click();
     await roleModal.getByRole("button", { name: /^Create role \(/ }).click();
-    await page.getByText(`Created ${ROLE_NAME}`).waitFor({ timeout: 15000 });
-    check("roles: custom role created via UI form", true);
+    await must("roles: custom role created via UI form", page.getByText(`Created ${ROLE_NAME}`).waitFor({ timeout: 15000 }));
 
     await page.reload();
     await settle(page);
@@ -164,8 +167,7 @@ async function main() {
       .locator("div.glass", { has: page.getByRole("heading", { name: ROLE_NAME, exact: true }) })
       .first();
     await roleCard.waitFor({ timeout: 15000 });
-    await roleCard.getByText("2 permissions", { exact: true }).waitFor({ timeout: 10000 });
-    check("roles: custom role visible in UI list", true);
+    await must("roles: custom role visible in UI list", roleCard.getByText("2 permissions", { exact: true }).waitFor({ timeout: 10000 }));
 
     // Cancel must reset modal state (no stale draft on reopen).
     await page.getByRole("button", { name: /new role/i }).click();
@@ -181,8 +183,7 @@ async function main() {
     // check — POST would silently 201 a second identical role).
     await modal3.getByPlaceholder("Front Desk Lead").fill("Receptionist");
     await modal3.getByRole("button", { name: /^Create role \(/ }).click();
-    await page.getByText("Could not create role").waitFor({ timeout: 10000 });
-    check("roles: duplicate role name blocked", true);
+    await must("roles: duplicate role name blocked", page.getByText("Could not create role").waitFor({ timeout: 10000 }));
     await modal3.getByRole("button", { name: "Cancel" }).click();
 
     await page.getByRole("heading", { name: ROLE_NAME, exact: true }).click();
@@ -192,16 +193,14 @@ async function main() {
     // exactly by its own label to avoid any ambiguity.
     await roleCard.getByRole("button", { name: "Save (3 perms)", exact: true }).click();
     await page.getByText(`Saved ${ROLE_NAME} permissions`).waitFor({ timeout: 10000 });
-    await roleCard.getByText("3 permissions", { exact: true }).waitFor({ timeout: 10000 });
-    check("roles: custom role permission edit saves via UI", true);
+    await must("roles: custom role permission edit saves via UI", roleCard.getByText("3 permissions", { exact: true }).waitFor({ timeout: 10000 }));
 
     // ── Settings ──
     await page.goto(`${BASE}/settings`);
     await settle(page);
     await page.getByText("Profile", { exact: true }).waitFor({ timeout: 15000 });
     await page.getByText("Granted permissions", { exact: true }).waitFor({ timeout: 15000 });
-    await page.getByText("Branch access", { exact: true }).waitFor({ timeout: 15000 });
-    check("settings: page renders profile / permissions / branch access", true);
+    await must("settings: page renders profile / permissions / branch access", page.getByText("Branch access", { exact: true }).waitFor({ timeout: 15000 }));
 
     const crossSwitch = page.getByRole("switch", { name: "Cross-branch access" });
     await crossSwitch.waitFor({ timeout: 15000 });
@@ -250,8 +249,7 @@ async function main() {
     await nameInput.fill(`${origName} E2E`);
     await profileCard.getByRole("button", { name: "Save changes" }).click();
     await page.getByText("Profile updated", { exact: true }).waitFor({ timeout: 10000 });
-    await page.locator("aside").getByText(`${origName} E2E`, { exact: true }).waitFor({ timeout: 15000 });
-    check("settings: profile name save persists (sidebar refreshes)", true);
+    await must("settings: profile name save persists (sidebar refreshes)", page.locator("aside").getByText(`${origName} E2E`, { exact: true }).waitFor({ timeout: 15000 }));
     await nameInput.fill(origName);
     await profileCard.getByRole("button", { name: "Save changes" }).click();
     await page.locator("aside").getByText(origName, { exact: true }).waitFor({ timeout: 15000 });
@@ -269,8 +267,7 @@ async function main() {
     await page.getByText("Gym profile updated", { exact: true }).waitFor({ timeout: 10000 });
     // Sidebar tenant name must refresh WITHOUT a reload — proves the save landed
     // and refreshMe ran.
-    await page.locator("aside").getByText(`${origGymName} E2E`, { exact: true }).waitFor({ timeout: 15000 });
-    check("settings: gym profile save refreshes sidebar tenant name", true);
+    await must("settings: gym profile save refreshes sidebar tenant name", page.locator("aside").getByText(`${origGymName} E2E`, { exact: true }).waitFor({ timeout: 15000 }));
     await page.reload();
     await settle(page);
     const gymCard2 = page.locator("div.glass", { hasText: "Gym profile" }).first();
@@ -286,8 +283,7 @@ async function main() {
     await gymCard2.getByRole("button", { name: /save gym profile/i }).click();
     // Toast does NOT auto-dismiss — waiting for text here would match the stale
     // pre-restore toast. Assert the restored name in the sidebar instead.
-    await page.locator("aside").getByText(origGymName, { exact: true }).waitFor({ timeout: 15000 });
-    check("settings: gym profile restored", true);
+    await must("settings: gym profile restored", page.locator("aside").getByText(origGymName, { exact: true }).waitFor({ timeout: 15000 }));
 
     // ── Notifications ──
     // Fixture: pay an open invoice (creates a server-side "Payment received"
@@ -344,31 +340,30 @@ async function main() {
     await page.getByRole("button", { name: /mark all read/i }).waitFor({ timeout: 15000 });
     // The payment notification arrives via the async outbox dispatcher, and
     // earlier runs may have left extra unread "Payment received" rows — wait
-    // for ANY unread one (the new delivery), then verify the click drops the
-    // unread-payment count by one (dot on the clicked row clears).
+    // for ANY unread one, then verify the click clears the unread dot on the
+    // clicked row.
     const unreadPaymentRows = page
       .locator("button", { hasText: "Payment received" })
       .filter({ has: page.locator("span.bg-accent") });
-    await unreadPaymentRows.first().waitFor({ timeout: 20000 });
-    check("notifications: list renders + payment notification appears", true);
+    await must("notifications: list renders + payment notification appears", unreadPaymentRows.first().waitFor({ timeout: 20000 }));
 
+    // Pin the target row by its invoice reference before clicking: a delivery
+    // landing mid-check inserts a newer row above, so re-resolving .first()
+    // could click a different row than the one we measured. Waiting for THIS
+    // row's dot to clear (rather than a global count drop) is also robust to
+    // a concurrent delivery — the count could stay flat (one marked read, one
+    // newly delivered) and time out even though the click worked.
     const unreadBefore = await unreadPaymentRows.count();
-    await unreadPaymentRows.first().click();
-    await page.waitForFunction(
-      (prev) => {
-        const rows = [...document.querySelectorAll("button")].filter(
-          (b) => (b.textContent || "").includes("Payment received"),
-        );
-        return rows.filter((b) => b.querySelector("span.bg-accent")).length < prev;
-      },
-      unreadBefore,
-      { timeout: 15000 },
-    );
+    const invoiceNo = (await unreadPaymentRows.first().innerText()).match(/INV-\d{4}-\d+/)?.[0];
+    const targetRow = invoiceNo ? unreadPaymentRows.filter({ hasText: invoiceNo }).first() : unreadPaymentRows.first();
+    await targetRow.click();
+    await targetRow.locator("span.bg-accent").waitFor({ state: "detached", timeout: 15000 });
     check("notifications: mark-read clears unread indicator", unreadBefore >= 1, `unread before=${unreadBefore}`);
-    await page.getByText("Notification marked as read", { exact: true }).waitFor({ timeout: 10000 });
-    check("notifications: single mark-read shows toast", true);
+    await must("notifications: single mark-read shows toast", page.getByText("Notification marked as read", { exact: true }).waitFor({ timeout: 10000 }));
   } catch (err) {
-    check("unexpected failure", false, String(err).slice(0, 200));
+    if (!(err && typeof err === "object" && err.named)) {
+      check("unexpected failure", false, String(err).slice(0, 200));
+    }
   } finally {
     await browser.close();
   }

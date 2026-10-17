@@ -14,6 +14,19 @@ function check(name, ok, extra = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? `  (${extra})` : ""}`);
 }
 
+// Await a wait-then-check pair so a timeout fails under the check's own
+// name instead of surfacing as a generic "unexpected failure".
+async function must(name, p, extra = "") {
+  try {
+    await p;
+    check(name, true, extra);
+  } catch (e) {
+    check(name, false, String(e).slice(0, 200));
+    if (e && typeof e === "object") e.named = true;
+    throw e;
+  }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -85,26 +98,22 @@ async function main() {
     ).json();
 
     await page.goto(`${BASE}/members/${member.id}`);
-    await page.getByRole("heading", { name: MEMBER_NAME }).waitFor({ timeout: 15000 });
-    check("member detail renders", true);
+    await must("member detail renders", page.getByRole("heading", { name: MEMBER_NAME }).waitFor({ timeout: 15000 }));
 
     // Enable/disable toggle
     await page.getByRole("button", { name: "Disable", exact: true }).click();
     await page.getByText(`${MEMBER_NAME} disabled`).waitFor({ timeout: 10000 });
-    await page.getByText("Disabled", { exact: true }).waitFor({ timeout: 10000 });
-    check("member disabled via UI", true);
+    await must("member disabled via UI", page.getByText("Disabled", { exact: true }).waitFor({ timeout: 10000 }));
 
     await page.getByRole("button", { name: "Enable", exact: true }).click();
-    await page.getByText(`${MEMBER_NAME} enabled`).waitFor({ timeout: 10000 });
-    check("member enabled via UI", true);
+    await must("member enabled via UI", page.getByText(`${MEMBER_NAME} enabled`).waitFor({ timeout: 10000 }));
 
     // Edit
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const editForm = page.locator("form").last();
     await editForm.locator("input").first().fill(`E2E Acct ${ts} v2`);
     await editForm.getByRole("button", { name: /save changes/i }).click();
-    await page.getByRole("heading", { name: `E2E Acct ${ts} v2` }).waitFor({ timeout: 10000 });
-    check("member edited via UI", true);
+    await must("member edited via UI", page.getByRole("heading", { name: `E2E Acct ${ts} v2` }).waitFor({ timeout: 10000 }));
 
     // Avatar upload via file input
     await page.setInputFiles('input[type="file"]', {
@@ -112,8 +121,7 @@ async function main() {
       mimeType: "image/png",
       buffer: Buffer.from("89504e470d0a1a0a0000000d494844520000000100000001080600000", "hex"),
     });
-    await page.getByText("Photo updated").waitFor({ timeout: 10000 });
-    check("avatar upload works", true);
+    await must("avatar upload works", page.getByText("Photo updated").waitFor({ timeout: 10000 }));
 
     // Renew (opens a modal prefilled with last end date)
     await page.getByRole("button", { name: "Renew", exact: true }).click();
@@ -121,23 +129,23 @@ async function main() {
     await renewModal.locator('input[type="date"]').waitFor({ timeout: 10000 });
     const prefilled = await renewModal.locator('input[type="date"]').inputValue();
     await renewModal.getByRole("button", { name: "Renew", exact: true }).click();
-    await page.getByText("Subscription renewed").waitFor({ timeout: 10000 });
-    check("subscription renewed via UI (modal with start date)", true, prefilled);
+    await must("subscription renewed via UI (modal with start date)", page.getByText("Subscription renewed").waitFor({ timeout: 10000 }), prefilled);
 
     // Check in
     await page.getByRole("button", { name: "Check in", exact: true }).click();
-    await page
-      .getByText(/checked in|duplicate|no active membership|member is disabled/)
-      .waitFor({ timeout: 10000 });
-    check("check-in button works", true);
+    await must(
+      "check-in button works",
+      page
+        .getByText(/checked in|duplicate|no active membership|member is disabled/)
+        .waitFor({ timeout: 10000 }),
+    );
 
     // Invoice detail page
     await page.goto(`${BASE}/billing`);
     await page.getByText("Invoices", { exact: true }).waitFor({ timeout: 15000 });
     await page.locator("a", { hasText: /^INV-/ }).first().click();
     await page.waitForURL(/\/billing\/.+/, { timeout: 10000 });
-    await page.getByText("Line items", { exact: true }).waitFor({ timeout: 10000 });
-    check("invoice detail page renders", true, page.url());
+    await must("invoice detail page renders", page.getByText("Line items", { exact: true }).waitFor({ timeout: 10000 }), page.url());
     await page.goto(`${BASE}/members/${member.id}`);
 
     // Upgrade plan
@@ -145,8 +153,7 @@ async function main() {
     const upgModal = page.locator("form").last();
     await upgModal.locator("select").selectOption(upgradePlan.id);
     await upgModal.getByRole("button", { name: /upgrade plan/i }).click();
-    await page.getByText("Plan upgraded").waitFor({ timeout: 10000 });
-    check("plan upgraded via UI", true);
+    await must("plan upgraded via UI", page.getByText("Plan upgraded").waitFor({ timeout: 10000 }));
 
     // Delete
     await page.getByRole("button", { name: "Delete", exact: true }).click();
@@ -154,7 +161,9 @@ async function main() {
     await page.waitForURL(/\/members$/, { timeout: 10000 });
     check("member deleted via UI", true, page.url());
   } catch (err) {
-    check("unexpected failure", false, String(err).slice(0, 200));
+    if (!(err && typeof err === "object" && err.named)) {
+      check("unexpected failure", false, String(err).slice(0, 200));
+    }
   } finally {
     await browser.close();
   }
