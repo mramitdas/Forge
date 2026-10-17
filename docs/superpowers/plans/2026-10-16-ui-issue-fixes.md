@@ -1,6 +1,6 @@
 # UI Issue Fixes Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Fix the four UI issues found by the e2e sweep: stale invoice detail after pay/void, no-op Settings profile save, missing create-role form, and the minor bundle (nested button, billing search, mark-read toast).
 
@@ -33,7 +33,7 @@
 - Modify: `apps/web/src/lib/hooks.ts:665-689` (`usePayInvoice`, `useVoidInvoice`)
 - Test: `apps/web/e2e/frontdesk_verify.cjs:195-203`
 
-- [ ] **Step 1: Write the failing e2e check**
+- [x] **Step 1: Write the failing e2e check**
 
 In `apps/web/e2e/frontdesk_verify.cjs` replace the block at lines 195–203:
 
@@ -50,12 +50,12 @@ In `apps/web/e2e/frontdesk_verify.cjs` replace the block at lines 195–203:
     check("invoice B voided via detail UI (Void badge on billing list)", true, invBOpen.number);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `node e2e/frontdesk_verify.cjs`
 Expected: FAIL at `invoice B void: detail badge updates in place` (16s timeout — detail card still shows `Open`); all other checks pass.
 
-- [ ] **Step 3: Fix the invalidations**
+- [x] **Step 3: Fix the invalidations**
 
 In `apps/web/src/lib/hooks.ts` replace `usePayInvoice` (line 665) and `useVoidInvoice` (line 680) with:
 
@@ -89,19 +89,19 @@ export function useVoidInvoice() {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes + typecheck**
+- [x] **Step 4: Run the test to verify it passes + typecheck**
 
 Run: `node e2e/frontdesk_verify.cjs`
 Expected: `19/19 checks passed` (the original 18, plus the new in-place detail check; the old list-badge check is retained as the second assertion).
 
 Run: `npx tsc --noEmit` → exit 0.
 
-- [ ] **Step 5: Run the platform gate (shared file)**
+- [x] **Step 5: Run the platform gate (shared file)**
 
 Run: `NODE_PATH="$(npm root -g)" node e2e/platform_admin_verify.cjs`
 Expected: `22/22 checks passed`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/lib/hooks.ts apps/web/e2e/frontdesk_verify.cjs
@@ -118,7 +118,7 @@ git commit -m "fix(billing): refresh invoice detail query after pay/void"
 - Modify: `backend/app/modules/identity/api.py` (`/me` route at line 72 + new PATCH route)
 - Test: `backend/tests/test_auth.py` (append)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `backend/tests/test_auth.py`:
 
@@ -163,12 +163,12 @@ async def test_update_me_profile(client, gym_a):
     assert restore.status_code == 200, restore.text
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_auth.py::test_update_me_profile -q`
 Expected: FAIL — 405 Method Not Allowed (no PATCH `/auth/me`).
 
-- [ ] **Step 3: Add the schema**
+- [x] **Step 3: Add the schema**
 
 In `backend/app/modules/identity/schemas.py`, after `MeOut` (line 66):
 
@@ -185,7 +185,7 @@ class MeUpdateRequest(BaseModel):
 
 (`Field`, `EmailStr`, `field_validator` are already imported in that file — verify `Field` import; add it if missing.)
 
-- [ ] **Step 4: Add the service function**
+- [x] **Step 4: Add the service function**
 
 In `backend/app/modules/identity/service.py`, after `authenticate` (~line 110):
 
@@ -222,7 +222,7 @@ async def update_me(
 
 Verify `NotFoundError` is imported in `service.py` (it is used by `create_employee`'s peers — check imports; add alongside existing `ConflictError` import if missing).
 
-- [ ] **Step 5: Add the route (extract shared payload helper)**
+- [x] **Step 5: Add the route (extract shared payload helper)**
 
 In `backend/app/modules/identity/api.py`, replace the body of the `me` route (lines 72–98) with a helper plus thin routes:
 
@@ -278,12 +278,12 @@ async def update_me_route(
 
 No permission dependency: any authenticated user may edit their own profile. Ensure `MeUpdateRequest` is added to the schemas import line in `api.py`.
 
-- [ ] **Step 6: Run the test to verify it passes**
+- [x] **Step 6: Run the test to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_auth.py -q`
 Expected: all pass (exit 0).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/app/modules/identity/schemas.py backend/app/modules/identity/service.py backend/app/modules/identity/api.py backend/tests/test_auth.py
@@ -300,7 +300,7 @@ git commit -m "feat(auth): PATCH /auth/me for profile self-update"
 - Modify: `apps/web/src/app/(app)/settings/page.tsx` (save handler)
 - Test: `apps/web/e2e/gym_ops_verify.cjs` (settings section, after line 183)
 
-- [ ] **Step 1: Write the failing e2e checks**
+- [x] **Step 1: Write the failing e2e checks**
 
 In `apps/web/e2e/gym_ops_verify.cjs`, insert after line 183 (`check("settings: cross-branch toggle restored to original", ...)`):
 
@@ -322,12 +322,12 @@ In `apps/web/e2e/gym_ops_verify.cjs`, insert after line 183 (`check("settings: c
     await page.getByText("Profile updated").waitFor({ timeout: 10000 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `node e2e/gym_ops_verify.cjs`
 Expected: FAIL at `settings: profile name save persists (sidebar refreshes)` — sidebar keeps the old name (me never reloads).
 
-- [ ] **Step 3: Expose `refreshMe` in the auth context**
+- [x] **Step 3: Expose `refreshMe` in the auth context**
 
 In `apps/web/src/lib/auth.tsx`:
 
@@ -347,7 +347,7 @@ and in the provider:
     <AuthContext.Provider value={{ me, loading, login, logout, refreshMe: loadMe }}>
 ```
 
-- [ ] **Step 4: Add the `useUpdateMe` hook**
+- [x] **Step 4: Add the `useUpdateMe` hook**
 
 Append to `apps/web/src/lib/hooks.ts` (near the other auth-adjacent mutations, e.g. after `useMarkNotificationRead`):
 
@@ -362,7 +362,7 @@ export function useUpdateMe() {
 
 (`MeOut` must be in the type import list at the top of `hooks.ts` — add it if missing.)
 
-- [ ] **Step 5: Wire the save handler in the settings page**
+- [x] **Step 5: Wire the save handler in the settings page**
 
 In `apps/web/src/app/(app)/settings/page.tsx`:
 
@@ -395,7 +395,7 @@ Replace the button at line 53:
         </div>
 ```
 
-- [ ] **Step 6: Run to verify it passes + typecheck + gate**
+- [x] **Step 6: Run to verify it passes + typecheck + gate**
 
 Run: `node e2e/gym_ops_verify.cjs`
 Expected: all checks pass incl. `settings: profile name save persists (sidebar refreshes)`.
@@ -404,7 +404,7 @@ Run: `npx tsc --noEmit` → exit 0.
 
 Run: `NODE_PATH="$(npm root -g)" node e2e/platform_admin_verify.cjs` → `22/22 checks passed`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/src/lib/auth.tsx apps/web/src/lib/hooks.ts "apps/web/src/app/(app)/settings/page.tsx" apps/web/e2e/gym_ops_verify.cjs
@@ -420,7 +420,7 @@ git commit -m "fix(settings): persist profile save via PATCH /auth/me"
 - Modify: `backend/app/modules/tenancy/api.py:486-504` (`update_settings`)
 - Test: `backend/tests/test_settings.py` (new file)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/test_settings.py`:
 
@@ -474,12 +474,12 @@ async def test_gym_settings_partial_updates(client, gym_a):
     assert restore.status_code == 200, restore.text
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_settings.py -q`
 Expected: FAIL — `GymSettingsUpdate` ignores `name`/`timezone` (422 extra-forbidden or name unchanged). Note: Pydantic default ignores extra fields, so PATCH succeeds but `name` stays original → assertion fails.
 
-- [ ] **Step 3: Extend the schema**
+- [x] **Step 3: Extend the schema**
 
 In `backend/app/modules/tenancy/schemas.py` replace:
 
@@ -500,7 +500,7 @@ class GymSettingsUpdate(BaseModel):
 
 (`Field` is already imported in this file — line 10 uses it.)
 
-- [ ] **Step 4: Make the route partial**
+- [x] **Step 4: Make the route partial**
 
 In `backend/app/modules/tenancy/api.py`, `update_settings` (line 486) — replace the single assignment:
 
@@ -521,13 +521,13 @@ with:
     await session.flush()
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run: `.venv/bin/python -m pytest tests/test_settings.py tests/test_auth.py -q` → exit 0.
 
 Run: `.venv/bin/ruff check app tests` → `All checks passed!`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/app/modules/tenancy/schemas.py backend/app/modules/tenancy/api.py backend/tests/test_settings.py
@@ -543,7 +543,7 @@ git commit -m "feat(settings): partial PATCH accepts gym name + timezone"
 - Modify: `apps/web/src/app/(app)/settings/page.tsx`
 - Test: `apps/web/e2e/gym_ops_verify.cjs`
 
-- [ ] **Step 1: Write the failing e2e check**
+- [x] **Step 1: Write the failing e2e check**
 
 In `apps/web/e2e/gym_ops_verify.cjs`, insert directly after the profile block added in Task 2b:
 
@@ -583,12 +583,12 @@ In `apps/web/e2e/gym_ops_verify.cjs`, insert directly after the profile block ad
     check("settings: gym profile restored", true);
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `node e2e/gym_ops_verify.cjs`
 Expected: FAIL at `settings: gym name + timezone persist after reload` — the "Gym profile" card does not exist yet (timeout waiting for it).
 
-- [ ] **Step 3: Widen the mutation type**
+- [x] **Step 3: Widen the mutation type**
 
 In `apps/web/src/lib/hooks.ts`, `useUpdateGymSettings` (line ~989):
 
@@ -603,7 +603,7 @@ In `apps/web/src/lib/hooks.ts`, `useUpdateGymSettings` (line ~989):
 
 (The existing `toggleCrossBranch` call in the settings page keeps working — it passes `cross_branch_access` only.)
 
-- [ ] **Step 4: Add the Gym profile card**
+- [x] **Step 4: Add the Gym profile card**
 
 In `apps/web/src/app/(app)/settings/page.tsx`:
 
@@ -684,13 +684,13 @@ In `apps/web/src/app/(app)/settings/page.tsx`:
 
 (The `SectionTitle` subtitle renders in a `div`, not a `p` — the existing `getByText("Profile", { exact: true })` check stays unambiguous.)
 
-- [ ] **Step 5: Run to verify it passes + typecheck + gate**
+- [x] **Step 5: Run to verify it passes + typecheck + gate**
 
 Run: `node e2e/gym_ops_verify.cjs` → all checks pass (incl. both new settings checks).
 Run: `npx tsc --noEmit` → exit 0.
 Run: `NODE_PATH="$(npm root -g)" node e2e/platform_admin_verify.cjs` → `22/22 checks passed`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/lib/hooks.ts "apps/web/src/app/(app)/settings/page.tsx" apps/web/e2e/gym_ops_verify.cjs
@@ -706,7 +706,7 @@ git commit -m "feat(settings): gym profile card (name + timezone)"
 - Modify: `apps/web/src/app/(app)/roles/page.tsx`
 - Test: `apps/web/e2e/gym_ops_verify.cjs:113-131` (replace API-create block)
 
-- [ ] **Step 1: Write the failing e2e check**
+- [x] **Step 1: Write the failing e2e check**
 
 In `apps/web/e2e/gym_ops_verify.cjs` replace lines 113–131 (the API-create block ending at `check("roles: custom role visible in UI list", true);`) with:
 
@@ -734,12 +734,12 @@ In `apps/web/e2e/gym_ops_verify.cjs` replace lines 113–131 (the API-create blo
 
 (The `page.reload()` keeps the rest of the section unchanged — the roles page collapses every card on first load, so the permission-edit steps that follow still work.)
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `node e2e/gym_ops_verify.cjs`
 Expected: FAIL — no `New role` button (timeout).
 
-- [ ] **Step 3: Add the `useCreateRole` hook**
+- [x] **Step 3: Add the `useCreateRole` hook**
 
 Append to `apps/web/src/lib/hooks.ts` after `useUpdateRole`:
 
@@ -756,7 +756,7 @@ export function useCreateRole() {
 }
 ```
 
-- [ ] **Step 4: Add the modal to the roles page**
+- [x] **Step 4: Add the modal to the roles page**
 
 In `apps/web/src/app/(app)/roles/page.tsx`:
 
@@ -892,13 +892,13 @@ In `apps/web/src/app/(app)/roles/page.tsx`:
 
 The `stopPropagation` span around `Switch` mirrors the existing card rows (line 181) — without it the row's own `onClick` would double-toggle.
 
-- [ ] **Step 5: Run to verify it passes + typecheck + gate**
+- [x] **Step 5: Run to verify it passes + typecheck + gate**
 
 Run: `node e2e/gym_ops_verify.cjs` → all checks pass incl. `roles: custom role created via UI form`.
 Run: `npx tsc --noEmit` → exit 0.
 Run: `NODE_PATH="$(npm root -g)" node e2e/platform_admin_verify.cjs` → `22/22 checks passed`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/lib/hooks.ts "apps/web/src/app/(app)/roles/page.tsx" apps/web/e2e/gym_ops_verify.cjs
@@ -913,7 +913,7 @@ git commit -m "feat(roles): create-role form with permission picker"
 - Modify: `apps/web/src/app/(app)/roles/page.tsx:103-151`
 - Test: `apps/web/e2e/gym_ops_verify.cjs` (roles section)
 
-- [ ] **Step 1: Write the failing e2e check**
+- [x] **Step 1: Write the failing e2e check**
 
 In `apps/web/e2e/gym_ops_verify.cjs`, insert after `check("roles: Gym Owner shows Locked badge + locked empty state", true);` (line 111):
 
@@ -935,12 +935,12 @@ In `apps/web/e2e/gym_ops_verify.cjs`, insert after `check("roles: Gym Owner show
 
 The check fails with the bug (`count>=1`: the header `<button>` wraps the Save `<Button>`) and passes after Step 3.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `node e2e/gym_ops_verify.cjs`
 Expected: FAIL with `count>=1` — the card header `<button>` wraps the Save `<Button>`.
 
-- [ ] **Step 3: Convert the header button to a div**
+- [x] **Step 3: Convert the header button to a div**
 
 In `apps/web/src/app/(app)/roles/page.tsx` (line numbers shifted by Task 3 — match by the exact code, not the line number), replace the opening header element:
 
@@ -971,12 +971,12 @@ with:
 
 and its closing `</button>` (line 151) with `</div>`. This mirrors the keyboard-accessible `div role="button"` pattern already used by the permission rows in the same file (lines 163–172).
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `node e2e/gym_ops_verify.cjs` → all checks pass incl. `roles: no nested <button> elements`.
 The comment at lines 136–138 in the script (`accessible name embeds the nested Save label`) can be simplified to remove the stale "nested" rationale — optional.
 
-- [ ] **Step 5: Commit (no shared files → no gate)**
+- [x] **Step 5: Commit (no shared files → no gate)**
 
 ```bash
 git add "apps/web/src/app/(app)/roles/page.tsx" apps/web/e2e/gym_ops_verify.cjs
@@ -991,7 +991,7 @@ git commit -m "fix(roles): header is div[role=button], no nested buttons"
 - Modify: `apps/web/src/app/(app)/billing/page.tsx` (state at 107–114, header at 145–148, tbody at 162)
 - Test: `apps/web/e2e/frontdesk_verify.cjs:160`
 
-- [ ] **Step 1: Write the failing e2e check**
+- [x] **Step 1: Write the failing e2e check**
 
 In `apps/web/e2e/frontdesk_verify.cjs`, after `check("billing page renders summary cards + invoices table", true);` (line 160) insert:
 
@@ -1006,12 +1006,12 @@ In `apps/web/e2e/frontdesk_verify.cjs`, after `check("billing page renders summa
     check("billing search clear restores rows", true);
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `node e2e/frontdesk_verify.cjs`
 Expected: FAIL — no search input (placeholder not found).
 
-- [ ] **Step 3: Implement the filter**
+- [x] **Step 3: Implement the filter**
 
 In `apps/web/src/app/(app)/billing/page.tsx`:
 
@@ -1067,12 +1067,12 @@ In `apps/web/src/app/(app)/billing/page.tsx`:
               )}
 ```
 
-- [ ] **Step 4: Run to verify it passes + typecheck**
+- [x] **Step 4: Run to verify it passes + typecheck**
 
 Run: `node e2e/frontdesk_verify.cjs` → all checks pass incl. both search checks.
 Run: `npx tsc --noEmit` → exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "apps/web/src/app/(app)/billing/page.tsx" apps/web/e2e/frontdesk_verify.cjs
@@ -1087,7 +1087,7 @@ git commit -m "feat(billing): search invoices by number or member"
 - Modify: `apps/web/src/app/(app)/notifications/page.tsx:63-66`
 - Test: `apps/web/e2e/gym_ops_verify.cjs:241-245`
 
-- [ ] **Step 1: Write the failing e2e check**
+- [x] **Step 1: Write the failing e2e check**
 
 In `apps/web/e2e/gym_ops_verify.cjs`, after `check("notifications: mark-read clears unread indicator", ...)` (line 245) insert:
 
@@ -1096,12 +1096,12 @@ In `apps/web/e2e/gym_ops_verify.cjs`, after `check("notifications: mark-read cle
     check("notifications: single mark-read shows toast", true);
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `node e2e/gym_ops_verify.cjs`
 Expected: FAIL — no toast after clicking a single notification.
 
-- [ ] **Step 3: Add the toast**
+- [x] **Step 3: Add the toast**
 
 In `apps/web/src/app/(app)/notifications/page.tsx` replace `markOne`:
 
@@ -1115,11 +1115,11 @@ In `apps/web/src/app/(app)/notifications/page.tsx` replace `markOne`:
 
 (The success `Toast` at line 122 already renders any non-null `toast`.)
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `node e2e/gym_ops_verify.cjs` → all checks pass incl. `notifications: single mark-read shows toast`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "apps/web/src/app/(app)/notifications/page.tsx" apps/web/e2e/gym_ops_verify.cjs
@@ -1130,9 +1130,9 @@ git commit -m "fix(notifications): toast on single mark-read"
 
 ## Final verification (all tasks)
 
-- [ ] `cd backend && .venv/bin/python -m pytest -q` → exit 0 (59 + 2 new = 61 tests)
-- [ ] `cd backend && .venv/bin/ruff check app tests scripts` → clean
-- [ ] `cd apps/web && npx tsc --noEmit` → exit 0
-- [ ] `cd apps/web && node e2e/platform_admin_verify.cjs` → 22/22
-- [ ] `cd apps/web && for s in plans_verify member_account_verify role_visibility_verify frontdesk_verify gym_ops_verify expenses_verify; do node e2e/$s.cjs | tail -1; done` → all green (frontdesk ≥21, gym_ops ≥24)
-- [ ] `make test` → exit 0
+- [x] `cd backend && .venv/bin/python -m pytest -q` → exit 0 (59 + 2 new = 61 tests)
+- [x] `cd backend && .venv/bin/ruff check app tests scripts` → clean
+- [x] `cd apps/web && npx tsc --noEmit` → exit 0
+- [x] `cd apps/web && node e2e/platform_admin_verify.cjs` → 22/22
+- [x] `cd apps/web && for s in plans_verify member_account_verify role_visibility_verify frontdesk_verify gym_ops_verify expenses_verify; do node e2e/$s.cjs | tail -1; done` → all green (frontdesk ≥21, gym_ops ≥24)
+- [x] `make test` → exit 0
