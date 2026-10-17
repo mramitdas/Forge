@@ -164,7 +164,7 @@ export default function RolesPage() {
                     toggleCollapsed(role.id);
                   }
                 }}
-                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 transition-colors"
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch transition-colors hover:bg-fill-strong"
               >
                 <svg
                   width="14"
