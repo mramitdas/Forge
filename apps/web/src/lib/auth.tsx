@@ -10,7 +10,9 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<MeOut>;
   logout: () => Promise<void>;
-  refreshMe: (data?: MeOut) => Promise<void>;
+  refreshMe: (
+    data?: MeOut | ((prev: MeOut | null) => MeOut | null),
+  ) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -35,7 +37,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshMe = useCallback(
-    async (data?: MeOut) => {
+    async (data?: MeOut | ((prev: MeOut | null) => MeOut | null)) => {
+      if (typeof data === "function") {
+        setMe((prev) => data(prev));
+        return;
+      }
       if (data) {
         setMe(data);
         return;

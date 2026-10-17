@@ -96,10 +96,9 @@ export default function SettingsPage() {
       seededRef.current = { name: updated.name, timezone: updated.timezone };
       setGymName(updated.name);
       setGymTimezone(updated.timezone);
-      // Feed the PATCH response into the auth context (pattern from Task 2b) —
-      // the sidebar's tenant_name comes from `me`, and a plain refreshMe() GET
-      // would be an extra round trip with a partial-failure window.
-      if (me) await refreshMe({ ...me, tenant_name: updated.name });
+      // Functional update: builds on the LATEST context state, not this
+      // render's closure — a concurrent profile save can't be clobbered.
+      refreshMe((prev) => (prev ? { ...prev, tenant_name: updated.name } : prev));
       notify("Gym profile updated");
     } catch (e) {
       if (e instanceof ApiError && e.status === 422) {
