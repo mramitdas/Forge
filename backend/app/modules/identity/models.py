@@ -51,6 +51,12 @@ class User(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "uq_users_email_active",
+            "email",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)

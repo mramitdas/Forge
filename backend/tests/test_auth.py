@@ -198,6 +198,47 @@ async def test_update_me_email_change_lowercased(client, gym_a):
     assert restored.json()["user"]["email"] == original_email
 
 
+async def test_db_rejects_duplicate_active_email_across_tenants(gym_a, gym_b):
+    """The service probe narrows cross-tenant claims, but the database is
+    the backstop for probe/insert races — exercise the index directly."""
+    import uuid as _uuid
+
+    import pytest
+    from app.core.tenant import (
+        TenantContext,
+        reset_tenant_context,
+        set_tenant_context,
+    )
+    from app.db.session import get_sessionmaker
+    from app.modules.identity.models import User
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
+
+    # Raw sessions run under FORCE RLS; read both tenants from platform scope
+    # (same idiom as conftest._make_user).
+    ctx_token = set_tenant_context(TenantContext(tenant_id=None, platform_scope=True))
+    try:
+        Session = get_sessionmaker()
+        async with Session() as session:
+            await session.begin()
+            owner_a = await session.scalar(
+                select(User).where(User.email == "owner-gyma@example.com")
+            )
+            assert owner_a is not None
+            session.add(
+                User(
+                    tenant_id=_uuid.UUID(str(gym_b["id"])),
+                    email=owner_a.email,
+                    full_name="Cross-Tenant Dupe",
+                )
+            )
+            with pytest.raises(IntegrityError):
+                await session.flush()
+            await session.rollback()
+    finally:
+        reset_tenant_context(ctx_token)
+
+
 async def test_update_me_validation_errors(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     headers = {"Authorization": f"Bearer {owner['access_token']}"}
