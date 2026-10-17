@@ -26,6 +26,7 @@ import type {
   InvoiceOut,
   MemberOut,
   MemberTimelineOut,
+  MeOut,
   NotificationOut,
   PageOut,
   PaymentCaptureResult,
@@ -33,7 +34,6 @@ import type {
   PlanOut,
   PlatformRevenueOut,
   PlatformSummaryOut,
-  MeOut,
   RoleOut,
   SubscriptionEventOut,
   SubscriptionOut,
@@ -663,6 +663,9 @@ export function useUpgradeSubscription() {
   });
 }
 
+// ["invoice", id] refreshes the open invoice-detail page in place after
+// pay/void — without it the status badge on /billing/[id] stays stale until
+// a full navigation. Covered by e2e/frontdesk_verify.cjs.
 export function usePayInvoice() {
   const qc = useQueryClient();
   return useMutation({
