@@ -207,8 +207,13 @@ async function main() {
     await page.getByText(`Cancel ${invBOpen.number}?`, { exact: true }).waitFor({ timeout: 10000 });
     await page.getByRole("button", { name: "Void invoice" }).click();
     await page.getByText(`${invBOpen.number} voided`).waitFor({ timeout: 15000 });
-    // The detail query must refresh after void — no navigation needed.
-    await page.getByText("Void", { exact: true }).first().waitFor({ timeout: 15000 });
+    // The detail query must refresh after void — no navigation needed. Scope
+    // the badge wait to THIS invoice's card (not any "Void" text on the page).
+    const invBCard = page
+      .locator("div.glass")
+      .filter({ has: page.getByRole("heading", { name: invBOpen.number }) })
+      .first();
+    await invBCard.getByText("Void", { exact: true }).waitFor({ timeout: 15000 });
     check("invoice B void: detail badge updates in place", true, invBOpen.number);
     await page.locator('main a[href="/billing"]').click();
     await page.waitForURL(/\/billing$/, { timeout: 10000 });
