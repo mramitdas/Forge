@@ -98,7 +98,9 @@ export default function SettingsPage() {
       setGymTimezone(updated.timezone);
       // Functional update: builds on the LATEST context state, not this
       // render's closure — a concurrent profile save can't be clobbered.
-      refreshMe((prev) => (prev ? { ...prev, tenant_name: updated.name } : prev));
+      // (A plain refreshMe() GET would be an extra round trip with a
+      // partial-failure window — see saveProfile.)
+      void refreshMe((prev) => (prev ? { ...prev, tenant_name: updated.name } : prev));
       notify("Gym profile updated");
     } catch (e) {
       if (e instanceof ApiError && e.status === 422) {
