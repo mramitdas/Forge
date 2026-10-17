@@ -342,14 +342,29 @@ async function main() {
     await page.goto(`${BASE}/notifications`);
     await settle(page);
     await page.getByRole("button", { name: /mark all read/i }).waitFor({ timeout: 15000 });
-    await page.getByText("Payment received", { exact: true }).first().waitFor({ timeout: 15000 });
+    // The payment notification arrives via the async outbox dispatcher, and
+    // earlier runs may have left extra unread "Payment received" rows — wait
+    // for ANY unread one (the new delivery), then verify the click drops the
+    // unread-payment count by one (dot on the clicked row clears).
+    const unreadPaymentRows = page
+      .locator("button", { hasText: "Payment received" })
+      .filter({ has: page.locator("span.bg-accent") });
+    await unreadPaymentRows.first().waitFor({ timeout: 20000 });
     check("notifications: list renders + payment notification appears", true);
 
-    const notifRow = page.locator("button", { hasText: "Payment received" }).first();
-    const dotsBefore = await notifRow.locator("span.bg-accent").count();
-    await notifRow.click();
-    await notifRow.locator("span.bg-accent").waitFor({ state: "detached", timeout: 10000 });
-    check("notifications: mark-read clears unread indicator", dotsBefore === 1, `dots before=${dotsBefore}`);
+    const unreadBefore = await unreadPaymentRows.count();
+    await unreadPaymentRows.first().click();
+    await page.waitForFunction(
+      (prev) => {
+        const rows = [...document.querySelectorAll("button")].filter(
+          (b) => (b.textContent || "").includes("Payment received"),
+        );
+        return rows.filter((b) => b.querySelector("span.bg-accent")).length < prev;
+      },
+      unreadBefore,
+      { timeout: 15000 },
+    );
+    check("notifications: mark-read clears unread indicator", unreadBefore >= 1, `unread before=${unreadBefore}`);
     await page.getByText("Notification marked as read", { exact: true }).waitFor({ timeout: 10000 });
     check("notifications: single mark-read shows toast", true);
   } catch (err) {
