@@ -44,6 +44,16 @@ async def test_update_gym_profile(client, platform_token):
     assert body["currency"] == "GBP"
 
 
+async def test_update_gym_rejects_overlong_timezone(client, platform_token):
+    gym = await provision_gym(client, platform_token, "tztoo")
+    response = await client.patch(
+        f"/api/v1/platform/gyms/{gym['id']}",
+        headers=await _headers(platform_token),
+        json={"timezone": "x" * 65},
+    )
+    assert response.status_code == 422, response.text
+
+
 async def test_delete_gym_removes_from_registry_and_blocks_login(
     client, platform_token
 ):

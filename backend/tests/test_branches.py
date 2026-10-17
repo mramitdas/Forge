@@ -176,6 +176,18 @@ async def test_delete_branch_soft_deletes_members(client, gym_a):
     assert me.status_code == 404
 
 
+async def test_branch_update_rejects_overlong_timezone(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch = await _create_branch(client, token, "TZ Bound St")
+    response = await client.patch(
+        f"/api/v1/branches/{branch['id']}",
+        headers=_headers(token),
+        json={"timezone": "x" * 65},
+    )
+    assert response.status_code == 422, response.text
+
+
 async def test_branch_is_tenant_scoped(client, gym_a, gym_b):
     owner_a = await login(client, "owner-gyma@example.com", "owner-pass-123")
     owner_b = await login(client, "owner-gymb@example.com", "owner-pass-123")

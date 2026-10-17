@@ -52,7 +52,7 @@ class GymSettingsOut(BaseModel):
 
 class GymUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=200)
-    timezone: str | None = None
+    timezone: str | None = Field(default=None, max_length=64)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     status: str | None = None
     tier_code: str | None = None
@@ -189,7 +189,7 @@ class BranchUpdate(BaseModel):
     phone: str | None = None
     country_code: str | None = None
     gst_number: str | None = None
-    timezone: str | None = None
+    timezone: str | None = Field(default=None, max_length=64)
     is_active: bool | None = None
 
 
