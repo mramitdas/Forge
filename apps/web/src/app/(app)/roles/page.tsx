@@ -150,22 +150,22 @@ export default function RolesPage() {
         const current = draft[role.id] ?? new Set(base);
         return (
           <Card key={role.id} className="overflow-hidden">
-            <div
-              role="button"
-              tabIndex={0}
-              aria-expanded={!collapsed.has(role.id)}
-              onClick={() => toggleCollapsed(role.id)}
-              onKeyDown={(e) => {
-                if (e.target !== e.currentTarget) return;
-                if (e.repeat) return;
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  toggleCollapsed(role.id);
-                }
-              }}
-              className="flex w-full cursor-pointer items-center justify-between gap-3 border-b border-line bg-fill px-5 py-4 text-left transition-colors hover:bg-fill-strong"
-            >
-              <div className="flex items-center gap-2">
+            <div className="flex w-full items-center justify-between gap-3 border-b border-line bg-fill px-5 py-4 text-left">
+              <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={!collapsed.has(role.id)}
+                onClick={() => toggleCollapsed(role.id)}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.repeat) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleCollapsed(role.id);
+                  }
+                }}
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 transition-colors"
+              >
                 <svg
                   width="14"
                   height="14"
@@ -179,7 +179,7 @@ export default function RolesPage() {
                 >
                   <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-[15px] font-semibold tracking-tight">{role.name}</h3>
                     {!role.is_editable && (
@@ -195,10 +195,7 @@ export default function RolesPage() {
                   {role.description && <p className="text-[12px] text-ink-faint">{role.description}</p>}
                 </div>
               </div>
-              <span
-                onClick={(e) => e.stopPropagation()}
-                className="shrink-0"
-              >
+              <div className="shrink-0">
                 {role.is_editable && dirty && (
                   <Button size="sm" disabled={saving === role.id} onClick={() => save(role.id, role.name)}>
                     {saving === role.id ? "Saving…" : `Save (${current.size} perms)`}
@@ -207,7 +204,7 @@ export default function RolesPage() {
                 {role.is_editable && !dirty && (
                   <span className="text-[12px] text-ink-faint">{current.size} permissions</span>
                 )}
-              </span>
+              </div>
             </div>
 
             {!collapsed.has(role.id) && (role.is_editable ? (

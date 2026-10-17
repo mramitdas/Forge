@@ -111,7 +111,8 @@ async function main() {
     check("roles: Gym Owner shows Locked badge + locked empty state", true);
 
     // The header's Save button only renders when a card has unsaved edits —
-    // make Receptionist dirty so the nested-button bug is observable.
+    // make Receptionist dirty so Save exists for the nested-button and
+    // keyboard-save checks below.
     const recvCard = page
       .locator("div.glass", { has: page.getByRole("heading", { name: "Receptionist", exact: true }) })
       .first();
@@ -120,11 +121,20 @@ async function main() {
     await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ timeout: 10000 });
     const nestedButtons = await page.locator("button button").count();
     check("roles: no nested <button> elements", nestedButtons === 0, `count=${nestedButtons}`);
+    const headerRegion = recvCard
+      .locator('[role="button"]', { has: page.getByRole("heading", { name: "Receptionist", exact: true }) })
+      .first();
+    const nestedInRoleButton = await headerRegion.locator("button").count();
+    check(
+      "roles: Save is outside the header role=button region",
+      nestedInRoleButton === 0,
+      `count=${nestedInRoleButton}`,
+    );
 
-    // Keyboard path: Enter on the focused Save must SAVE, not collapse the card.
-    // (If the header swallows the keydown, the card collapses while the dirty
-    // header's Save button stays mounted — so the detached wait times out and
-    // the check fails. The switch-visibility wait is belt-and-braces.)
+    // Keyboard path: Enter on the focused Save must SAVE via native button
+    // activation — Save now lives outside the header's role=button region,
+    // so a header keydown can never intercept it. The detached wait is the
+    // RED signal; the switch-visibility wait is belt-and-braces.
     await recvCard.getByRole("button", { name: /^Save \(/ }).focus();
     await page.keyboard.press("Enter");
     await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 15000 });
@@ -178,8 +188,8 @@ async function main() {
     await page.getByRole("heading", { name: ROLE_NAME, exact: true }).click();
     await roleCard.getByRole("switch", { name: "reports.view" }).waitFor({ timeout: 10000 });
     await roleCard.getByRole("switch", { name: "reports.view" }).click();
-    // The card header (div[role=button]) accessible name embeds the nested
-    // Save label — match the inner button exactly to avoid ambiguity.
+    // Save sits outside the header's role=button region; match the button
+    // exactly by its own label to avoid any ambiguity.
     await roleCard.getByRole("button", { name: "Save (3 perms)", exact: true }).click();
     await page.getByText(`Saved ${ROLE_NAME} permissions`).waitFor({ timeout: 10000 });
     await roleCard.getByText("3 permissions", { exact: true }).waitFor({ timeout: 10000 });
