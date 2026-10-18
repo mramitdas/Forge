@@ -5,6 +5,7 @@ import { Badge, Button, Card, EmptyState, Input, Modal, Switch, Toast } from "@/
 import { Async } from "@/components/skeleton";
 import { RoleCardSkeleton } from "@/components/skeletons";
 import { useCreateRole, usePermissionCatalog, useRoles, useUpdateRole } from "@/lib/hooks";
+import { useInFlight } from "@/lib/inflight";
 
 const MODULE_LABELS: Record<string, string> = {
   members: "Members",
@@ -31,6 +32,7 @@ export default function RolesPage() {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newPerms, setNewPerms] = useState<Set<string>>(new Set());
+  const addGuard = useInFlight();
 
   useEffect(() => {
     if (!initializedRef.current && roles.length > 0) {
@@ -118,17 +120,19 @@ export default function RolesPage() {
       setToast({ type: "error", message: `Could not create role — a role named ${newName.trim()} already exists` });
       return;
     }
-    try {
-      await createRole.mutateAsync({
-        name: newName.trim(),
-        description: newDesc.trim() || undefined,
-        permission_codes: [...newPerms],
-      });
-      closeCreateModal();
-      setToast({ type: "success", message: `Created ${newName.trim()}` });
-    } catch {
-      setToast({ type: "error", message: "Could not create role" });
-    }
+    await addGuard.run(async () => {
+      try {
+        await createRole.mutateAsync({
+          name: newName.trim(),
+          description: newDesc.trim() || undefined,
+          permission_codes: [...newPerms],
+        });
+        closeCreateModal();
+        setToast({ type: "success", message: `Created ${newName.trim()}` });
+      } catch {
+        setToast({ type: "error", message: "Could not create role" });
+      }
+    });
   }
 
   return (
@@ -325,7 +329,7 @@ export default function RolesPage() {
             <Button type="button" variant="secondary" onClick={closeCreateModal}>
               Cancel
             </Button>
-            <Button onClick={submitNewRole} disabled={createRole.isPending}>
+            <Button onClick={submitNewRole} disabled={addGuard.busy || createRole.isPending}>
               {createRole.isPending ? "Creating…" : `Create role (${newPerms.size} perms)`}
             </Button>
           </div>

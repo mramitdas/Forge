@@ -71,6 +71,7 @@ export default function ExpensesPage() {
   const deleteExpense = useDeleteExpense();
   const can = useCan();
   const addGuard = useInFlight();
+  const deleteGuard = useInFlight();
 
   const sorted = useMemo(
     () => [...expenses].sort((a, b) => (a.paid_at < b.paid_at ? 1 : -1)),
@@ -102,12 +103,14 @@ export default function ExpensesPage() {
   }
 
   async function confirmDelete(id: string) {
-    try {
-      await deleteExpense.mutateAsync(id);
-      setToast({ type: "success", message: "Expense deleted" });
-    } catch {
-      setToast({ type: "error", message: "Could not delete the expense" });
-    }
+    await deleteGuard.run(async () => {
+      try {
+        await deleteExpense.mutateAsync(id);
+        setToast({ type: "success", message: "Expense deleted" });
+      } catch {
+        setToast({ type: "error", message: "Could not delete the expense" });
+      }
+    });
   }
 
   return (
@@ -156,7 +159,12 @@ export default function ExpensesPage() {
                   <td className="px-4 py-3 font-medium">{inr(e.amount_minor)}</td>
                   <td className="px-5 py-3 text-right">
                     {can("expenses.manage") && (
-                      <Button size="xs" variant="ghost" onClick={() => confirmDelete(e.id)}>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        disabled={deleteGuard.busy || deleteExpense.isPending}
+                        onClick={() => confirmDelete(e.id)}
+                      >
                         Delete
                       </Button>
                     )}

@@ -6,6 +6,7 @@ import { Async, Count, Skeleton } from "@/components/skeleton";
 import { BranchGridSkeleton } from "@/components/skeletons";
 import { useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { useInFlight } from "@/lib/inflight";
 import { TIMEZONES } from "@/lib/timezones";
 import { COUNTRY_CODES, dialFor } from "@/lib/countries";
 import type { Branch } from "@/lib/mock";
@@ -59,6 +60,7 @@ export default function BranchesPage() {
   const updateBranch = useUpdateBranch();
   const deleteBranch = useDeleteBranch();
   const can = useCan();
+  const addGuard = useInFlight();
   const totalMembers = branches.reduce((s, b) => s + b.members, 0);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -71,22 +73,24 @@ export default function BranchesPage() {
 
   async function addBranch(e: React.FormEvent) {
     e.preventDefault();
-    try {
-      await createBranch.mutateAsync({
-        name: form.name,
-        code: form.code || undefined,
-        address: form.address || undefined,
-        phone: form.phone || undefined,
-        country_code: form.country_code,
-        gst_number: form.gst_number || undefined,
-        timezone: form.timezone,
-      });
-      setCreateOpen(false);
-      setForm(emptyForm);
-      setToast({ type: "success", message: "Branch added" });
-    } catch {
-      setToast({ type: "error", message: "Could not add branch" });
-    }
+    await addGuard.run(async () => {
+      try {
+        await createBranch.mutateAsync({
+          name: form.name,
+          code: form.code || undefined,
+          address: form.address || undefined,
+          phone: form.phone || undefined,
+          country_code: form.country_code,
+          gst_number: form.gst_number || undefined,
+          timezone: form.timezone,
+        });
+        setCreateOpen(false);
+        setForm(emptyForm);
+        setToast({ type: "success", message: "Branch added" });
+      } catch {
+        setToast({ type: "error", message: "Could not add branch" });
+      }
+    });
   }
 
   function openEdit(b: Branch) {
@@ -339,7 +343,7 @@ export default function BranchesPage() {
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={createBranch.isPending}>
+            <Button type="submit" disabled={addGuard.busy || createBranch.isPending}>
               {createBranch.isPending ? "Adding…" : "Add branch"}
             </Button>
           </div>
