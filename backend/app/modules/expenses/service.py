@@ -89,7 +89,7 @@ async def list_expenses(
     total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = (
         await session.execute(
-            stmt.order_by(Expense.paid_at.desc())
+            stmt.order_by(Expense.paid_at.desc(), Expense.id.desc())
             .offset(pagination.offset())
             .limit(pagination.page_size)
         )
