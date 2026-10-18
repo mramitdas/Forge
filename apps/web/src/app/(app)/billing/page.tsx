@@ -64,7 +64,7 @@ function SummaryCards() {
   const { invoices, isLoading, isError } = useInvoicesData();
 
   const outstanding = invoices
-    .filter((i) => i.status !== "paid")
+    .filter((i) => i.status === "open" || i.status === "overdue")
     .reduce((a, i) => a + (i.total - i.paid), 0);
   const collected = invoices
     .filter((i) => i.status === "paid")
@@ -197,7 +197,7 @@ export default function BillingPage() {
                     <StatusBadge status={i.status} />
                   </td>
                   <td className="px-5 py-3 text-right">
-                    {i.status !== "paid" && can("billing.payments.capture") && (
+                    {(i.status === "open" || i.status === "overdue") && can("billing.payments.capture") && (
                       <Button size="xs" onClick={() => setPaying(i.id)}>
                         Pay now
                       </Button>

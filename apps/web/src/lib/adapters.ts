@@ -1,4 +1,4 @@
-import { inr } from "./mock";
+import { inr } from "./mock.ts";
 import type {
   BranchOut,
   CheckInOut,
@@ -230,7 +230,11 @@ export function toUiInvoice(i: InvoiceOut): Invoice {
   let status: Invoice["status"];
   if (i.status === "paid") status = "paid";
   else if (i.status === "void") status = "void";
-  else if (i.status === "open" && new Date(i.due_date).getTime() < now) status = "overdue";
+  else if (
+    (i.status === "open" || i.status === "partial") &&
+    new Date(i.due_date).getTime() < now
+  )
+    status = "overdue";
   else status = "open";
   return {
     id: i.id,
