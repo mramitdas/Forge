@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await apiFetch<MeOut>("/auth/me");
       setMe(data);
+      if (data.must_change) setMustChange(true);
     } catch {
       setMe(null);
     } finally {

@@ -240,7 +240,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (loading || !me) {
+  if (loading || !me || mustChange) {
     return <AppShellSkeleton />;
   }
 
