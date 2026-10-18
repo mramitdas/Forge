@@ -25,6 +25,7 @@ import {
   useUpdatePlan,
 } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { useInFlight } from "@/lib/inflight";
 import type { Plan } from "@/lib/mock";
 
 const periodLabel: Record<string, string> = {
@@ -96,6 +97,8 @@ export default function PlansPage() {
   const updatePlan = useUpdatePlan();
   const deletePlan = useDeletePlan();
   const can = useCan();
+  const addGuard = useInFlight();
+  const editGuard = useInFlight();
 
   const selected = subscribeTo ? plans.find((p) => p.id === subscribeTo) : null;
   const memberOptions = rawMembers
@@ -116,45 +119,49 @@ export default function PlansPage() {
   async function subscribePlan(e: React.FormEvent) {
     e.preventDefault();
     if (!selected || !form.memberId || !form.branchId) return;
-    try {
-      await subscribe.mutateAsync({
-        member_id: form.memberId,
-        plan_id: selected.id,
-        branch_id: form.branchId,
-      });
-      const member = memberOptions.find((m) => m.id === form.memberId);
-      const tax = Math.round((selected.price * selected.taxBp) / 10000);
-      const total = selected.price + selected.entryFee + tax;
-      setSubscribeTo(null);
-      setForm({ memberId: "", branchId: "" });
-      setToast({ type: "success", message: `Subscription created for ${member?.name ?? "member"} · ${inr(total)} due` });
-    } catch {
-      setToast({ type: "error", message: "Could not create subscription" });
-    }
+    await addGuard.run(async () => {
+      try {
+        await subscribe.mutateAsync({
+          member_id: form.memberId,
+          plan_id: selected.id,
+          branch_id: form.branchId,
+        });
+        const member = memberOptions.find((m) => m.id === form.memberId);
+        const tax = Math.round((selected.price * selected.taxBp) / 10000);
+        const total = selected.price + selected.entryFee + tax;
+        setSubscribeTo(null);
+        setForm({ memberId: "", branchId: "" });
+        setToast({ type: "success", message: `Subscription created for ${member?.name ?? "member"} · ${inr(total)} due` });
+      } catch {
+        setToast({ type: "error", message: "Could not create subscription" });
+      }
+    });
   }
 
   async function addPlan(e: React.FormEvent) {
     e.preventDefault();
     const dur = durationFor(planForm.durationMonths);
-    try {
-      await createPlan.mutateAsync({
-        name: planForm.name,
-        slug: planForm.slug || autoSlug(planForm.name, planForm.branchId ? branchName(planForm.branchId) : ""),
-        branch_id: planForm.branchId || null,
-        description: planForm.description || undefined,
-        billing_period: dur.period,
-        amount_minor: Number(planForm.amountMinor),
-        entry_fee_minor: Number(planForm.entryFeeMinor),
-        tax_rate_bp: Math.round(Number(planForm.taxPercent) * 100),
-        duration_months: dur.months,
-        auto_renew: planForm.autoRenew,
-      });
-      setCreateOpen(false);
-      setPlanForm(emptyForm);
-      setToast({ type: "success", message: "Plan created" });
-    } catch (err) {
-      setToast({ type: "error", message: planError(err, "create") });
-    }
+    await addGuard.run(async () => {
+      try {
+        await createPlan.mutateAsync({
+          name: planForm.name,
+          slug: planForm.slug || autoSlug(planForm.name, planForm.branchId ? branchName(planForm.branchId) : ""),
+          branch_id: planForm.branchId || null,
+          description: planForm.description || undefined,
+          billing_period: dur.period,
+          amount_minor: Number(planForm.amountMinor),
+          entry_fee_minor: Number(planForm.entryFeeMinor),
+          tax_rate_bp: Math.round(Number(planForm.taxPercent) * 100),
+          duration_months: dur.months,
+          auto_renew: planForm.autoRenew,
+        });
+        setCreateOpen(false);
+        setPlanForm(emptyForm);
+        setToast({ type: "success", message: "Plan created" });
+      } catch (err) {
+        setToast({ type: "error", message: planError(err, "create") });
+      }
+    });
   }
 
   function openEdit(p: Plan) {
@@ -176,26 +183,28 @@ export default function PlansPage() {
     e.preventDefault();
     if (!editing) return;
     const dur = durationFor(editForm.durationMonths);
-    try {
-      await updatePlan.mutateAsync({
-        planId: editing.id,
-        body: {
-          name: editForm.name,
-          branch_id: editForm.branchId || null,
-          description: editForm.description || undefined,
-          billing_period: dur.period,
-          amount_minor: Number(editForm.amountMinor),
-          entry_fee_minor: Number(editForm.entryFeeMinor),
-          tax_rate_bp: Math.round(Number(editForm.taxPercent) * 100),
-          duration_months: dur.months,
-          auto_renew: editForm.autoRenew,
-        },
-      });
-      setEditing(null);
-      setToast({ type: "success", message: "Plan updated" });
-    } catch (err) {
-      setToast({ type: "error", message: planError(err, "update") });
-    }
+    await editGuard.run(async () => {
+      try {
+        await updatePlan.mutateAsync({
+          planId: editing.id,
+          body: {
+            name: editForm.name,
+            branch_id: editForm.branchId || null,
+            description: editForm.description || undefined,
+            billing_period: dur.period,
+            amount_minor: Number(editForm.amountMinor),
+            entry_fee_minor: Number(editForm.entryFeeMinor),
+            tax_rate_bp: Math.round(Number(editForm.taxPercent) * 100),
+            duration_months: dur.months,
+            auto_renew: editForm.autoRenew,
+          },
+        });
+        setEditing(null);
+        setToast({ type: "success", message: "Plan updated" });
+      } catch (err) {
+        setToast({ type: "error", message: planError(err, "update") });
+      }
+    });
   }
 
   async function enablePlan(p: Plan) {
@@ -427,7 +436,7 @@ export default function PlansPage() {
             <Button type="button" variant="secondary" onClick={() => setSubscribeTo(null)}>
               Cancel
             </Button>
-            <Button type="submit">Create subscription</Button>
+            <Button type="submit" disabled={addGuard.busy || subscribe.isPending}>Create subscription</Button>
           </div>
         </form>
       </Modal>
@@ -514,7 +523,7 @@ export default function PlansPage() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={createPlan.isPending}>
+            <Button type="submit" disabled={addGuard.busy || createPlan.isPending}>
               {createPlan.isPending ? "Creating…" : "Create plan"}
             </Button>
           </div>
@@ -589,7 +598,7 @@ export default function PlansPage() {
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button type="submit" disabled={updatePlan.isPending}>
+            <Button type="submit" disabled={editGuard.busy || updatePlan.isPending}>
               {updatePlan.isPending ? "Saving…" : "Save changes"}
             </Button>
           </div>

@@ -7,6 +7,7 @@ import { TableSkeleton } from "@/components/skeletons";
 import { inr } from "@/lib/mock";
 import { useCreateExpense, useDeleteExpense, useExpensesData } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { useInFlight } from "@/lib/inflight";
 
 const CATEGORIES = ["Rent", "Salary", "Electricity", "Water", "Internet", "Maintenance", "Marketing", "Other"];
 const METHODS = ["cash", "upi", "card", "netbanking", "wallet", "other"];
@@ -69,6 +70,7 @@ export default function ExpensesPage() {
   const createExpense = useCreateExpense();
   const deleteExpense = useDeleteExpense();
   const can = useCan();
+  const addGuard = useInFlight();
 
   const sorted = useMemo(
     () => [...expenses].sort((a, b) => (a.paid_at < b.paid_at ? 1 : -1)),
@@ -81,20 +83,22 @@ export default function ExpensesPage() {
       setToast({ type: "error", message: "Enter a valid amount" });
       return;
     }
-    try {
-      await createExpense.mutateAsync({
-        category: form.category,
-        description: form.description || undefined,
-        amount_minor: amountMinor,
-        method: form.method,
-        paid_at: new Date(form.paidAt).toISOString(),
-      });
-      setAdding(false);
-      setForm({ ...form, description: "", amount: "" });
-      setToast({ type: "success", message: `Expense recorded` });
-    } catch {
-      setToast({ type: "error", message: "Could not save the expense — please try again" });
-    }
+    await addGuard.run(async () => {
+      try {
+        await createExpense.mutateAsync({
+          category: form.category,
+          description: form.description || undefined,
+          amount_minor: amountMinor,
+          method: form.method,
+          paid_at: new Date(form.paidAt).toISOString(),
+        });
+        setAdding(false);
+        setForm({ ...form, description: "", amount: "" });
+        setToast({ type: "success", message: `Expense recorded` });
+      } catch {
+        setToast({ type: "error", message: "Could not save the expense — please try again" });
+      }
+    });
   }
 
   async function confirmDelete(id: string) {
@@ -221,7 +225,7 @@ export default function ExpensesPage() {
             <Button type="button" variant="secondary" onClick={() => setAdding(false)}>
               Cancel
             </Button>
-            <Button onClick={confirmAdd} disabled={createExpense.isPending}>
+            <Button onClick={confirmAdd} disabled={addGuard.busy || createExpense.isPending}>
               Save expense
             </Button>
           </div>

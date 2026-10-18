@@ -28,6 +28,7 @@ import { inr } from "@/lib/mock";
 import { useAuth } from "@/lib/auth";
 import { useBranches, useCheckinMutation, useCheckins, useMemberCtx, useNotificationsData } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { useInFlight } from "@/lib/inflight";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -49,7 +50,7 @@ function OverviewHeader() {
   const [memberId, setMemberId] = useState("");
   const [branchId, setBranchId] = useState("");
   const [source, setSource] = useState("manual");
-  const [busy, setBusy] = useState(false);
+  const checkGuard = useInFlight();
   const [toast, setToast] = useState<{
     type: "success" | "error" | "info";
     message: string;
@@ -65,33 +66,32 @@ function OverviewHeader() {
     e.preventDefault();
     if (!member || !(branchId || member.branch_id)) return;
     const targetBranch = branchId || member.branch_id;
-    setBusy(true);
-    try {
-      const res = await checkinMut.mutateAsync({
-        member_id: member.id,
-        branch_id: targetBranch,
-        source,
-      });
-      const outcome =
-        res.result === "allowed" ? "granted" : res.result === "denied" ? "denied" : "duplicate";
-      const name = member.full_name || member.first_name;
-      setToast({
-        type: outcome === "granted" ? "success" : outcome === "denied" ? "error" : "info",
-        message: `${name} — ${
-          outcome === "granted"
-            ? "access granted"
-            : outcome === "denied"
-              ? `access denied (${res.reason ?? "no active membership"})`
-              : "duplicate check-in"
-        }`,
-      });
-      setOpen(false);
-      setMemberId("");
-    } catch {
-      setToast({ type: "error", message: "Check-in failed — could not reach the server" });
-    } finally {
-      setBusy(false);
-    }
+    await checkGuard.run(async () => {
+      try {
+        const res = await checkinMut.mutateAsync({
+          member_id: member.id,
+          branch_id: targetBranch,
+          source,
+        });
+        const outcome =
+          res.result === "allowed" ? "granted" : res.result === "denied" ? "denied" : "duplicate";
+        const name = member.full_name || member.first_name;
+        setToast({
+          type: outcome === "granted" ? "success" : outcome === "denied" ? "error" : "info",
+          message: `${name} — ${
+            outcome === "granted"
+              ? "access granted"
+              : outcome === "denied"
+                ? `access denied (${res.reason ?? "no active membership"})`
+                : "duplicate check-in"
+          }`,
+        });
+        setOpen(false);
+        setMemberId("");
+      } catch {
+        setToast({ type: "error", message: "Check-in failed — could not reach the server" });
+      }
+    });
   }
 
   const todayAllowed = checkins.filter(
@@ -210,8 +210,8 @@ function OverviewHeader() {
             >
               Cancel
             </Button>
-            <Button type="submit" className="flex-1" disabled={!member || !(branchId || member.branch_id) || busy}>
-              {busy ? "Checking in…" : "Check in"}
+            <Button type="submit" className="flex-1" disabled={!member || !(branchId || member.branch_id) || checkGuard.busy}>
+              {checkGuard.busy ? "Checking in…" : "Check in"}
             </Button>
           </div>
         </form>

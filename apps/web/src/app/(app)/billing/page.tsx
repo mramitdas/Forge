@@ -16,6 +16,7 @@ import { TableSkeleton } from "@/components/skeletons";
 import { inr } from "@/lib/mock";
 import { useInvoicesData, useMemberCtx, usePayInvoice } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { useInFlight } from "@/lib/inflight";
 
 const methods = [
   {
@@ -114,6 +115,7 @@ export default function BillingPage() {
   const { members: rawMembers } = useMemberCtx();
   const payInvoice = usePayInvoice();
   const can = useCan();
+  const payGuard = useInFlight();
 
   const memberMap = useMemo(
     () => new Map(rawMembers.map((m) => [m.id, m.full_name || m.first_name])),
@@ -135,17 +137,19 @@ export default function BillingPage() {
 
   async function confirmPay() {
     if (!invoice) return;
-    try {
-      await payInvoice.mutateAsync({
-        invoice_id: invoice.id,
-        method,
-        idempotency_key: crypto.randomUUID(),
-      });
-      setPaying(null);
-      setToast({ type: "success", message: `${invoice.number} marked as paid via ${method}` });
-    } catch {
-      setToast({ type: "error", message: "Payment failed — please try again" });
-    }
+    await payGuard.run(async () => {
+      try {
+        await payInvoice.mutateAsync({
+          invoice_id: invoice.id,
+          method,
+          idempotency_key: crypto.randomUUID(),
+        });
+        setPaying(null);
+        setToast({ type: "success", message: `${invoice.number} marked as paid via ${method}` });
+      } catch {
+        setToast({ type: "error", message: "Payment failed — please try again" });
+      }
+    });
   }
 
   return (
@@ -275,7 +279,7 @@ export default function BillingPage() {
               <Button type="button" variant="secondary" onClick={() => setPaying(null)}>
                 Cancel
               </Button>
-              <Button onClick={confirmPay}>
+              <Button onClick={confirmPay} disabled={payGuard.busy}>
                 Pay {inr(invoice.total)}
               </Button>
             </div>

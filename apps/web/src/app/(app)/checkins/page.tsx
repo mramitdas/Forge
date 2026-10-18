@@ -24,6 +24,7 @@ import {
   useMemberCtx,
 } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { useInFlight } from "@/lib/inflight";
 
 const sourceLabels = ["Biometric", "QR", "RFID", "Manual"];
 const sourceValue: Record<string, string> = {
@@ -91,6 +92,7 @@ function QuickCheckinCard() {
   const { members: rawMembers, isLoading: ml, isError: me } = useMemberCtx();
   const doCheckinApi = useCheckinMutation();
   const can = useCan();
+  const checkGuard = useInFlight();
 
   useEffect(() => {
     if (!branchId && branches[0]) setBranchId(branches[0].id);
@@ -105,38 +107,40 @@ function QuickCheckinCard() {
   async function doCheckin(e: React.FormEvent) {
     e.preventDefault();
     if (!member) return;
-    try {
-      const res = await doCheckinApi.mutateAsync({
-        member_id: member.id,
-        branch_id: branchId,
-        source,
-      });
-      const outcome: CheckinResult =
-        res.result === "allowed" ? "granted" : res.result === "denied" ? "denied" : "duplicate";
-      setResult({
-        memberId: member.id,
-        memberName: member.full_name || member.first_name,
-        result: outcome,
-        time: new Date().toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }),
-      });
-      const message = `${member.full_name || member.first_name} — ${
-        outcome === "granted"
-          ? "access granted"
-          : outcome === "denied"
-            ? `access denied (${res.reason ?? "no active membership"})`
-            : `duplicate check-in${res.reason ? ` · ${res.reason}` : ""}`
-      }`;
-      setToast({
-        type: outcome === "granted" ? "success" : outcome === "denied" ? "error" : "info",
-        message,
-      });
-    } catch {
-      setToast({ type: "error", message: "Check-in failed — could not reach the server" });
-    }
+    await checkGuard.run(async () => {
+      try {
+        const res = await doCheckinApi.mutateAsync({
+          member_id: member.id,
+          branch_id: branchId,
+          source,
+        });
+        const outcome: CheckinResult =
+          res.result === "allowed" ? "granted" : res.result === "denied" ? "denied" : "duplicate";
+        setResult({
+          memberId: member.id,
+          memberName: member.full_name || member.first_name,
+          result: outcome,
+          time: new Date().toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }),
+        });
+        const message = `${member.full_name || member.first_name} — ${
+          outcome === "granted"
+            ? "access granted"
+            : outcome === "denied"
+              ? `access denied (${res.reason ?? "no active membership"})`
+              : `duplicate check-in${res.reason ? ` · ${res.reason}` : ""}`
+        }`;
+        setToast({
+          type: outcome === "granted" ? "success" : outcome === "denied" ? "error" : "info",
+          message,
+        });
+      } catch {
+        setToast({ type: "error", message: "Check-in failed — could not reach the server" });
+      }
+    });
   }
 
   const meta = result ? resultMeta(result.result) : null;
@@ -221,7 +225,7 @@ function QuickCheckinCard() {
                 </Select>
               </Field>
             </div>
-            <Button type="submit" size="lg" className="w-full rounded-xl" disabled={!member}>
+            <Button type="submit" size="lg" className="w-full rounded-xl" disabled={!member || checkGuard.busy}>
               Check in
             </Button>
           </form>

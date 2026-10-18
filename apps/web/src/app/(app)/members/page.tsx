@@ -21,6 +21,7 @@ import { type Member } from "@/lib/mock";
 import { byId, useBranches, useCreateMember, useMembersPage, usePlans, useSubscribe, useActivateSubscription } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { COUNTRY_CODES } from "@/lib/countries";
+import { useInFlight } from "@/lib/inflight";
 
 function CountryCodeSelect({
   value,
@@ -58,7 +59,6 @@ export default function MembersPage() {
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
   const { branches } = useBranches();
   const { plans } = usePlans();
@@ -74,6 +74,7 @@ export default function MembersPage() {
   const subscribe = useSubscribe();
   const activate = useActivateSubscription();
   const can = useCan();
+  const addGuard = useInFlight();
 
   const planMap = byId(plans);
   const branchMap = byId(branches);
@@ -94,34 +95,33 @@ export default function MembersPage() {
     e.preventDefault();
     const nameParts = form.name.trim().split(/\s+/);
     if (!nameParts[0]) return;
-    setSubmitting(true);
-    try {
-      const created = await createMember.mutateAsync({
-        first_name: nameParts[0],
-        last_name: nameParts.slice(1).join(" ") || undefined,
-        email: form.email || undefined,
-        phone: form.phone || undefined,
-        country_code: form.countryCode || undefined,
-        gender: form.gender,
-        branch_id: form.branchId,
-        status: "lead",
-      });
-      if (form.planId) {
-        const sub = await subscribe.mutateAsync({
-          member_id: created.id,
-          plan_id: form.planId,
+    await addGuard.run(async () => {
+      try {
+        const created = await createMember.mutateAsync({
+          first_name: nameParts[0],
+          last_name: nameParts.slice(1).join(" ") || undefined,
+          email: form.email || undefined,
+          phone: form.phone || undefined,
+          country_code: form.countryCode || undefined,
+          gender: form.gender,
           branch_id: form.branchId,
+          status: "lead",
         });
-        await activate.mutateAsync(sub.id);
+        if (form.planId) {
+          const sub = await subscribe.mutateAsync({
+            member_id: created.id,
+            plan_id: form.planId,
+            branch_id: form.branchId,
+          });
+          await activate.mutateAsync(sub.id);
+        }
+        setOpen(false);
+        setToast({ type: "success", message: `${form.name.trim()} added as lead` });
+        setForm({ name: "", email: "", countryCode: "+91", phone: "", gender: "Male", branchId: form.branchId, planId: "" });
+      } catch {
+        setToast({ type: "error", message: "Failed to add member" });
       }
-      setOpen(false);
-      setToast({ type: "success", message: `${form.name.trim()} added as lead` });
-      setForm({ name: "", email: "", countryCode: "+91", phone: "", gender: "Male", branchId: form.branchId, planId: "" });
-    } catch {
-      setToast({ type: "error", message: "Failed to add member" });
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   return (
@@ -340,8 +340,8 @@ export default function MembersPage() {
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Adding…" : "Add member"}
+            <Button type="submit" disabled={addGuard.busy}>
+              {addGuard.busy ? "Adding…" : "Add member"}
             </Button>
           </div>
         </form>
