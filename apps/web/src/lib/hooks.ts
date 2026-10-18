@@ -551,15 +551,19 @@ export function useNotificationsData(): {
   isLoading: boolean;
   isError: boolean;
 } {
+  const can = useCan();
+  const enabled = can("notifications.view");
   const q = useQuery({
     queryKey: ["notifications"],
     queryFn: () => apiFetch<NotificationOut[]>("/notifications"),
     staleTime: 0,
+    enabled,
   });
   const unreadQ = useQuery({
     queryKey: ["notifications", "unread"],
     queryFn: () => apiFetch<{ count: number }>("/notifications/unread-count"),
     staleTime: 0,
+    enabled,
   });
   return useMemo(
     () => ({
@@ -999,10 +1003,12 @@ export function useGymSettings(): {
   isLoading: boolean;
   isError: boolean;
 } {
+  const can = useCan();
   const q = useQuery({
     queryKey: ["settings"],
     queryFn: () => apiFetch<GymSettingsOut>("/settings"),
     retry: false,
+    enabled: can("tenancy.settings.manage"),
   });
   return useMemo(
     () => ({ settings: q.data ?? null, isLoading: q.isLoading, isError: q.isError }),
