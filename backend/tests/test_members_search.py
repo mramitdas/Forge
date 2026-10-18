@@ -32,6 +32,21 @@ async def test_search_matches_full_name(client, gym_a):
     assert created.status_code == 201, created.text
     member_id = created.json()["id"]
 
+    other = await client.post(
+        "/api/v1/members",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "first_name": "Sole",
+            "last_name": "Name",
+            "email": "sole-name@example.com",
+            "phone": "+919900000012",
+            "branch_id": branch,
+            "status": "prospect",
+        },
+    )
+    assert other.status_code == 201, other.text
+    other_id = other.json()["id"]
+
     for query in ("DblClick QA", "DblClick", "QA"):
         response = await client.get(
             "/api/v1/members",
@@ -41,3 +56,4 @@ async def test_search_matches_full_name(client, gym_a):
         assert response.status_code == 200, response.text
         ids = [m["id"] for m in response.json()["items"]]
         assert member_id in ids, f"search={query!r} missed member: {ids}"
+        assert other_id not in ids, f"search={query!r} leaked non-matching member: {ids}"
