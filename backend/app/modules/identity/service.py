@@ -81,6 +81,7 @@ async def _issue_for_user(
         access_token=access,
         refresh_token=raw_refresh,
         expires_in=settings.access_token_ttl_seconds,
+        must_change=must_change,
     )
 
 

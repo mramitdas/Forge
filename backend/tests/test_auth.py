@@ -295,6 +295,10 @@ async def _set_must_change(client, *, flag: bool) -> str:
         json={"email": "owner-gyma@example.com", "password": "owner-pass-123"},
     )
     assert login_res.status_code == 200, login_res.text
+    body = login_res.json()
+    assert body.get("must_change") is flag, (
+        f"login must_change={body.get('must_change')!r} but credential flag={flag!r}"
+    )
     return login_res.json()["access_token"]
 
 
