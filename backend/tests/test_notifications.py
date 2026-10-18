@@ -82,20 +82,47 @@ async def test_mark_all_read_clears_every_unread(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     headers = {"Authorization": f"Bearer {owner['access_token']}"}
 
-    # Seed 3 unread rows under the gym's tenant context so the tenant_id
-    # column default (app.tenant_id setting) fills correctly.
+    # Second gym_a user (branch manager has notifications.view) to prove
+    # mark-all only touches the caller's rows.
+    roles = await client.get("/api/v1/permissions/roles", headers=headers)
+    assert roles.status_code == 200, roles.text
+    branch_manager = next(r for r in roles.json() if r["name"] == "Branch Manager")
+    employee = await client.post(
+        "/api/v1/employees",
+        headers=headers,
+        json={
+            "email": "bm-markall@example.com",
+            "full_name": "BM MarkAll",
+            "password": "bm-pass-123",
+            "role_ids": [branch_manager["id"]],
+        },
+    )
+    assert employee.status_code == 201, employee.text
+    bm_login = await login(client, "bm-markall@example.com", "bm-pass-123")
+    bm_headers = {"Authorization": f"Bearer {bm_login['access_token']}"}
+
+    # Seed 51 unread rows for the owner and 1 for the branch manager under the
+    # gym's tenant context so the tenant_id column default fills correctly.
     maker = get_sessionmaker()
     token_ctx = set_tenant_context(TenantContext(tenant_id=uuid.UUID(str(gym_a["id"]))))
     try:
         async with maker() as session:
             await session.begin()
-            user_id = await session.scalar(
+            owner_id = await session.scalar(
                 select(User.id).where(User.email == "owner-gyma@example.com")
             )
-            for i in range(3):
+            # 51 exceeds the list endpoint's 50-row cap: a mark-all that only
+            # touched the visible 50 would leave one row unread.
+            for i in range(51):
                 await create_notification(
-                    session, user_id=user_id, title=f"MarkAll {i}", body="x", type="info"
+                    session, user_id=owner_id, title=f"MarkAll {i}", body="x", type="info"
                 )
+            bm_id = await session.scalar(
+                select(User.id).where(User.email == "bm-markall@example.com")
+            )
+            await create_notification(
+                session, user_id=bm_id, title="MarkAll other-user", body="x", type="info"
+            )
             await session.commit()
     finally:
         reset_tenant_context(token_ctx)
@@ -103,7 +130,12 @@ async def test_mark_all_read_clears_every_unread(client, gym_a):
     before = (
         await client.get("/api/v1/notifications/unread-count", headers=headers)
     ).json()["count"]
-    assert before >= 3
+    assert before >= 51
+
+    bm_before = (
+        await client.get("/api/v1/notifications/unread-count", headers=bm_headers)
+    ).json()["count"]
+    assert bm_before >= 1
 
     res = await client.post("/api/v1/notifications/mark-all", headers=headers)
     assert res.status_code == 200, res.text
@@ -112,3 +144,9 @@ async def test_mark_all_read_clears_every_unread(client, gym_a):
         await client.get("/api/v1/notifications/unread-count", headers=headers)
     ).json()["count"]
     assert after == 0
+
+    # The owner's mark-all must not clear anyone else's unread rows.
+    bm_after = (
+        await client.get("/api/v1/notifications/unread-count", headers=bm_headers)
+    ).json()["count"]
+    assert bm_after == bm_before
