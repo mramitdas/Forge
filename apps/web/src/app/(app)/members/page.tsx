@@ -57,7 +57,7 @@ export default function MembersPage() {
   const [branch, setBranch] = useState("all");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const { branches } = useBranches();
@@ -115,10 +115,10 @@ export default function MembersPage() {
         await activate.mutateAsync(sub.id);
       }
       setOpen(false);
-      setToast(`${form.name.trim()} added as lead`);
+      setToast({ type: "success", message: `${form.name.trim()} added as lead` });
       setForm({ name: "", email: "", countryCode: "+91", phone: "", gender: "Male", branchId: form.branchId, planId: "" });
     } catch {
-      setToast("Failed to add member");
+      setToast({ type: "error", message: "Failed to add member" });
     } finally {
       setSubmitting(false);
     }
@@ -347,7 +347,7 @@ export default function MembersPage() {
         </form>
       </Modal>
 
-      {toast && <Toast type={toast.startsWith("Failed") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

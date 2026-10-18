@@ -29,7 +29,7 @@ type Filter = "all" | "active" | "pending" | "expired" | "cancelled";
 
 export default function SubscriptionsPage() {
   const [filter, setFilter] = useState<Filter>("all");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   const { subs, isLoading, isError } = useSubscriptionsData();
   const { members: rawMembers } = useMemberCtx();
@@ -57,9 +57,9 @@ export default function SubscriptionsPage() {
     if (!sub) return;
     try {
       await activate.mutateAsync(id);
-      setToast(`${memberMap.get(sub.memberId) ?? "Member"}'s subscription activated`);
+      setToast({ type: "success", message: `${memberMap.get(sub.memberId) ?? "Member"}'s subscription activated` });
     } catch {
-      setToast("Could not activate subscription");
+      setToast({ type: "error", message: "Could not activate subscription" });
     }
   }
 
@@ -139,7 +139,7 @@ export default function SubscriptionsPage() {
         </Card>
       </Async>
 
-      {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

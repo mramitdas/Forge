@@ -26,7 +26,7 @@ export default function RolesPage() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const [saving, setSaving] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -83,9 +83,9 @@ export default function RolesPage() {
     try {
       await updateRole.mutateAsync({ roleId, body: { permission_codes: codes } });
       setDraft((d) => ({ ...d, [roleId]: new Set(codes) }));
-      setToast(`Saved ${name} permissions`);
+      setToast({ type: "success", message: `Saved ${name} permissions` });
     } catch {
-      setToast("Could not save role — it may be locked");
+      setToast({ type: "error", message: "Could not save role — it may be locked" });
     } finally {
       setSaving(null);
     }
@@ -110,12 +110,12 @@ export default function RolesPage() {
   async function submitNewRole() {
     if (createRole.isPending) return;
     if (newName.trim().length < 2) {
-      setToast("Could not create role — name must be at least 2 characters");
+      setToast({ type: "error", message: "Could not create role — name must be at least 2 characters" });
       return;
     }
     const dupe = roles.some((r) => r.name.trim().toLowerCase() === newName.trim().toLowerCase());
     if (dupe) {
-      setToast(`Could not create role — a role named ${newName.trim()} already exists`);
+      setToast({ type: "error", message: `Could not create role — a role named ${newName.trim()} already exists` });
       return;
     }
     try {
@@ -125,9 +125,9 @@ export default function RolesPage() {
         permission_codes: [...newPerms],
       });
       closeCreateModal();
-      setToast(`Created ${newName.trim()}`);
+      setToast({ type: "success", message: `Created ${newName.trim()}` });
     } catch {
-      setToast("Could not create role");
+      setToast({ type: "error", message: "Could not create role" });
     }
   }
 
@@ -332,7 +332,7 @@ export default function RolesPage() {
         </div>
       </Modal>
 
-      {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

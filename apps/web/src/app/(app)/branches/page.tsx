@@ -67,7 +67,7 @@ export default function BranchesPage() {
   const [editForm, setEditForm] = useState(emptyForm);
   const [disableTarget, setDisableTarget] = useState<Branch | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   async function addBranch(e: React.FormEvent) {
     e.preventDefault();
@@ -83,9 +83,9 @@ export default function BranchesPage() {
       });
       setCreateOpen(false);
       setForm(emptyForm);
-      setToast("Branch added");
+      setToast({ type: "success", message: "Branch added" });
     } catch {
-      setToast("Could not add branch");
+      setToast({ type: "error", message: "Could not add branch" });
     }
   }
 
@@ -120,18 +120,18 @@ export default function BranchesPage() {
         },
       });
       setEditing(null);
-      setToast("Branch updated");
+      setToast({ type: "success", message: "Branch updated" });
     } catch {
-      setToast("Could not update branch");
+      setToast({ type: "error", message: "Could not update branch" });
     }
   }
 
   async function enableBranch(b: Branch) {
     try {
       await updateBranch.mutateAsync({ branchId: b.id, body: { is_active: true } });
-      setToast(`${b.name} enabled`);
+      setToast({ type: "success", message: `${b.name} enabled` });
     } catch {
-      setToast("Could not enable branch");
+      setToast({ type: "error", message: "Could not enable branch" });
     }
   }
 
@@ -142,14 +142,15 @@ export default function BranchesPage() {
         branchId: disableTarget.id,
         body: { is_active: false },
       });
-      setToast(
-        `${disableTarget.name} disabled · ${disableTarget.members} member${
+      setToast({
+        type: "success",
+        message: `${disableTarget.name} disabled · ${disableTarget.members} member${
           disableTarget.members === 1 ? "" : "s"
         } frozen`,
-      );
+      });
       setDisableTarget(null);
     } catch {
-      setToast("Could not disable branch");
+      setToast({ type: "error", message: "Could not disable branch" });
     }
   }
 
@@ -157,14 +158,15 @@ export default function BranchesPage() {
     if (!deleteTarget) return;
     try {
       await deleteBranch.mutateAsync(deleteTarget.id);
-      setToast(
-        `${deleteTarget.name} deleted · ${deleteTarget.members} member${
+      setToast({
+        type: "success",
+        message: `${deleteTarget.name} deleted · ${deleteTarget.members} member${
           deleteTarget.members === 1 ? "" : "s"
         } removed`,
-      );
+      });
       setDeleteTarget(null);
     } catch {
-      setToast("Could not delete branch");
+      setToast({ type: "error", message: "Could not delete branch" });
     }
   }
 
@@ -435,7 +437,7 @@ export default function BranchesPage() {
         </div>
       </Modal>
 
-      {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

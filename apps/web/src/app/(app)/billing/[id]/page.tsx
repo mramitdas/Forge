@@ -16,16 +16,16 @@ export default function InvoiceDetailPage() {
   const voidInvoice = useVoidInvoice();
   const can = useCan();
   const [voidOpen, setVoidOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   async function confirmVoid() {
     if (!invoice) return;
     try {
       await voidInvoice.mutateAsync(invoice.id);
       setVoidOpen(false);
-      setToast(`${invoice.number} voided`);
+      setToast({ type: "success", message: `${invoice.number} voided` });
     } catch {
-      setToast("Could not void invoice");
+      setToast({ type: "error", message: "Could not void invoice" });
     }
   }
 
@@ -130,7 +130,7 @@ export default function InvoiceDetailPage() {
         </div>
       </Modal>
 
-      {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

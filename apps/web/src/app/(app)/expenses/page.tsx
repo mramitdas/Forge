@@ -56,7 +56,7 @@ function SummaryCards() {
 
 export default function ExpensesPage() {
   const [adding, setAdding] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [form, setForm] = useState({
     category: "Rent",
     description: "",
@@ -78,7 +78,7 @@ export default function ExpensesPage() {
   async function confirmAdd() {
     const amountMinor = Math.round(Number(form.amount) * 100);
     if (!form.amount || Number.isNaN(amountMinor) || amountMinor <= 0) {
-      setToast("Enter a valid amount");
+      setToast({ type: "error", message: "Enter a valid amount" });
       return;
     }
     try {
@@ -91,18 +91,18 @@ export default function ExpensesPage() {
       });
       setAdding(false);
       setForm({ ...form, description: "", amount: "" });
-      setToast(`Expense recorded`);
+      setToast({ type: "success", message: `Expense recorded` });
     } catch {
-      setToast("Could not save the expense — please try again");
+      setToast({ type: "error", message: "Could not save the expense — please try again" });
     }
   }
 
   async function confirmDelete(id: string) {
     try {
       await deleteExpense.mutateAsync(id);
-      setToast("Expense deleted");
+      setToast({ type: "success", message: "Expense deleted" });
     } catch {
-      setToast("Could not delete the expense");
+      setToast({ type: "error", message: "Could not delete the expense" });
     }
   }
 
@@ -229,7 +229,7 @@ export default function ExpensesPage() {
       </Modal>
 
       {toast && (
-        <Toast type={toast.startsWith("Could") || toast.startsWith("Enter") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />
+        <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />
       )}
     </div>
   );

@@ -107,7 +107,7 @@ function SummaryCards() {
 export default function BillingPage() {
   const [paying, setPaying] = useState<string | null>(null);
   const [method, setMethod] = useState("upi");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [search, setSearch] = useState("");
 
   const { invoices, isLoading, isError } = useInvoicesData();
@@ -142,9 +142,9 @@ export default function BillingPage() {
         idempotency_key: crypto.randomUUID(),
       });
       setPaying(null);
-      setToast(`${invoice.number} marked as paid via ${method}`);
+      setToast({ type: "success", message: `${invoice.number} marked as paid via ${method}` });
     } catch {
-      setToast("Payment failed — please try again");
+      setToast({ type: "error", message: "Payment failed — please try again" });
     }
   }
 
@@ -283,7 +283,7 @@ export default function BillingPage() {
         )}
       </Modal>
 
-      {toast && <Toast type={toast.startsWith("Payment failed") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }
