@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, Modal, Select, Textarea, Toast } from "@/components/ui";
 import { Async, Skeleton, SkeletonText } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
 import { inr } from "@/lib/mock";
-import { useCreateExpense, useDeleteExpense, useExpensesData } from "@/lib/hooks";
+import { useCreateExpense, useDeleteExpense, useExpensesData, useExpensesPage } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
 
@@ -66,12 +66,19 @@ export default function ExpensesPage() {
     paidAt: new Date().toISOString().slice(0, 10),
   });
 
-  const { expenses, isLoading, isError } = useExpensesData();
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+  const { expenses, total, isLoading, isError } = useExpensesPage({ page, pageSize: PAGE_SIZE });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const createExpense = useCreateExpense();
   const deleteExpense = useDeleteExpense();
   const can = useCan();
   const addGuard = useInFlight();
   const deleteGuard = useInFlight();
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const sorted = useMemo(
     () => [...expenses].sort((a, b) => (a.paid_at < b.paid_at ? 1 : -1)),
@@ -122,7 +129,7 @@ export default function ExpensesPage() {
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h2 className="text-[15px] font-semibold tracking-tight">Expenses</h2>
             <div className="flex items-center gap-2">
-              <Badge tone="gray">{expenses.length} total</Badge>
+              <Badge tone="gray">{total} total</Badge>
               {can("expenses.manage") && (
                 <Button size="xs" onClick={() => setAdding(true)}>
                   Add expense
@@ -173,6 +180,19 @@ export default function ExpensesPage() {
               ))}
             </tbody>
           </table>
+          <div className="flex items-center justify-between px-5 py-3 text-[13px] text-ink-faint">
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <span className="flex gap-2">
+              <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                Previous
+              </Button>
+              <Button variant="secondary" size="xs" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            </span>
+          </div>
         </Card>
       </Async>
 

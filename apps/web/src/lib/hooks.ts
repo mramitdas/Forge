@@ -503,6 +503,34 @@ export function useExpensesData(): {
   );
 }
 
+export function useExpensesPage(params: { page: number; pageSize: number }): {
+  expenses: ExpenseOut[];
+  total: number;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
+  const q = useQuery({
+    queryKey: ["expenses", "page", params],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      });
+      return apiFetch<PageOut<ExpenseOut>>(`/expenses?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    enabled: can("expenses.view"),
+  });
+  const page = q.data ?? { items: [] as ExpenseOut[], total: 0 };
+  return {
+    expenses: page.items,
+    total: page.total ?? page.items.length,
+    isLoading: q.isLoading,
+    isError: q.isError,
+  };
+}
+
 export function useCreateExpense() {
   const qc = useQueryClient();
   return useMutation({

@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, EmptyState } from "@/components/ui";
+import { useState } from "react";
+import { Button, Card, EmptyState } from "@/components/ui";
 import { Async, Count } from "@/components/skeleton";
 import { BarChartSkeleton, TableSkeleton } from "@/components/skeletons";
 import { usePlatformRevenue } from "@/lib/hooks";
@@ -65,6 +66,10 @@ function MoMChart() {
 }
 
 function SoldList({ sold }: { sold: SoldSubscriptionOut[] }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const totalPages = Math.max(1, Math.ceil(sold.length / pageSize));
+  const visible = sold.slice((page - 1) * pageSize, page * pageSize);
   return (
     <Card className="overflow-hidden">
       <div className="border-b border-line px-5 py-4">
@@ -83,7 +88,7 @@ function SoldList({ sold }: { sold: SoldSubscriptionOut[] }) {
           </tr>
         </thead>
         <tbody>
-          {sold.map((s) => (
+          {visible.map((s) => (
             <tr key={s.id} className="border-b border-line last:border-0 hover:bg-accent-soft/40">
               <td className="px-5 py-3 font-medium">{s.member_name}</td>
               <td className="px-4 py-3">{s.plan_name}</td>
@@ -105,6 +110,21 @@ function SoldList({ sold }: { sold: SoldSubscriptionOut[] }) {
           ))}
         </tbody>
       </table>
+      {sold.length > pageSize && (
+        <div className="flex items-center justify-between border-t border-line px-5 py-3 text-[13px] text-ink-faint">
+          <span>
+            Page {page} of {totalPages} · {sold.length} total
+          </span>
+          <span className="flex gap-2">
+            <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
+            <Button variant="secondary" size="xs" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
+          </span>
+        </div>
+      )}
       {sold.length === 0 && <EmptyState title="No subscriptions sold yet" />}
     </Card>
   );
