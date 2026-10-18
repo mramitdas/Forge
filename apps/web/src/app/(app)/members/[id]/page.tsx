@@ -302,6 +302,7 @@ export default function MemberDetailPage() {
                   onClick={() => setAvatarOpen(true)}
                   className="block rounded-full transition-opacity hover:opacity-90"
                   title="View photo"
+                  aria-label="View photo"
                 >
                   <Avatar name={member.name} size="lg" src={member.avatarPath ? avatarUrl(member.id) : null} />
                 </button>
@@ -311,6 +312,7 @@ export default function MemberDetailPage() {
                     onClick={() => fileInput?.click()}
                     className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-accent-ink shadow-md hover:bg-accent"
                     title="Upload photo"
+                    aria-label="Upload photo"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                       <path d="M12 5v14M5 12h14" strokeLinecap="round" />

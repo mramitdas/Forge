@@ -411,6 +411,9 @@ export default function PlansPage() {
           <Field label="Member">
             <Select
               required
+              id="subscribe-member"
+              name="subscribe-member"
+              aria-label="Member"
               value={form.memberId}
               onChange={(e) => setForm({ ...form, memberId: e.target.value })}
             >
@@ -421,7 +424,7 @@ export default function PlansPage() {
             </Select>
           </Field>
           <Field label="Branch">
-            <Select value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
+            <Select id="subscribe-branch" name="subscribe-branch" aria-label="Branch" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
@@ -468,6 +471,9 @@ export default function PlansPage() {
           </div>
           <Field label="Availability">
             <Select
+              id="plan-availability"
+              name="plan-availability"
+              aria-label="Availability"
               value={planForm.branchId}
               onChange={(e) => setPlanForm({ ...planForm, branchId: e.target.value })}
             >
@@ -490,6 +496,9 @@ export default function PlansPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Duration">
               <Select
+                id="plan-duration"
+                name="plan-duration"
+                aria-label="Duration"
                 value={planForm.durationMonths}
                 onChange={(e) => setPlanForm({ ...planForm, durationMonths: e.target.value })}
               >
@@ -554,12 +563,18 @@ export default function PlansPage() {
             <Field label="Plan name">
               <Input
                 required
+                id="plan-edit-name"
+                name="plan-edit-name"
+                aria-label="Plan name"
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
               />
             </Field>
             <Field label="Duration">
               <Select
+                id="plan-edit-duration"
+                name="plan-edit-duration"
+                aria-label="Duration"
                 value={editForm.durationMonths}
                 onChange={(e) => setEditForm({ ...editForm, durationMonths: e.target.value })}
               >
@@ -571,6 +586,9 @@ export default function PlansPage() {
           </div>
           <Field label="Availability">
             <Select
+              id="plan-edit-availability"
+              name="plan-edit-availability"
+              aria-label="Availability"
               value={editForm.branchId}
               onChange={(e) => setEditForm({ ...editForm, branchId: e.target.value })}
             >
@@ -581,10 +599,13 @@ export default function PlansPage() {
             </Select>
           </Field>
           <Field label="Description">
-            <Input
-              value={editForm.description}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-            />
+              <Input
+                id="plan-edit-description"
+                name="plan-edit-description"
+                aria-label="Description"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Price (₹, paise)">
@@ -592,6 +613,9 @@ export default function PlansPage() {
                 type="number"
                 min="0"
                 required
+                id="plan-edit-amount"
+                name="plan-edit-amount"
+                aria-label="Price (₹, paise)"
                 value={editForm.amountMinor}
                 onChange={(e) => setEditForm({ ...editForm, amountMinor: e.target.value })}
               />
@@ -600,19 +624,25 @@ export default function PlansPage() {
               <Input
                 type="number"
                 min="0"
+                id="plan-edit-entry-fee"
+                name="plan-edit-entry-fee"
+                aria-label="Entry fee (₹, paise)"
                 value={editForm.entryFeeMinor}
                 onChange={(e) => setEditForm({ ...editForm, entryFeeMinor: e.target.value })}
               />
             </Field>
           </div>
           <Field label="Tax (%)">
-            <Input
-              type="number"
-              min="0"
-              max="100"
-              value={editForm.taxPercent}
-              onChange={(e) => setEditForm({ ...editForm, taxPercent: e.target.value })}
-            />
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                id="plan-edit-tax"
+                name="plan-edit-tax"
+                aria-label="Tax (%)"
+                value={editForm.taxPercent}
+                onChange={(e) => setEditForm({ ...editForm, taxPercent: e.target.value })}
+              />
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
