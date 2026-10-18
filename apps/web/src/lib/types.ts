@@ -15,6 +15,7 @@ export interface MeOut {
   is_platform: boolean;
   permissions: string[];
   branches: { id: string; name: string }[];
+  must_change?: boolean;
 }
 
 export interface TokenResponse {
@@ -22,6 +23,7 @@ export interface TokenResponse {
   refresh_token: string;
   token_type: string;
   expires_in: number;
+  must_change?: boolean;
 }
 
 export interface MemberOut {

@@ -21,7 +21,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const me = await login(email, password);
-      router.push(me.is_platform ? "/platform" : "/");
+      router.push(!me ? "/change-password" : me.is_platform ? "/platform" : "/");
     } catch (err) {
       if (err instanceof ApiError) {
         const detail = err.detail as { code?: string; message?: string } | null;

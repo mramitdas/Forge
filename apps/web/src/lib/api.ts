@@ -12,6 +12,15 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
   }
+
+  get code(): string | undefined {
+    const d = this.detail as
+      | { error?: { code?: string }; code?: string }
+      | string
+      | null;
+    if (d && typeof d === "object") return d.error?.code ?? d.code;
+    return undefined;
+  }
 }
 
 export function getAccessToken(): string | null {
@@ -83,7 +92,11 @@ export async function apiFetch<T>(
     } catch {
       detail = await res.text();
     }
-    throw new ApiError(res.status, detail);
+    const apiError = new ApiError(res.status, detail);
+    if (apiError.code === "MUST_CHANGE_PASSWORD") {
+      window.dispatchEvent(new Event("auth:must-change"));
+    }
+    throw apiError;
   }
 
   if (res.status === 204) return undefined as T;

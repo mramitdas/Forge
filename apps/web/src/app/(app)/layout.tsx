@@ -194,7 +194,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       : pathname.startsWith("/members/")
         ? "Member"
         : "FORGE");
-  const { me, loading, logout } = useAuth();
+  const { me, loading, mustChange, logout } = useAuth();
   const { unread } = useNotificationsData();
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [impersonating] = useState(
@@ -214,8 +214,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!loading && !me) router.replace("/login");
-  }, [loading, me, router]);
+    if (loading) return;
+    if (mustChange) router.replace("/change-password");
+    else if (!me) router.replace("/login");
+  }, [loading, me, mustChange, router]);
   useEffect(() => {
     const t = document.documentElement.classList.contains("dark") ? "dark" : "light";
     setTheme(t);

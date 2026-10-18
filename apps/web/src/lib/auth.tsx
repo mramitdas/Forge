@@ -8,11 +8,13 @@ import type { MeOut, TokenResponse } from "@/lib/types";
 interface AuthContextValue {
   me: MeOut | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<MeOut>;
+  mustChange: boolean;
+  login: (email: string, password: string) => Promise<MeOut | null>;
   logout: () => Promise<void>;
   refreshMe: (
     data?: MeOut | ((prev: MeOut | null) => MeOut | null),
   ) => Promise<void>;
+  completePasswordChange: (tokens: TokenResponse) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -20,6 +22,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [me, setMe] = useState<MeOut | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mustChange, setMustChange] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setMustChange(true);
+    window.addEventListener("auth:must-change", handler);
+    return () => window.removeEventListener("auth:must-change", handler);
+  }, []);
 
   const loadMe = useCallback(async () => {
     if (!getAccessToken()) {
@@ -66,6 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
     clearImpersonationOrigin();
     setTokens(tokens);
+    if (tokens.must_change) {
+      setMustChange(true);
+      setMe(null);
+      setLoading(false);
+      return null;
+    }
     const data = await apiFetch<MeOut>("/auth/me");
     setMe(data);
     return data;
@@ -87,10 +102,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("gym_access_token");
     localStorage.removeItem("gym_refresh_token");
     setMe(null);
+    setMustChange(false);
   }, []);
 
+  const completePasswordChange = useCallback(
+    async (tokens: TokenResponse) => {
+      setTokens(tokens);
+      setMustChange(false);
+      await loadMe();
+    },
+    [loadMe],
+  );
+
   return (
-    <AuthContext.Provider value={{ me, loading, login, logout, refreshMe }}>
+    <AuthContext.Provider
+      value={{ me, loading, mustChange, login, logout, refreshMe, completePasswordChange }}
+    >
       {children}
     </AuthContext.Provider>
   );
