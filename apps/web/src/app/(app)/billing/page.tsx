@@ -162,6 +162,9 @@ export default function BillingPage() {
             <h2 className="text-[15px] font-semibold tracking-tight">Invoices</h2>
             <div className="flex items-center gap-3">
               <Input
+                id="billing-search"
+                name="billing-search"
+                aria-label="Search invoice # or member"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search invoice # or member"

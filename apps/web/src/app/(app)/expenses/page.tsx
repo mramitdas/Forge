@@ -181,7 +181,7 @@ export default function ExpensesPage() {
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Category</span>
-              <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+              <Select id="expense-category" name="expense-category" aria-label="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -191,7 +191,7 @@ export default function ExpensesPage() {
             </label>
             <label className="block">
               <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Method</span>
-              <Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
+              <Select id="expense-method" name="expense-method" aria-label="Method" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
                 {METHODS.map((m) => (
                   <option key={m} value={m}>
                     {m}
@@ -206,6 +206,9 @@ export default function ExpensesPage() {
               <Input
                 type="number"
                 min="1"
+                id="expense-amount"
+                name="expense-amount"
+                aria-label="Amount (₹)"
                 placeholder="25000"
                 value={form.amount}
                 onChange={(e) => setForm({ ...form, amount: e.target.value })}
@@ -215,6 +218,9 @@ export default function ExpensesPage() {
               <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Paid on</span>
               <Input
                 type="date"
+                id="expense-paid-at"
+                name="expense-paid-at"
+                aria-label="Paid on"
                 value={form.paidAt}
                 onChange={(e) => setForm({ ...form, paidAt: e.target.value })}
               />
@@ -224,6 +230,9 @@ export default function ExpensesPage() {
             <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Description</span>
             <Textarea
               rows={2}
+              id="expense-description"
+              name="expense-description"
+              aria-label="Description"
               placeholder="Optional note"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}

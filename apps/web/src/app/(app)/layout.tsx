@@ -169,6 +169,7 @@ function ThemeToggle({ theme, onToggle }: { theme: "light" | "dark"; onToggle: (
       onClick={onToggle}
       className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-fill text-ink-soft transition-colors hover:bg-fill-strong hover:text-ink"
       title={theme === "dark" ? "Switch to light" : "Switch to dark"}
+      aria-label={theme === "dark" ? "Switch to light" : "Switch to dark"}
     >
       {theme === "dark" ? (
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -358,6 +359,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               onClick={handleLogout}
               className="text-ink-faint transition-colors hover:text-red"
               title="Sign out"
+              aria-label="Sign out"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />

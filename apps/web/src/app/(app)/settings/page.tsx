@@ -117,10 +117,10 @@ export default function SettingsPage() {
         <SectionTitle title="Profile" subtitle="Your account details across the organization" />
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Full name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Input id="settings-full-name" name="settings-full-name" aria-label="Full name" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field label="Email">
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input type="email" id="settings-email" name="settings-email" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
         </div>
         <div className="mt-4 flex justify-end">
@@ -179,13 +179,16 @@ export default function SettingsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Gym name">
                   <Input
+                    id="settings-gym-name"
+                    name="settings-gym-name"
+                    aria-label="Gym name"
                     value={gymName}
                     maxLength={200}
                     onChange={(e) => setGymName(e.target.value)}
                   />
                 </Field>
                 <Field label="Timezone">
-                  <Select value={gymTimezone} onChange={(e) => setGymTimezone(e.target.value)}>
+                  <Select id="settings-timezone" name="settings-timezone" aria-label="Timezone" value={gymTimezone} onChange={(e) => setGymTimezone(e.target.value)}>
                     {TIMEZONES.map((tz) => (
                       <option key={tz} value={tz}>
                         {tz}

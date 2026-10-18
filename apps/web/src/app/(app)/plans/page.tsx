@@ -447,6 +447,9 @@ export default function PlansPage() {
             <Field label="Plan name">
               <Input
                 required
+                id="plan-name"
+                name="plan-name"
+                aria-label="Plan name"
                 placeholder="e.g. Monthly Flex"
                 value={planForm.name}
                 onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
@@ -454,6 +457,9 @@ export default function PlansPage() {
             </Field>
             <Field label="Slug">
               <Input
+                id="plan-slug"
+                name="plan-slug"
+                aria-label="Slug"
                 placeholder={planForm.name ? autoSlug(planForm.name, planForm.branchId ? branchName(planForm.branchId) : "") : "auto-generated"}
                 value={planForm.slug}
                 onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })}
@@ -473,6 +479,9 @@ export default function PlansPage() {
           </Field>
           <Field label="Description">
             <Input
+              id="plan-description"
+              name="plan-description"
+              aria-label="Description"
               placeholder="What's included"
               value={planForm.description}
               onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
@@ -494,6 +503,9 @@ export default function PlansPage() {
                 type="number"
                 min="0"
                 required
+                id="plan-amount"
+                name="plan-amount"
+                aria-label="Price (₹, paise)"
                 placeholder="e.g. 150000"
                 value={planForm.amountMinor}
                 onChange={(e) => setPlanForm({ ...planForm, amountMinor: e.target.value })}
@@ -505,6 +517,9 @@ export default function PlansPage() {
               <Input
                 type="number"
                 min="0"
+                id="plan-entry-fee"
+                name="plan-entry-fee"
+                aria-label="Entry fee (₹, paise)"
                 placeholder="0"
                 value={planForm.entryFeeMinor}
                 onChange={(e) => setPlanForm({ ...planForm, entryFeeMinor: e.target.value })}
@@ -515,6 +530,9 @@ export default function PlansPage() {
                 type="number"
                 min="0"
                 max="100"
+                id="plan-tax"
+                name="plan-tax"
+                aria-label="Tax (%)"
                 placeholder="e.g. 18"
                 value={planForm.taxPercent}
                 onChange={(e) => setPlanForm({ ...planForm, taxPercent: e.target.value })}

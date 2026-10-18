@@ -65,6 +65,9 @@ export default function LoginPage() {
               </svg>
               <input
                 type="email"
+                id="login-email"
+                name="login-email"
+                aria-label="Email"
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -90,6 +93,9 @@ export default function LoginPage() {
               </svg>
               <input
                 type="password"
+                id="login-password"
+                name="login-password"
+                aria-label="Password"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

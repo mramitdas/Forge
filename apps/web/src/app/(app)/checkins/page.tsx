@@ -175,6 +175,9 @@ function QuickCheckinCard() {
             <Field label="Member">
               <div className="relative">
                 <Input
+                  id="checkin-member-search"
+                  name="checkin-member-search"
+                  aria-label="Member"
                   placeholder="Search member…"
                   value={member?.full_name ?? ""}
                   onChange={(e) => {

@@ -152,6 +152,9 @@ export default function MembersPage() {
             <path d="m20 20-3.5-3.5" strokeLinecap="round" />
           </svg>
           <Input
+            id="member-search"
+            name="member-search"
+            aria-label="Search name, email, phone"
             placeholder="Search name, email, phone"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -283,6 +286,9 @@ export default function MembersPage() {
           <Field label="Full name">
             <Input
               required
+              id="member-name"
+              name="member-name"
+              aria-label="Full name"
               placeholder="e.g. Aisha Kapoor"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -291,6 +297,9 @@ export default function MembersPage() {
           <Field label="Email">
             <Input
               type="email"
+              id="member-email"
+              name="member-email"
+              aria-label="Email"
               placeholder="aisha@example.com"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -305,6 +314,9 @@ export default function MembersPage() {
             </Field>
             <Field label="Phone number">
               <Input
+                id="member-phone"
+                name="member-phone"
+                aria-label="Phone number"
                 placeholder="90000 00000"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
