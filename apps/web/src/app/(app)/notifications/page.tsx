@@ -5,7 +5,7 @@ import { Badge, Button, Card, EmptyState, Segmented, Toast } from "@/components/
 import { Async, Count } from "@/components/skeleton";
 import { NotificationListSkeleton } from "@/components/skeletons";
 import { type Notification } from "@/lib/mock";
-import { useMarkNotificationRead, useNotificationsData } from "@/lib/hooks";
+import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationsData } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 
 const typeIcon: Record<Notification["type"], React.ReactNode> = {
@@ -51,6 +51,7 @@ export default function NotificationsPage() {
   }
   const { notifications, unread, isLoading, isError } = useNotificationsData();
   const markRead = useMarkNotificationRead();
+  const markAllMutation = useMarkAllNotificationsRead();
   const can = useCan();
   const [isMarkingAll, setMarkingAll] = useState(false);
 
@@ -60,17 +61,13 @@ export default function NotificationsPage() {
   );
 
   async function markAll() {
-    const ids = notifications.filter((n) => !n.read).map((n) => n.id);
-    if (ids.length === 0 || isMarkingAll) return;
+    if (isMarkingAll) return;
     setMarkingAll(true);
     try {
-      const results = await Promise.allSettled(ids.map((id) => markRead.mutateAsync(id)));
-      const failed = results.filter((r) => r.status === "rejected").length;
-      if (failed > 0) {
-        notify(`Could not mark ${failed} notification${failed === 1 ? "" : "s"} as read`, "error");
-      } else {
-        notify("All notifications marked as read");
-      }
+      await markAllMutation.mutateAsync();
+      notify("All notifications marked as read");
+    } catch {
+      notify("Could not mark notifications as read", "error");
     } finally {
       setMarkingAll(false);
     }
@@ -137,6 +134,12 @@ export default function NotificationsPage() {
           )}
         </Card>
       </Async>
+
+      {notifications.length === 50 && (
+        <p className="text-center text-[12px] text-ink-faint">
+          Showing the latest 50 notifications.
+        </p>
+      )}
 
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>

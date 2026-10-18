@@ -717,6 +717,17 @@ export function useMarkNotificationRead() {
   });
 }
 
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ count: number }>("/notifications/mark-all", { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
 export function useUpdateMe() {
   return useMutation({
     mutationFn: (body: { full_name?: string; email?: string }) =>

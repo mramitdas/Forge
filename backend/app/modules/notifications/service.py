@@ -75,6 +75,21 @@ async def mark_read(session: AsyncSession, *, notification_id: uuid.UUID) -> InA
     return notification
 
 
+async def mark_all_read(session: AsyncSession, *, user_id: uuid.UUID) -> int:
+    result = await session.execute(
+        select(InAppNotification).where(
+            InAppNotification.user_id == user_id,
+            InAppNotification.read_at.is_(None),
+        )
+    )
+    count = 0
+    now = datetime.now()
+    for notification in result.scalars():
+        notification.read_at = now
+        count += 1
+    return count
+
+
 async def notify_all_tenant_users(
     session: AsyncSession, *, title: str, body: str, type: str = "info", payload: dict | None = None
 ) -> int:

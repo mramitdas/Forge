@@ -11,6 +11,7 @@ from app.deps import Actor, get_session_for_actor, require_permission
 from app.modules.notifications.service import (
     NotificationOut,
     list_for_user,
+    mark_all_read,
     mark_read,
     unread_count,
 )
@@ -46,3 +47,12 @@ async def read(
     if notification is None or notification.user_id != actor.user_id:
         raise NotFoundError("Notification not found", code="NOT_FOUND")
     return NotificationOut.model_validate(notification)
+
+
+@router.post("/mark-all", response_model=dict)
+async def mark_all(
+    actor: Annotated[Actor, Depends(require_permission("notifications.view"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> dict:
+    count = await mark_all_read(session, user_id=actor.user_id)
+    return {"count": count}
