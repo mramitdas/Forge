@@ -4,7 +4,7 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.core.errors import AppError, to_http_exception
 from app.core.logging import configure_logging, get_logger
 from app.db.session import get_engine
+from app.deps import reject_if_must_change
 from app.kernel.events import Dispatcher
 from app.modules.attendance.api import router as attendance_router
 from app.modules.billing.api import router as billing_router
@@ -103,18 +104,19 @@ def create_app() -> FastAPI:
             )
         return {"status": "ready"}
 
+    gate = [Depends(reject_if_must_change)]
     app.include_router(auth_router, prefix=settings.api_prefix)
-    app.include_router(roles_router, prefix=settings.api_prefix)
-    app.include_router(employees_router, prefix=settings.api_prefix)
-    app.include_router(platform_router, prefix=settings.api_prefix)
-    app.include_router(tenant_router, prefix=settings.api_prefix)
-    app.include_router(settings_router, prefix=settings.api_prefix)
-    app.include_router(members_router, prefix=settings.api_prefix)
-    app.include_router(membership_router, prefix=settings.api_prefix)
-    app.include_router(billing_router, prefix=settings.api_prefix)
-    app.include_router(expenses_router, prefix=settings.api_prefix)
-    app.include_router(attendance_router, prefix=settings.api_prefix)
-    app.include_router(notifications_router, prefix=settings.api_prefix)
+    app.include_router(roles_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(employees_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(platform_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(tenant_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(settings_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(members_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(membership_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(billing_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(expenses_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(attendance_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(notifications_router, prefix=settings.api_prefix, dependencies=gate)
     return app
 
 

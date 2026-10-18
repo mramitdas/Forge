@@ -24,6 +24,7 @@ class Actor:
     is_platform: bool
     email: str
     full_name: str
+    must_change: bool = False
 
 
 async def resolve_actor(authorization: str | None) -> Actor:
@@ -48,6 +49,7 @@ async def resolve_actor(authorization: str | None) -> Actor:
                 is_platform=user.is_platform,
                 email=user.email,
                 full_name=user.full_name,
+                must_change=bool(payload.get("must_change", False)),
             )
     finally:
         reset_tenant_context(context_token)
@@ -170,3 +172,11 @@ def require_permission(code: str, branch_id: uuid.UUID | None = None):
         return actor
 
     return checker
+
+
+async def reject_if_must_change(
+    actor: Annotated[Actor, Depends(get_actor_context)],
+) -> None:
+    """Reject authenticated requests until the flagged user changes password."""
+    if actor.must_change:
+        raise ForbiddenError("Password change required", code="MUST_CHANGE_PASSWORD")

@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_platform_session
 from app.deps import Actor, get_actor_context, get_session_for_actor, require_permission
 from app.modules.identity import service as identity_svc
-from app.modules.identity.models import PermissionCatalog, Role, RolePermission, User
+from app.modules.identity.models import Credential, PermissionCatalog, Role, RolePermission, User
 from app.modules.identity.schemas import (
     AssignRoleRequest,
+    ChangePasswordRequest,
     CreateEmployeeRequest,
     CreateRoleRequest,
     LoginRequest,
@@ -83,6 +84,7 @@ async def _me_payload(session: AsyncSession, actor: Actor, user: User) -> MeOut:
             )
         )
         branches = [{"id": str(b.id), "name": b.name} for b in branch_rows]
+    cred = await session.scalar(select(Credential).where(Credential.user_id == user.id))
     return MeOut(
         user=UserOut.model_validate(user),
         tenant_id=actor.tenant_id,
@@ -90,6 +92,7 @@ async def _me_payload(session: AsyncSession, actor: Actor, user: User) -> MeOut:
         is_platform=actor.is_platform,
         permissions=sorted(perms.keys()),
         branches=branches,
+        must_change=bool(cred.must_change) if cred else False,
     )
 
 
@@ -115,6 +118,20 @@ async def update_me_route(
         email=body.email,
     )
     return await _me_payload(session, actor, user)
+
+
+@router.post("/change-password", response_model=TokenResponse)
+async def change_password_route(
+    body: ChangePasswordRequest,
+    actor: Annotated[Actor, Depends(get_actor_context)],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> TokenResponse:
+    return await identity_svc.change_password(
+        session,
+        user_id=actor.user_id,
+        current_password=body.current_password,
+        new_password=body.new_password,
+    )
 
 
 @roles_router.get("", response_model=list[PermissionOut])

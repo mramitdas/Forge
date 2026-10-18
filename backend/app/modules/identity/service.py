@@ -56,6 +56,7 @@ async def _issue_for_user(
     user: User,
     *,
     family_id: uuid.UUID | None = None,
+    must_change: bool = False,
     ip: str | None = None,
     user_agent: str | None = None,
 ) -> TokenResponse:
@@ -63,7 +64,7 @@ async def _issue_for_user(
     access, _ = create_access_token(
         user_id=str(user.id),
         tenant_id=str(user.tenant_id),
-        claims={"is_platform": user.is_platform},
+        claims={"is_platform": user.is_platform, "must_change": must_change},
     )
     raw_refresh = generate_refresh_token()
     session.add(
@@ -109,7 +110,9 @@ async def authenticate(
         raise UnauthenticatedError("Account is disabled", code="ACCOUNT_DISABLED")
     if not verify_password(password, credential.password_hash):
         raise UnauthenticatedError("Invalid credentials", code="INVALID_CREDENTIALS")
-    return await issue_tokens(session, user, ip=ip, user_agent=user_agent)
+    return await _issue_for_user(
+        session, user, must_change=credential.must_change, ip=ip, user_agent=user_agent
+    )
 
 
 async def _email_taken_elsewhere(email: str, *, exclude_user_id: uuid.UUID) -> bool:
@@ -189,9 +192,17 @@ async def refresh_tokens(
     user = await session.get(User, record.user_id)
     if user is None or not user.is_active:
         raise UnauthenticatedError("Account is disabled", code="ACCOUNT_DISABLED")
+    credential = await session.scalar(
+        select(Credential).where(Credential.user_id == user.id)
+    )
     record.revoked_at = datetime.now(UTC)
     return await _issue_for_user(
-        session, user, family_id=record.family_id, ip=ip, user_agent=user_agent
+        session,
+        user,
+        family_id=record.family_id,
+        must_change=bool(credential.must_change) if credential else False,
+        ip=ip,
+        user_agent=user_agent,
     )
 
 
@@ -211,6 +222,37 @@ async def logout(session: AsyncSession, *, refresh_token: str) -> None:
     record = result.scalar_one_or_none()
     if record is not None:
         record.revoked_at = datetime.now(UTC)
+
+
+async def change_password(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    current_password: str,
+    new_password: str,
+) -> TokenResponse:
+    result = await session.execute(
+        select(User, Credential)
+        .join(Credential, Credential.user_id == User.id)
+        .where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    row = result.first()
+    if row is None:
+        raise UnauthenticatedError("Account not found", code="INVALID_CREDENTIALS")
+    user, credential = row
+    if not verify_password(current_password, credential.password_hash):
+        raise ValidationError("Current password is incorrect", code="INVALID_CURRENT_PASSWORD")
+    credential.password_hash = hash_password(new_password)
+    credential.must_change = False
+    records = await session.scalars(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None)
+        )
+    )
+    for record in records:
+        record.revoked_at = datetime.now(UTC)
+    await session.flush()
+    return await _issue_for_user(session, user)
 
 
 async def get_effective_permissions(

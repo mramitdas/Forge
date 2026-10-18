@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
+from app.db.session import get_sessionmaker
+from app.modules.identity.models import Credential, User
+from sqlalchemy import select
+
 from tests.helpers import login
 
 
@@ -267,3 +272,74 @@ async def test_update_me_validation_errors(client, gym_a):
             "/api/v1/auth/me", headers=headers, json={"full_name": original_name}
         )
     assert padded_short.status_code == 422, padded_short.text
+
+
+async def _set_must_change(client, *, flag: bool) -> str:
+    """Flip must_change on gym-a owner's credential, THEN log in so the minted
+    access token carries the claim (the gate reads the JWT claim)."""
+    maker = get_sessionmaker()
+    token_ctx = set_tenant_context(TenantContext(tenant_id=None, platform_scope=True))
+    async with maker() as session:
+        await session.begin()
+        user_id = await session.scalar(
+            select(User.id).where(User.email == "owner-gyma@example.com")
+        )
+        cred = await session.scalar(
+            select(Credential).where(Credential.user_id == user_id)
+        )
+        cred.must_change = flag
+        await session.commit()
+    reset_tenant_context(token_ctx)
+    login_res = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "owner-gyma@example.com", "password": "owner-pass-123"},
+    )
+    assert login_res.status_code == 200, login_res.text
+    return login_res.json()["access_token"]
+
+
+async def test_must_change_blocks_protected_routes(client, gym_a):
+    token = await _set_must_change(client, flag=True)
+    res = await client.get(
+        "/api/v1/members", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert res.status_code == 403, res.text
+    # main.py's AppError handler returns {"error": {...}} (detail wrapper
+    # stripped), matching the shape sibling tests assert (see test_plans.py).
+    assert res.json()["error"]["code"] == "MUST_CHANGE_PASSWORD"
+
+
+async def test_change_password_clears_flag_and_rotates(client, gym_a):
+    token = await _set_must_change(client, flag=True)
+    res = await client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "owner-pass-123", "new_password": "owner-pass-123"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["must_change"] is False
+
+    new_headers = {"Authorization": f"Bearer {body['access_token']}"}
+    ok = await client.get("/api/v1/members", headers=new_headers)
+    assert ok.status_code == 200, ok.text
+
+    # Flag is cleared in the DB too — a fresh login is fully unblocked.
+    login_res = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "owner-gyma@example.com", "password": "owner-pass-123"},
+    )
+    assert login_res.status_code == 200
+    assert login_res.json()["must_change"] is False
+
+
+async def test_change_password_rejects_wrong_current(client, gym_a):
+    token = await _set_must_change(client, flag=True)
+    res = await client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "wrong-password", "new_password": "owner-pass-123"},
+    )
+    assert res.status_code == 422, res.text
+    # Leave the shared fixture user unflagged for any test that runs after us.
+    await _set_must_change(client, flag=False)

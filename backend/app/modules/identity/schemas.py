@@ -19,11 +19,17 @@ class LogoutRequest(BaseModel):
     refresh_token: str = Field(min_length=32, max_length=512)
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"  # noqa: S105 -- JWT token_type claim name, not a secret
     expires_in: int
+    must_change: bool = False
 
 
 class UserOut(BaseModel):
@@ -64,6 +70,7 @@ class MeOut(BaseModel):
     is_platform: bool
     permissions: list[str]
     branches: list[dict] = []
+    must_change: bool = False
 
 
 class MeUpdateRequest(BaseModel):
