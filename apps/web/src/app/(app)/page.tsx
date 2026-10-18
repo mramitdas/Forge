@@ -375,11 +375,11 @@ function RevenueCard() {
           <div className="mt-4 flex h-40 items-end gap-3">
             {bars.map((b) => (
               <div key={b.d} className="group flex flex-1 flex-col items-center gap-2">
-                <div className="flex w-full flex-1 items-end">
+                <div className="flex h-[136px] w-full items-end">
                   <div
                     title={inr(b.amount)}
                     className="w-full rounded-md bg-gradient-to-t from-accent-deep to-accent transition-all duration-200 group-hover:from-accent-deep group-hover:to-accent-hover group-hover:shadow-[0_0_18px_var(--color-glow-strong)]"
-                    style={{ height: `${Math.max(4, b.v)}%` }}
+                    style={{ height: `${Math.max(2, Math.round((b.v / 100) * 136))}px` }}
                   />
                 </div>
                 <span className="text-[11px] text-ink-faint">{b.d}</span>
