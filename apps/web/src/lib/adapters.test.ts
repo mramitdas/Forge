@@ -42,3 +42,8 @@ test("void stays void regardless of due date", () => {
   const ui = toUiInvoice(invoice({ status: "void", due_date: "2024-01-01" }));
   assert.equal(ui.status, "void");
 });
+
+test("future-due open invoice stays open", () => {
+  const ui = toUiInvoice(invoice({ due_date: "2099-06-01" }));
+  assert.equal(ui.status, "open");
+});

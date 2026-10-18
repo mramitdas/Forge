@@ -71,7 +71,7 @@ function SummaryCards() {
     .reduce((a, i) => a + i.paid, 0);
   const overdue = invoices
     .filter((i) => i.status === "overdue")
-    .reduce((a, i) => a + i.total, 0);
+    .reduce((a, i) => a + (i.total - i.paid), 0);
 
   return (
     <Async
