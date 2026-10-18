@@ -175,8 +175,13 @@ def require_permission(code: str, branch_id: uuid.UUID | None = None):
 
 
 async def reject_if_must_change(
-    actor: Annotated[Actor, Depends(get_actor_context)],
+    actor: Annotated[Actor, Depends(get_actor_from_query_token)],
 ) -> None:
-    """Reject authenticated requests until the flagged user changes password."""
+    """Reject authenticated requests until the flagged user changes password.
+
+    Resolves via the query-token superset (header OR ?token=) because <img>
+    routes like member avatars authenticate without an Authorization header;
+    a header-only resolver here would 401 them before their own resolver runs.
+    """
     if actor.must_change:
         raise ForbiddenError("Password change required", code="MUST_CHANGE_PASSWORD")

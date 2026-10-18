@@ -311,6 +311,9 @@ async def test_must_change_blocks_protected_routes(client, gym_a):
     # main.py's AppError handler returns {"error": {...}} (detail wrapper
     # stripped), matching the shape sibling tests assert (see test_plans.py).
     assert res.json()["error"]["code"] == "MUST_CHANGE_PASSWORD"
+    # Reset even here so a -k run of only this test cannot leave the
+    # session-scoped gym_a owner flagged for later tests.
+    await _set_must_change(client, flag=False)
 
 
 async def test_change_password_clears_flag_and_rotates(client, gym_a):
@@ -345,5 +348,101 @@ async def test_change_password_rejects_wrong_current(client, gym_a):
         json={"current_password": "wrong-password", "new_password": "owner-pass-123"},
     )
     assert res.status_code == 422, res.text
+    assert res.json()["error"]["code"] == "INVALID_CURRENT_PASSWORD"
     # Leave the shared fixture user unflagged for any test that runs after us.
+    await _set_must_change(client, flag=False)
+
+
+async def test_avatar_query_token_not_blocked_by_gate(client, gym_a):
+    """<img> tags authenticate via ?token= only (no Authorization header) —
+    the gate must resolve through that path too or every avatar 401s."""
+    token = await _set_must_change(client, flag=False)
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    auth_headers = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    branch = await client.post(
+        "/api/v1/branches",
+        headers=auth_headers,
+        json={"name": "Avatar Branch", "code": "AV", "timezone": "Asia/Kolkata"},
+    )
+    assert branch.status_code == 201, branch.text
+    created = await client.post(
+        "/api/v1/members",
+        headers=auth_headers,
+        json={
+            "first_name": "Ava",
+            "last_name": "Tarf",
+            "email": "avatar-gate@example.com",
+            "phone": "+919900000013",
+            "branch_id": branch.json()["id"],
+            "status": "prospect",
+        },
+    )
+    assert created.status_code == 201, created.text
+    member_id = created.json()["id"]
+
+    # Unflagged, query token only. The member has no avatar image, so the
+    # route's own 404 ("No avatar") proves the gate did NOT intercept with
+    # a 401 — permission check passed and handler logic ran.
+    res = await client.get(
+        f"/api/v1/members/{member_id}/avatar", params={"token": token}
+    )
+    assert res.status_code == 404, res.text
+
+    # Flagged, query token only: the gate must still fire via the query path.
+    flagged = await _set_must_change(client, flag=True)
+    res = await client.get(
+        f"/api/v1/members/{member_id}/avatar", params={"token": flagged}
+    )
+    assert res.status_code == 403, res.text
+    assert res.json()["error"]["code"] == "MUST_CHANGE_PASSWORD"
+
+    # test_branch_crud asserts gym_a's branch-name set EXACTLY, and
+    # test_auth.py runs first alphabetically — remove the branch we made.
+    deleted = await client.delete(
+        f"/api/v1/branches/{branch.json()['id']}", headers=auth_headers
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    await _set_must_change(client, flag=False)
+
+
+async def test_refresh_carries_must_change_claim(client, gym_a):
+    """Refresh must re-read the DB flag, not trust whatever the old JWT said."""
+    await _set_must_change(client, flag=True)
+    tokens = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    assert tokens["must_change"] is True
+
+    res = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["must_change"] is True
+
+    await _set_must_change(client, flag=False)
+
+
+async def test_change_password_revokes_old_refresh_token(client, gym_a):
+    """The pair minted by change-password works; the pre-change refresh token
+    is revoked and cannot be replayed."""
+    await _set_must_change(client, flag=True)
+    tokens = await login(client, "owner-gyma@example.com", "owner-pass-123")
+
+    res = await client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"current_password": "owner-pass-123", "new_password": "owner-pass-123"},
+    )
+    assert res.status_code == 200, res.text
+
+    stale = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+    )
+    assert stale.status_code == 401, stale.text
+
+    rotated = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": res.json()["refresh_token"]}
+    )
+    assert rotated.status_code == 200, rotated.text
+
     await _set_must_change(client, flag=False)
