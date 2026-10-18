@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+from tests.helpers import login
+
+
+async def _branch_id(client, token) -> str:
+    response = await client.post(
+        "/api/v1/branches",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Search Branch", "code": "SB", "timezone": "Asia/Kolkata"},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+async def test_search_matches_full_name(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch = await _branch_id(client, token)
+    created = await client.post(
+        "/api/v1/members",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "first_name": "DblClick",
+            "last_name": "QA",
+            "email": "dblclick-qa@example.com",
+            "phone": "+919900000011",
+            "branch_id": branch,
+            "status": "prospect",
+        },
+    )
+    assert created.status_code == 201, created.text
+    member_id = created.json()["id"]
+
+    for query in ("DblClick QA", "DblClick", "QA"):
+        response = await client.get(
+            "/api/v1/members",
+            params={"search": query},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200, response.text
+        ids = [m["id"] for m in response.json()["items"]]
+        assert member_id in ids, f"search={query!r} missed member: {ids}"

@@ -208,8 +208,10 @@ async def list_members(
         stmt = stmt.where(Member.branch_id == branch_id)
     if search:
         like = f"%{search.lower()}%"
+        full_name = func.lower(func.concat(Member.first_name, " ", Member.last_name))
         stmt = stmt.where(
             or_(
+                full_name.like(like),
                 func.lower(Member.first_name).like(like),
                 func.lower(Member.last_name).like(like),
                 func.lower(Member.email).like(like),
