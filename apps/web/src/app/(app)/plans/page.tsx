@@ -78,7 +78,7 @@ function durationFor(months: string): { months: number; period: string } {
 
 export default function PlansPage() {
   const [subscribeTo, setSubscribeTo] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [form, setForm] = useState({ memberId: "", branchId: "" });
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -127,9 +127,9 @@ export default function PlansPage() {
       const total = selected.price + selected.entryFee + tax;
       setSubscribeTo(null);
       setForm({ memberId: "", branchId: "" });
-      setToast(`Subscription created for ${member?.name ?? "member"} · ${inr(total)} due`);
+      setToast({ type: "success", message: `Subscription created for ${member?.name ?? "member"} · ${inr(total)} due` });
     } catch {
-      setToast("Could not create subscription");
+      setToast({ type: "error", message: "Could not create subscription" });
     }
   }
 
@@ -151,9 +151,9 @@ export default function PlansPage() {
       });
       setCreateOpen(false);
       setPlanForm(emptyForm);
-      setToast("Plan created");
+      setToast({ type: "success", message: "Plan created" });
     } catch (err) {
-      setToast(planError(err, "create"));
+      setToast({ type: "error", message: planError(err, "create") });
     }
   }
 
@@ -192,18 +192,18 @@ export default function PlansPage() {
         },
       });
       setEditing(null);
-      setToast("Plan updated");
+      setToast({ type: "success", message: "Plan updated" });
     } catch (err) {
-      setToast(planError(err, "update"));
+      setToast({ type: "error", message: planError(err, "update") });
     }
   }
 
   async function enablePlan(p: Plan) {
     try {
       await updatePlan.mutateAsync({ planId: p.id, body: { is_active: true } });
-      setToast(`${p.name} enabled`);
+      setToast({ type: "success", message: `${p.name} enabled` });
     } catch {
-      setToast("Could not enable plan");
+      setToast({ type: "error", message: "Could not enable plan" });
     }
   }
 
@@ -214,10 +214,10 @@ export default function PlansPage() {
         planId: disableTarget.id,
         body: { is_active: false },
       });
-      setToast(`${disableTarget.name} disabled · no longer sold`);
+      setToast({ type: "success", message: `${disableTarget.name} disabled · no longer sold` });
       setDisableTarget(null);
     } catch {
-      setToast("Could not disable plan");
+      setToast({ type: "error", message: "Could not disable plan" });
     }
   }
 
@@ -225,10 +225,10 @@ export default function PlansPage() {
     if (!deleteTarget) return;
     try {
       await deletePlan.mutateAsync(deleteTarget.id);
-      setToast(`${deleteTarget.name} deleted`);
+      setToast({ type: "success", message: `${deleteTarget.name} deleted` });
       setDeleteTarget(null);
     } catch {
-      setToast("Could not delete plan");
+      setToast({ type: "error", message: "Could not delete plan" });
     }
   }
 
@@ -630,7 +630,7 @@ export default function PlansPage() {
         </div>
       </Modal>
 
-      {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

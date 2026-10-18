@@ -81,7 +81,7 @@ function OverviewHeader() {
           outcome === "granted"
             ? "access granted"
             : outcome === "denied"
-              ? "access denied (no active membership)"
+              ? `access denied (${res.reason ?? "no active membership"})`
               : "duplicate check-in"
         }`,
       });

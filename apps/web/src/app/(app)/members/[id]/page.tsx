@@ -65,7 +65,7 @@ function CountryCodeSelect({
 export default function MemberDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     first_name: "",
@@ -157,9 +157,9 @@ export default function MemberDetailPage() {
         },
       });
       setEditing(false);
-      setToast("Member updated");
+      setToast({ type: "success", message: "Member updated" });
     } catch {
-      setToast("Could not update member");
+      setToast({ type: "error", message: "Could not update member" });
     }
   }
 
@@ -167,9 +167,9 @@ export default function MemberDetailPage() {
     if (!member) return;
     try {
       await updateMember.mutateAsync({ memberId: member.id, body: { is_active: next } });
-      setToast(next ? `${member.name} enabled` : `${member.name} disabled`);
+      setToast({ type: "success", message: next ? `${member.name} enabled` : `${member.name} disabled` });
     } catch {
-      setToast("Could not update member");
+      setToast({ type: "error", message: "Could not update member" });
     }
   }
 
@@ -179,7 +179,7 @@ export default function MemberDetailPage() {
       await deleteMember.mutateAsync(member.id);
       router.push("/members");
     } catch {
-      setToast("Could not delete member");
+      setToast({ type: "error", message: "Could not delete member" });
     }
   }
 
@@ -188,9 +188,9 @@ export default function MemberDetailPage() {
     if (!file || !member) return;
     try {
       await uploadAvatar.mutateAsync({ memberId: member.id, file });
-      setToast("Photo updated");
+      setToast({ type: "success", message: "Photo updated" });
     } catch {
-      setToast("Could not upload photo");
+      setToast({ type: "error", message: "Could not upload photo" });
     }
   }
 
@@ -213,9 +213,9 @@ export default function MemberDetailPage() {
       if (!blob) throw new Error("capture failed");
       const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
       await uploadAvatar.mutateAsync({ memberId: member.id, file });
-      setToast("Photo captured");
+      setToast({ type: "success", message: "Photo captured" });
     } catch {
-      setToast("Camera unavailable — upload a photo instead");
+      setToast({ type: "error", message: "Camera unavailable — upload a photo instead" });
     }
   }
 
@@ -223,9 +223,9 @@ export default function MemberDetailPage() {
     if (!sub) return;
     try {
       await activate.mutateAsync(sub.id);
-      setToast("Subscription activated");
+      setToast({ type: "success", message: "Subscription activated" });
     } catch {
-      setToast("Could not activate subscription");
+      setToast({ type: "error", message: "Could not activate subscription" });
     }
   }
 
@@ -244,9 +244,9 @@ export default function MemberDetailPage() {
         start_at: renewStart ? new Date(`${renewStart}T00:00:00`).toISOString() : undefined,
       });
       setRenewOpen(false);
-      setToast("Subscription renewed");
+      setToast({ type: "success", message: "Subscription renewed" });
     } catch {
-      setToast("Could not renew subscription");
+      setToast({ type: "error", message: "Could not renew subscription" });
     }
   }
 
@@ -257,9 +257,9 @@ export default function MemberDetailPage() {
       await upgrade.mutateAsync({ subscriptionId: sub.id, planId: upgradePlanId });
       setUpgradeOpen(false);
       setUpgradePlanId("");
-      setToast("Plan upgraded");
+      setToast({ type: "success", message: "Plan upgraded" });
     } catch {
-      setToast("Could not upgrade plan");
+      setToast({ type: "error", message: "Could not upgrade plan" });
     }
   }
 
@@ -271,13 +271,15 @@ export default function MemberDetailPage() {
         branch_id: member.branchId,
         source: "manual",
       });
-      setToast(
-        result.result === "allowed"
-          ? `${member.name} checked in`
-          : `Check-in ${result.result} · ${result.reason ?? ""}`,
-      );
+      setToast({
+        type: result.result === "allowed" ? "success" : result.result === "duplicate" ? "info" : "error",
+        message:
+          result.result === "allowed"
+            ? `${member.name} checked in`
+            : `Check-in ${result.result} · ${result.reason ?? ""}`,
+      });
     } catch {
-      setToast("Could not check in");
+      setToast({ type: "error", message: "Could not check in" });
     }
   }
 
@@ -688,7 +690,7 @@ export default function MemberDetailPage() {
         </div>
       </Modal>
 
-      {toast && <Toast type={toast.startsWith("Could") ? "error" : "success"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

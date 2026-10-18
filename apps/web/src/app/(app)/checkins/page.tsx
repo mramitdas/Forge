@@ -85,7 +85,7 @@ function QuickCheckinCard() {
     result: CheckinResult;
     time: string;
   } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   const { branches, isLoading: bl, isError: be } = useBranches();
   const { members: rawMembers, isLoading: ml, isError: me } = useMemberCtx();
@@ -123,17 +123,19 @@ function QuickCheckinCard() {
           hour12: false,
         }),
       });
-      setToast(
-        `${member.full_name || member.first_name} — ${
-          outcome === "granted"
-            ? "access granted"
-            : outcome === "denied"
-              ? "access denied (no active membership)"
-              : "duplicate check-in"
-        }`,
-      );
+      const message = `${member.full_name || member.first_name} — ${
+        outcome === "granted"
+          ? "access granted"
+          : outcome === "denied"
+            ? `access denied (${res.reason ?? "no active membership"})`
+            : `duplicate check-in${res.reason ? ` · ${res.reason}` : ""}`
+      }`;
+      setToast({
+        type: outcome === "granted" ? "success" : outcome === "denied" ? "error" : "info",
+        message,
+      });
     } catch {
-      setToast("Check-in failed — could not reach the server");
+      setToast({ type: "error", message: "Check-in failed — could not reach the server" });
     }
   }
 
@@ -243,7 +245,7 @@ function QuickCheckinCard() {
         </Card>
       )}
 
-      {toast && <Toast type={toast.startsWith("failed") || toast.startsWith("Could") ? "error" : "info"} message={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </>
   );
 }
