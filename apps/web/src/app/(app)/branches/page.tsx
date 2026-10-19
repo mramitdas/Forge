@@ -61,6 +61,7 @@ export default function BranchesPage() {
   const deleteBranch = useDeleteBranch();
   const can = useCan();
   const addGuard = useInFlight();
+  const saveGuard = useInFlight();
   const totalMembers = branches.reduce((s, b) => s + b.members, 0);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -110,24 +111,26 @@ export default function BranchesPage() {
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
-    try {
-      await updateBranch.mutateAsync({
-        branchId: editing.id,
-        body: {
-          name: editForm.name,
-          code: editForm.code || undefined,
-          address: editForm.address || undefined,
-          phone: editForm.phone || undefined,
-          country_code: editForm.country_code,
-          gst_number: editForm.gst_number || undefined,
-          timezone: editForm.timezone,
-        },
-      });
-      setEditing(null);
-      setToast({ type: "success", message: "Branch updated" });
-    } catch {
-      setToast({ type: "error", message: "Could not update branch" });
-    }
+    await saveGuard.run(async () => {
+      try {
+        await updateBranch.mutateAsync({
+          branchId: editing.id,
+          body: {
+            name: editForm.name,
+            code: editForm.code || undefined,
+            address: editForm.address || undefined,
+            phone: editForm.phone || undefined,
+            country_code: editForm.country_code,
+            gst_number: editForm.gst_number || undefined,
+            timezone: editForm.timezone,
+          },
+        });
+        setEditing(null);
+        setToast({ type: "success", message: "Branch updated" });
+      } catch {
+        setToast({ type: "error", message: "Could not update branch" });
+      }
+    });
   }
 
   async function enableBranch(b: Branch) {
@@ -420,8 +423,8 @@ export default function BranchesPage() {
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button type="submit" disabled={updateBranch.isPending}>
-              {updateBranch.isPending ? "Saving…" : "Save changes"}
+            <Button type="submit" disabled={saveGuard.busy || updateBranch.isPending}>
+              {saveGuard.busy || updateBranch.isPending ? "Saving…" : "Save changes"}
             </Button>
           </div>
         </form>
