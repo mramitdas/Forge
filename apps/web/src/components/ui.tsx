@@ -1,6 +1,7 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "subtle";
 
@@ -328,6 +329,56 @@ export function Modal({
   children: React.ReactNode;
   width?: string;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const lastActiveRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    lastActiveRef.current = (document.activeElement as HTMLElement) ?? null;
+    const node = dialogRef.current;
+    const focusables = node
+      ? Array.from(
+          node.querySelectorAll<HTMLElement>(
+            'button, [href], input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])',
+          ),
+        )
+      : [];
+    (focusables[0] ?? node)?.focus();
+    return () => {
+      lastActiveRef.current?.focus?.();
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const node = dialogRef.current;
+      if (!node) return;
+      const focusables = Array.from(
+        node.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -336,13 +387,30 @@ export function Modal({
         onClick={onClose}
       />
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        tabIndex={-1}
         className={cn(
-          "relative w-full rounded-2xl border border-line-strong bg-panel-strong p-6 shadow-2xl animate-modal-in",
+          "relative w-full rounded-2xl border border-line-strong bg-panel-strong p-6 shadow-2xl animate-modal-in focus:outline-none",
           width,
         )}
       >
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-1 text-ink-faint transition-colors hover:bg-fill hover:text-ink"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
         <div className="mb-4">
-          <h3 className="font-display text-[16px] font-semibold tracking-tight">{title}</h3>
+          <h3 id="modal-title" className="font-display text-[16px] font-semibold tracking-tight">
+            {title}
+          </h3>
           {subtitle && <p className="mt-0.5 text-[13px] text-ink-faint">{subtitle}</p>}
         </div>
         {children}
@@ -360,6 +428,26 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
+let toastRegion: HTMLElement | null = null;
+
+function ensureToastRegion(): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  if (toastRegion === null) {
+    toastRegion = document.createElement("div");
+    toastRegion.setAttribute("role", "status");
+    toastRegion.setAttribute("aria-live", "polite");
+    toastRegion.setAttribute("aria-atomic", "true");
+    document.body.appendChild(toastRegion);
+  }
+  return toastRegion;
+}
+
+// Mount the live region at module load (client only) so assistive tech
+// registers it before the first toast's content arrives.
+if (typeof document !== "undefined") {
+  ensureToastRegion();
+}
+
 export function Toast({
   type,
   message,
@@ -371,8 +459,10 @@ export function Toast({
 }) {
   const tone =
     type === "success" ? "bg-green" : type === "error" ? "bg-red" : "bg-accent";
-  return (
-    <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2" role="status" aria-live="polite">
+  const region = ensureToastRegion();
+  if (!region) return null;
+  return createPortal(
+    <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2">
       <div className="flex items-center gap-3 rounded-full border border-line-strong bg-panel-strong/90 px-4 py-2.5 shadow-[0_12px_40px_var(--color-shadow)] backdrop-blur-xl animate-toast-in glass-edge">
         <span className={cn("h-2 w-2 rounded-full", tone)} />
         <span className="text-[13px] font-medium text-ink">{message}</span>
@@ -382,7 +472,8 @@ export function Toast({
           </svg>
         </button>
       </div>
-    </div>
+    </div>,
+    region,
   );
 }
 
