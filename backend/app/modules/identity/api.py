@@ -215,6 +215,17 @@ async def create_role(
     return RoleOut.model_validate(role)
 
 
+@roles_router.delete("/roles/{role_id}", status_code=204)
+async def delete_role(
+    role_id: uuid.UUID,
+    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> None:
+    await identity_svc.delete_role(
+        session, role_id=role_id, tenant_id=actor.tenant_id, actor_id=actor.user_id
+    )
+
+
 @employees_router.post("", response_model=UserOut, status_code=201)
 async def create_employee(
     body: CreateEmployeeRequest,

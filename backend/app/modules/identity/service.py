@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -350,6 +350,34 @@ async def update_role(
     for code in permission_codes:
         session.add(RolePermission(role_id=role_id, permission_code=code))
     return role
+
+
+async def delete_role(
+    session: AsyncSession,
+    *,
+    role_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    actor_id: uuid.UUID | None = None,
+) -> None:
+    """Soft-delete a custom role. Refuses locked roles and roles still in use."""
+    role = await session.get(Role, role_id)
+    if role is None or role.tenant_id != tenant_id or role.deleted_at is not None:
+        raise NotFoundError("Role not found", code="NOT_FOUND")
+    if not role.is_editable:
+        raise ValidationError(
+            "This role is locked and cannot be deleted", code="ROLE_LOCKED"
+        )
+    assignments = await session.scalar(
+        select(func.count()).select_from(UserRole).where(UserRole.role_id == role_id)
+    )
+    if assignments:
+        raise ConflictError(
+            f"Role is assigned to {assignments} user(s) and cannot be deleted",
+            code="ROLE_IN_USE",
+        )
+    role.deleted_at = datetime.now(UTC)
+    role.deleted_by = actor_id
+    await session.flush()
 
 
 async def seed_platform_roles(session: AsyncSession, platform_tenant_id: uuid.UUID) -> Role:
