@@ -188,6 +188,16 @@ async function main() {
     await tierCard.getByRole("switch", { name: "Toggle Verify Tier Plus" }).click();
     await must("tier re-enabled via switch", page.getByText("Verify Tier Plus is now active").waitFor({ timeout: 10000 }));
 
+    // Disabling a tier a live gym uses must be blocked with a reason.
+    const starterSwitch = page.getByRole("switch", { name: "Toggle starter" });
+    await starterSwitch.click();
+    await must(
+      "in-use tier disable blocked with reason",
+      page.getByText(/Could not update tier: Tier is still referenced by gyms/).waitFor({ timeout: 10000 }),
+    );
+    const starterStillOn = await starterSwitch.isChecked();
+    check("in-use tier switch stays on after failed disable", starterStillOn, `checked=${starterStillOn}`);
+
     tierCard = page.locator("div.rounded-2xl").filter({ hasText: "Verify Tier Plus" }).first();
     await tierCard.getByRole("button", { name: "Delete" }).click();
     await page.getByRole("button", { name: /delete tier/i }).click();
