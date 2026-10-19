@@ -94,11 +94,6 @@ export default function PlatformSettings() {
         </div>
       </Card>
 
-      <Card className="p-6">
-        <SectionTitle title="Role" subtitle="How this account is scoped" />
-        <p className="text-[13px] text-ink-soft">Platform admin</p>
-      </Card>
-
       {/* Password card added in Task 7. */}
 
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
