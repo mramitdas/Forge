@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toUiInvoice } from "./adapters.ts";
-import type { InvoiceOut } from "./types.ts";
+import { toUiInvoice, toUiMember } from "./adapters.ts";
+import type { CheckInOut, InvoiceOut, MemberOut } from "./types.ts";
 
 function invoice(overrides: Partial<InvoiceOut>): InvoiceOut {
   return {
@@ -46,4 +46,65 @@ test("void stays void regardless of due date", () => {
 test("future-due open invoice stays open", () => {
   const ui = toUiInvoice(invoice({ due_date: "2099-06-01" }));
   assert.equal(ui.status, "open");
+});
+
+function member(overrides: Partial<MemberOut>): MemberOut {
+  return {
+    id: "mem-1",
+    branch_id: "br-1",
+    first_name: "Asha",
+    last_name: "Rao",
+    full_name: "Asha Rao",
+    email: "asha@example.com",
+    phone: null,
+    country_code: "+91",
+    gender: "Female",
+    status: "active",
+    is_active: true,
+    avatar_path: null,
+    joined_at: "2026-01-01T00:00:00Z",
+    created_at: "2026-01-01T00:00:00Z",
+    version: 1,
+    ...overrides,
+  };
+}
+
+function checkin(overrides: Partial<CheckInOut>): CheckInOut {
+  return {
+    id: "ci-1",
+    member_id: "mem-1",
+    branch_id: "br-1",
+    recorded_at: new Date().toISOString(),
+    source: "manual",
+    result: "allowed",
+    reason: null,
+    ...overrides,
+  };
+}
+
+test("member stats count only granted check-ins", () => {
+  const today = new Date().toISOString();
+  const yesterday = new Date(Date.now() - 86400000).toISOString();
+  const ui = toUiMember(member({}), {
+    subscriptions: [],
+    invoices: [],
+    checkins: [
+      checkin({ id: "ci-1", result: "allowed", recorded_at: today }),
+      checkin({ id: "ci-2", result: "denied", recorded_at: yesterday }),
+    ],
+  });
+  assert.equal(ui.visits, 1);
+  assert.equal(ui.streak, 1);
+  assert.ok(ui.lastCheckIn);
+});
+
+test("denied-only member shows zero visits and no last check-in", () => {
+  const ui = toUiMember(member({}), {
+    subscriptions: [],
+    invoices: [],
+    checkins: [checkin({ result: "denied" })],
+  });
+  assert.equal(ui.visits, 0);
+  assert.equal(ui.streak, 0);
+  assert.equal(ui.lastCheckIn, null);
 });

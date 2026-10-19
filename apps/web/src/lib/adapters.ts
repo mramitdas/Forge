@@ -150,7 +150,9 @@ export interface MemberCtx {
 }
 
 export function toUiMember(m: MemberOut, ctx: MemberCtx): Member {
-  const memberCheckins = ctx.checkins.filter((c) => c.member_id === m.id);
+  const memberCheckins = ctx.checkins.filter(
+    (c) => c.member_id === m.id && c.result === "allowed",
+  );
   const last = memberCheckins.length
     ? memberCheckins.reduce((a, b) =>
         new Date(a.recorded_at) > new Date(b.recorded_at) ? a : b,
