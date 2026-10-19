@@ -138,6 +138,21 @@ async function main() {
     const stillThere = await page.locator("tr", { hasText: `Verify Gym ${ts}` }).count();
     check("gym deleted from table", stillThere === 0, `remaining rows=${stillThere}`);
 
+    // ── Gyms: restore the just-deleted gym via "Show deleted" ──
+    const showDeleted = page.locator('label:has-text("Show deleted") input');
+    await showDeleted.check();
+    const deletedRow = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
+    await deletedRow.waitFor({ timeout: 15000 });
+    await deletedRow.getByRole("button", { name: "Restore" }).click();
+    await must(
+      "gym restored via Show deleted toggle",
+      page.getByText(new RegExp(`Verify Gym ${ts} restored`)).waitFor({ timeout: 10000 }),
+    );
+    await showDeleted.uncheck();
+    const backRow = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
+    await backRow.waitFor({ timeout: 15000 });
+    check("restored gym reappears in live list", (await backRow.count()) > 0);
+
     // ── Platform subscriptions: pricing cards + tier CRUD ──
     await page.goto(`${BASE}/platform/subscriptions`);
     await page.getByRole("button", { name: /new tier/i }).waitFor({ timeout: 15000 });
