@@ -22,6 +22,7 @@ import {
   useMemberCtx,
   usePlans,
   useSubscriptionsData,
+  useTenantTier,
 } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 
@@ -35,6 +36,7 @@ export default function SubscriptionsPage() {
   const { members: rawMembers } = useMemberCtx();
   const { plans } = usePlans();
   const { branches } = useBranches();
+  const { tier, isLoading: tierLoading } = useTenantTier();
   const activate = useActivateSubscription();
   const can = useCan();
 
@@ -82,6 +84,36 @@ export default function SubscriptionsPage() {
           onChange={setFilter}
         />
       </div>
+
+      {can("membership.subscriptions.view") && (
+        <Card className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <div>
+            <p className="kicker">Gym plan</p>
+            <p className="mt-1 text-[15px] font-semibold tracking-tight">
+              {tierLoading ? "…" : (tier?.tier_name ?? "—")}
+              {tier?.description && (
+                <span className="ml-2 text-[12px] font-normal text-ink-faint">
+                  {tier.description}
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-ink-soft">
+            <span>
+              {tier?.price_minor != null ? `${inr(tier.price_minor)} / mo` : "Custom pricing"}
+            </span>
+            <span>
+              Branches {tier?.branches_used ?? "—"}
+              {tier ? ` of ${tier.max_branches ?? "∞"}` : ""}
+            </span>
+            <span>
+              Members {tier?.members_used ?? "—"}
+              {tier ? ` of ${tier.max_members ?? "∞"}` : ""}
+            </span>
+            <StatusBadge status={tier?.gym_status ?? "pending"} />
+          </div>
+        </Card>
+      )}
 
       <Async loading={isLoading} error={isError} skeleton={<TableSkeleton columns={7} rows={8} />}>
         <Card className="overflow-hidden">

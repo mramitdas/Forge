@@ -89,6 +89,18 @@ export interface InvoiceOut {
   lines: { id: string; description: string; quantity: number; amount_minor: number }[];
 }
 
+export interface TenantTierOut {
+  tier_code: string;
+  tier_name: string;
+  description: string | null;
+  price_minor: number | null;
+  max_branches: number | null;
+  max_members: number | null;
+  branches_used: number;
+  members_used: number;
+  gym_status: string;
+}
+
 export interface CheckInOut {
   id: string;
   member_id: string;

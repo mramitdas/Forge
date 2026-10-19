@@ -38,6 +38,7 @@ import type {
   SubscriptionEventOut,
   SubscriptionOut,
   SubscriptionTierOut,
+  TenantTierOut,
   TokenResponse,
 } from "./types";
 import type {
@@ -445,6 +446,20 @@ export function useSubscriptionsData(): {
     () => ({ subs: (q.data ?? []).map(toUiSubscription), isLoading: q.isLoading, isError: q.isError }),
     [q.data, q.isLoading, q.isError],
   );
+}
+
+export function useTenantTier(): {
+  tier: TenantTierOut | undefined;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
+  const q = useQuery({
+    queryKey: ["tenant-tier"],
+    queryFn: () => apiFetch<TenantTierOut>("/subscriptions/tier"),
+    enabled: can("membership.subscriptions.view"),
+  });
+  return { tier: q.data, isLoading: q.isLoading, isError: q.isError };
 }
 
 export function useCheckins(): { items: CheckinRecord[]; isLoading: boolean; isError: boolean } {
