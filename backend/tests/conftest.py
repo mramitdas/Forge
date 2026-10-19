@@ -19,7 +19,12 @@ from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_cont
 from app.db.session import get_sessionmaker  # noqa: E402
 from app.kernel.events import Dispatcher  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.modules.identity.models import Credential, User, UserRole  # noqa: E402
+from app.modules.identity.models import (  # noqa: E402
+    Credential,
+    User,
+    UserRole,
+    split_full_name,
+)
 from app.modules.identity.service import seed_platform_roles  # noqa: E402
 from app.modules.notifications.service import register_handlers  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
@@ -107,10 +112,14 @@ async def _make_user(**kwargs) -> tuple[str, str]:
     token_ctx = set_tenant_context(ctx)
     async with maker() as session:
         await session.begin()
+        full_name = kwargs.get("full_name", "Test User")
+        first, last = split_full_name(full_name)
         user = User(
             tenant_id=kwargs["tenant_id"],
             email=kwargs["email"],
-            full_name=kwargs.get("full_name", "Test User"),
+            full_name=full_name,
+            first_name=first,
+            last_name=last,
             is_active=True,
             is_platform=kwargs.get("is_platform", False),
         )

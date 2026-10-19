@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from app.core.security import hash_password
 from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
 from app.db.session import get_sessionmaker
@@ -532,27 +533,34 @@ async def test_update_me_first_last_name(client, gym_a):
     assert before.status_code == 200
     original = before.json()["user"]["full_name"]
 
-    res = await client.patch(
-        "/api/v1/auth/me",
-        headers=headers,
-        json={"first_name": "Ada", "last_name": "Lovelace"},
-    )
-    assert res.status_code == 200, res.text
-    body = res.json()["user"]
-    assert body["first_name"] == "Ada"
-    assert body["last_name"] == "Lovelace"
-    assert body["full_name"] == "Ada Lovelace"
+    try:
+        res = await client.patch(
+            "/api/v1/auth/me",
+            headers=headers,
+            json={"first_name": "Ada", "last_name": "Lovelace"},
+        )
+        assert res.status_code == 200, res.text
+        body = res.json()["user"]
+        assert body["first_name"] == "Ada"
+        assert body["last_name"] == "Lovelace"
+        assert body["full_name"] == "Ada Lovelace"
 
-    # Legacy full_name path keeps the split columns in sync too.
-    res2 = await client.patch(
-        "/api/v1/auth/me", headers=headers, json={"full_name": original}
-    )
-    assert res2.status_code == 200, res2.text
-    me = (await client.get("/api/v1/auth/me", headers=headers)).json()["user"]
-    assert me["full_name"] == original
-    parts = original.split(" ", 1)
-    assert me["first_name"] == parts[0]
-    assert me["last_name"] == (parts[1] if len(parts) > 1 else "")
+        # Legacy full_name path keeps the split columns in sync too.
+        res2 = await client.patch(
+            "/api/v1/auth/me", headers=headers, json={"full_name": original}
+        )
+        assert res2.status_code == 200, res2.text
+        me = (await client.get("/api/v1/auth/me", headers=headers)).json()["user"]
+        assert me["full_name"] == original
+        parts = original.split(" ", 1)
+        assert me["first_name"] == parts[0]
+        assert me["last_name"] == (parts[1] if len(parts) > 1 else "")
+    finally:
+        # Restore the shared gym_a owner even when mid-test asserts fail.
+        restore_res = await client.patch(
+            "/api/v1/auth/me", headers=headers, json={"full_name": original}
+        )
+        assert restore_res.status_code == 200, restore_res.text
 
 
 async def test_update_me_platform_email_frozen(client, platform_token):
@@ -561,28 +569,86 @@ async def test_update_me_platform_email_frozen(client, platform_token):
     assert before.status_code == 200
     original_full = before.json()["user"]["full_name"]
 
-    # Split-name update works for platform actors.
-    res = await client.patch(
-        "/api/v1/auth/me",
-        headers=headers,
-        json={"first_name": "Frozen", "last_name": "Admin"},
-    )
-    assert res.status_code == 200, res.text
-    assert res.json()["user"]["full_name"] == "Frozen Admin"
-    assert res.json()["user"]["first_name"] == "Frozen"
+    try:
+        # Split-name update works for platform actors.
+        res = await client.patch(
+            "/api/v1/auth/me",
+            headers=headers,
+            json={"first_name": "Frozen", "last_name": "Admin"},
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["user"]["full_name"] == "Frozen Admin"
+        assert res.json()["user"]["first_name"] == "Frozen"
 
-    # Email change is rejected for platform actors.
-    frozen = await client.patch(
-        "/api/v1/auth/me", headers=headers, json={"email": "not-frozen@example.com"}
-    )
-    assert frozen.status_code == 403, frozen.text
-    assert frozen.json()["error"]["code"] == "EMAIL_FROZEN"
+        # Same email in different casing is NOT a change — allowed, no-op.
+        same = await client.patch(
+            "/api/v1/auth/me", headers=headers, json={"email": "Platform@Example.com"}
+        )
+        assert same.status_code == 200, same.text
+        assert same.json()["user"]["email"] == "platform@example.com"
 
-    # Email untouched after the rejected attempt.
-    me = (await client.get("/api/v1/auth/me", headers=headers)).json()
-    assert me["user"]["email"] == "platform@example.com"
+        # A genuinely different email is rejected for platform actors.
+        frozen = await client.patch(
+            "/api/v1/auth/me", headers=headers, json={"email": "not-frozen@example.com"}
+        )
+        assert frozen.status_code == 403, frozen.text
+        assert frozen.json()["error"]["code"] == "EMAIL_FROZEN"
 
-    # Restore the seeded name so later runs see the original state.
-    await client.patch(
-        "/api/v1/auth/me", headers=headers, json={"full_name": original_full}
-    )
+        # Email untouched after the rejected attempt.
+        me = (await client.get("/api/v1/auth/me", headers=headers)).json()
+        assert me["user"]["email"] == "platform@example.com"
+    finally:
+        # Restore the seeded name so later runs see the original state.
+        restore_res = await client.patch(
+            "/api/v1/auth/me", headers=headers, json={"full_name": original_full}
+        )
+        assert restore_res.status_code == 200, restore_res.text
+
+
+@pytest.mark.parametrize(
+    ("payload", "expect_error_code"),
+    [
+        # first-only: last_name must stay untouched (dynamic read below).
+        ({"first_name": "Solo"}, None),
+        # last-only: first_name must stay untouched.
+        ({"last_name": "Byron"}, None),
+        # Whitespace first_name strips to "" → min_length=1 → schema 422
+        # (pydantic envelope, no {"error": ...} code to assert).
+        ({"first_name": "   "}, None),
+        # 100-char parts pass the schema but compose to 201 chars → service
+        # guard rejects with the app error envelope.
+        ({"first_name": "A" * 100, "last_name": "B" * 100}, "VALIDATION"),
+    ],
+)
+async def test_update_me_single_field_fallbacks(
+    client, gym_a, payload, expect_error_code
+):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    before = (await client.get("/api/v1/auth/me", headers=headers)).json()["user"]
+    original_first, original_last = before["first_name"], before["last_name"]
+
+    try:
+        res = await client.patch("/api/v1/auth/me", headers=headers, json=payload)
+        if expect_error_code is not None:
+            assert res.status_code == 422, res.text
+            assert res.json()["error"]["code"] == expect_error_code, res.text
+            return
+        if payload.get("first_name") is not None and not payload["first_name"].strip():
+            assert res.status_code == 422, res.text  # schema-level
+            return
+        assert res.status_code == 200, res.text
+        body = res.json()["user"]
+        if "first_name" in payload:
+            assert body["first_name"] == payload["first_name"]
+            assert body["last_name"] == original_last  # unchanged
+        else:
+            assert body["last_name"] == payload["last_name"]
+            assert body["first_name"] == original_first  # unchanged
+    finally:
+        restore = await client.patch(
+            "/api/v1/auth/me",
+            headers=headers,
+            json={"first_name": original_first, "last_name": original_last},
+        )
+        assert restore.status_code == 200, restore.text

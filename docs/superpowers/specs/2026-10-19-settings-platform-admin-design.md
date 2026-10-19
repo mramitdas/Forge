@@ -49,7 +49,7 @@ Gym users keep the existing page unchanged (byte-for-byte).
 - `update_me`:
   - If `first_name`/`last_name` provided: validate (first must be non-empty after strip), set, recompute `full_name`.
   - If legacy `full_name` provided: keep existing behavior **and** also split into `first_name`/`last_name` (keeps columns in sync for gym-path saves).
-  - **Email freeze**: if `actor.is_platform` and body contains `email` that differs from current → `403` `EMAIL_FROZEN`. Gym actors keep current behavior ( uniqueness checks etc.).
+  - **Email freeze**: if `actor.is_platform` and body contains `email` that differs from current → `403` `EMAIL_FROZEN` (enforced in the API route before the service call). Gym actors keep current behavior ( uniqueness checks etc.).
 - Password rules: pure function `password_rule_failures(pw: str) -> list[str]` returning failed rule codes among `["uppercase", "lowercase", "digit", "special", "length"]`.
   - Enforced service-level in `change_password`, after current-password verification: failures → `422` `PASSWORD_TOO_WEAK` with the failed codes in `details.failed` (app `{"error": {...}}` envelope).
   - Rules: ≥1 uppercase, ≥1 lowercase, ≥1 digit, ≥1 special char (non-alphanumeric), length ≥ 8.

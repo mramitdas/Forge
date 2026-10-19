@@ -152,6 +152,7 @@ async def update_me(
     first_name: str | None = None,
     last_name: str | None = None,
 ) -> User:
+    """Update the caller's profile. Split-name fields win over full_name if both are sent."""
     user = await session.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise NotFoundError("User not found", code="NOT_FOUND")
@@ -160,9 +161,12 @@ async def update_me(
         new_last = (last_name if last_name is not None else user.last_name).strip()
         if not new_first:
             raise ValidationError("First name is required", code="VALIDATION")
+        composed = f"{new_first} {new_last}".strip()
+        if len(composed) > 200:
+            raise ValidationError("Full name is too long", code="VALIDATION")
         user.first_name = new_first
         user.last_name = new_last
-        user.full_name = f"{new_first} {new_last}".strip()
+        user.full_name = composed
     elif full_name is not None:
         user.full_name = full_name.strip()
         user.first_name, user.last_name = split_full_name(user.full_name)
