@@ -51,9 +51,9 @@ Gym users keep the existing page unchanged (byte-for-byte).
   - If legacy `full_name` provided: keep existing behavior **and** also split into `first_name`/`last_name` (keeps columns in sync for gym-path saves).
   - **Email freeze**: if `actor.is_platform` and body contains `email` that differs from current → `403` `EMAIL_FROZEN`. Gym actors keep current behavior ( uniqueness checks etc.).
 - Password rules: pure function `password_rule_failures(pw: str) -> list[str]` returning failed rule codes among `["uppercase", "lowercase", "digit", "special", "length"]`.
-  - `ChangePasswordRequest.new_password` validator: failures → Pydantic error surfaced as `422` with code `PASSWORD_TOO_WEAK` and the failed list in detail.
+  - Enforced service-level in `change_password`, after current-password verification: failures → `422` `PASSWORD_TOO_WEAK` with the failed codes in `details.failed` (app `{"error": {...}}` envelope).
   - Rules: ≥1 uppercase, ≥1 lowercase, ≥1 digit, ≥1 special char (non-alphanumeric), length ≥ 8.
-  - Implementation note: drop the plain `min_length=8` field constraint on `new_password` (keep `max_length=128`) so sub-8 passwords fail through the custom validator with the consistent `PASSWORD_TOO_WEAK` + `["length", ...]` shape instead of a generic Pydantic length error. `current_password` keeps its `min_length=8`.
+  - Implementation note: `new_password` drops the field-level `min_length=8` (keeps `max_length=128`) so short passwords flow through the service check and get the consistent `PASSWORD_TOO_WEAK` + `["length", ...]` envelope instead of a generic Pydantic length error. `current_password` keeps its `min_length=8`. Current-password check runs first, so wrong-current keeps `INVALID_CURRENT_PASSWORD` regardless of new-password strength.
   - Scope: **change-password endpoint only**. Login, employee-create, provision-owner, owner-reset flows untouched.
 
 ### API (`identity/api.py`)
