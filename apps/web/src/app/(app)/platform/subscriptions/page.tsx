@@ -232,8 +232,7 @@ export default function PlatformSubscriptionsPage() {
       .catch((e) => {
         const detail =
           e instanceof ApiError
-            ? (e.detail as { error?: { message?: string } } | null)?.error
-                ?.message
+            ? (e.detail as { message?: string } | null)?.message
             : undefined;
         setToast(
           detail
