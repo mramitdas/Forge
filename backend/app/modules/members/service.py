@@ -223,7 +223,7 @@ async def list_members(
     )
     rows = (
         await session.execute(
-            stmt.order_by(Member.created_at.desc())
+            stmt.order_by(Member.created_at.desc(), Member.id.desc())
             .offset(pagination.offset())
             .limit(pagination.page_size)
         )
@@ -238,7 +238,7 @@ async def list_member_timeline(
     rows = await session.scalars(
         select(MemberTimeline)
         .where(MemberTimeline.member_id == member_id)
-        .order_by(MemberTimeline.created_at.desc())
+        .order_by(MemberTimeline.created_at.desc(), MemberTimeline.id.desc())
         .limit(limit)
     )
     return list(rows)

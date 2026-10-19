@@ -92,7 +92,7 @@ async def list_plans(
             )
         )
     rows = (
-        await session.execute(stmt.order_by(MembershipPlan.amount_minor))
+        await session.execute(stmt.order_by(MembershipPlan.amount_minor, MembershipPlan.id.desc()))
     ).scalars().all()
     return list(rows)
 
@@ -370,6 +370,6 @@ async def list_subscriptions(
     if member_id:
         stmt = stmt.where(Subscription.member_id == member_id)
     rows = (
-        await session.execute(stmt.order_by(Subscription.start_at.desc()))
+        await session.execute(stmt.order_by(Subscription.start_at.desc(), Subscription.id.desc()))
     ).scalars().all()
     return list(rows)

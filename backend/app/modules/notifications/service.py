@@ -52,7 +52,7 @@ async def list_for_user(
     rows = await session.scalars(
         select(InAppNotification)
         .where(InAppNotification.user_id == user_id)
-        .order_by(InAppNotification.created_at.desc())
+        .order_by(InAppNotification.created_at.desc(), InAppNotification.id.desc())
         .limit(limit)
     )
     return list(rows)

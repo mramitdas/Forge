@@ -569,7 +569,7 @@ async def list_subscription_events(
     rows = await session.execute(
         select(GymSubscriptionEvent, Gym.name)
         .join(Gym, Gym.id == GymSubscriptionEvent.gym_id)
-        .order_by(GymSubscriptionEvent.created_at.desc())
+        .order_by(GymSubscriptionEvent.created_at.desc(), GymSubscriptionEvent.id.desc())
         .limit(limit)
     )
     return [
@@ -636,7 +636,7 @@ async def platform_revenue(
         .join(Branch, Branch.id == Subscription.branch_id)
         .join(Gym, Gym.id == Branch.gym_id)
         .where(Subscription.deleted_at.is_(None))
-        .order_by(Subscription.start_at.desc())
+        .order_by(Subscription.start_at.desc(), Subscription.id.desc())
         .limit(sold_limit)
     )
     sold = [

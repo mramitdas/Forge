@@ -183,7 +183,7 @@ async def list_check_ins(
     total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = (
         await session.execute(
-            stmt.order_by(CheckIn.recorded_at.desc())
+            stmt.order_by(CheckIn.recorded_at.desc(), CheckIn.id.desc())
             .offset(pagination.offset())
             .limit(pagination.page_size)
         )
