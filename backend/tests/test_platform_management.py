@@ -526,3 +526,32 @@ async def test_delete_tier_blocked_by_soft_deleted_gym(client, platform_token):
         "/api/v1/platform/tiers/ghost", headers=await _headers(platform_token)
     )
     assert allowed.status_code == 204
+
+
+async def test_list_gyms_include_deleted_flag(client, platform_token):
+    """Default list hides deleted gyms; include_deleted=true shows them."""
+    gym = await provision_gym(client, platform_token, "listdel")
+    headers = await _headers(platform_token)
+
+    deleted = await client.delete(f"/api/v1/platform/gyms/{gym['id']}", headers=headers)
+    assert deleted.status_code == 204
+
+    default = await client.get("/api/v1/platform/gyms", headers=headers)
+    assert default.status_code == 200
+    assert all(g["slug"] != "listdel" for g in default.json())
+
+    with_deleted = await client.get(
+        "/api/v1/platform/gyms?include_deleted=true", headers=headers
+    )
+    assert with_deleted.status_code == 200
+    row = next(g for g in with_deleted.json() if g["slug"] == "listdel")
+    assert row["deleted_at"] is not None
+
+
+async def test_gym_out_live_gym_has_null_deleted_at(client, platform_token):
+    """A live gym still serializes deleted_at=None (response shape unchanged)."""
+    await provision_gym(client, platform_token, "livedel")
+    headers = await _headers(platform_token)
+    listing = await client.get("/api/v1/platform/gyms", headers=headers)
+    row = next(g for g in listing.json() if g["slug"] == "livedel")
+    assert row["deleted_at"] is None

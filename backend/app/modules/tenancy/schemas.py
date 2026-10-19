@@ -27,6 +27,7 @@ class GymOut(BaseModel):
     currency: str
     cross_branch_access: bool = False
     created_at: datetime
+    deleted_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

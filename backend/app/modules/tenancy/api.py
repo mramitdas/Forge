@@ -90,10 +90,12 @@ async def create_gym(
 async def list_gyms(
     actor: Annotated[Actor, Depends(require_permission("platform.gyms.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+    include_deleted: bool = False,
 ) -> list[GymOut]:
-    rows = await session.scalars(
-        select(Gym).where(Gym.deleted_at.is_(None)).order_by(Gym.name)
-    )
+    stmt = select(Gym)
+    if not include_deleted:
+        stmt = stmt.where(Gym.deleted_at.is_(None))
+    rows = await session.scalars(stmt.order_by(Gym.name))
     return [GymOut.model_validate(g) for g in rows]
 
 
