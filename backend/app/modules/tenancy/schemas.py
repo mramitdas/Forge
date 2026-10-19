@@ -50,6 +50,18 @@ class GymSettingsOut(BaseModel):
     cross_branch_access: bool = False
 
 
+class TenantTierOut(BaseModel):
+    tier_code: str
+    tier_name: str
+    description: str | None = None
+    price_minor: int | None = None
+    max_branches: int | None = None
+    max_members: int | None = None
+    branches_used: int
+    members_used: int
+    gym_status: str
+
+
 class GymUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=200)
     timezone: str | None = Field(default=None, max_length=64)

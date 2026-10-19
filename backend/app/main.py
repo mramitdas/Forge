@@ -25,7 +25,12 @@ from app.modules.membership.api import router as membership_router
 from app.modules.membership.renewal import start_renewal_worker
 from app.modules.notifications.api import router as notifications_router
 from app.modules.notifications.service import register_handlers
-from app.modules.tenancy.api import platform_router, settings_router, tenant_router
+from app.modules.tenancy.api import (
+    platform_router,
+    settings_router,
+    subscriptions_router,
+    tenant_router,
+)
 
 logger = get_logger(__name__)
 
@@ -111,6 +116,7 @@ def create_app() -> FastAPI:
     app.include_router(platform_router, prefix=settings.api_prefix, dependencies=gate)
     app.include_router(tenant_router, prefix=settings.api_prefix, dependencies=gate)
     app.include_router(settings_router, prefix=settings.api_prefix, dependencies=gate)
+    app.include_router(subscriptions_router, prefix=settings.api_prefix, dependencies=gate)
     app.include_router(members_router, prefix=settings.api_prefix, dependencies=gate)
     app.include_router(membership_router, prefix=settings.api_prefix, dependencies=gate)
     app.include_router(billing_router, prefix=settings.api_prefix, dependencies=gate)

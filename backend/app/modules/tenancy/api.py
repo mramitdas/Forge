@@ -38,6 +38,7 @@ from app.modules.tenancy.schemas import (
     SubscriptionTierOut,
     SubscriptionTierUpdate,
     SubscriptionUpdateRequest,
+    TenantTierOut,
 )
 from app.modules.tenancy.service import (
     change_gym_tier,
@@ -60,6 +61,7 @@ from app.modules.tenancy.service import (
 platform_router = APIRouter(prefix="/platform", tags=["platform"])
 tenant_router = APIRouter(prefix="/branches", tags=["branches"])
 settings_router = APIRouter(prefix="/settings", tags=["settings"])
+subscriptions_router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 
 @platform_router.post("/gyms", response_model=GymOut, status_code=201)
@@ -507,4 +509,50 @@ async def update_settings(
         timezone=gym.timezone,
         currency=gym.currency,
         cross_branch_access=gym.cross_branch_access,
+    )
+
+
+@subscriptions_router.get("/tier", response_model=TenantTierOut)
+async def get_tenant_tier(
+    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.view"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> TenantTierOut:
+    gym = await session.get(Gym, actor.tenant_id)
+    if gym is None:
+        raise NotFoundError("Gym not found", code="NOT_FOUND")
+    tier = await session.get(SubscriptionTier, gym.tier_code)
+    branches_used = (
+        await session.scalar(
+            select(func.count())
+            .select_from(Branch)
+            .where(Branch.gym_id == actor.tenant_id, Branch.deleted_at.is_(None))
+        )
+        or 0
+    )
+    members_used = (
+        await session.scalar(
+            select(func.count())
+            .select_from(Member)
+            .where(Member.tenant_id == actor.tenant_id, Member.deleted_at.is_(None))
+        )
+        or 0
+    )
+    if tier is None:
+        return TenantTierOut(
+            tier_code=gym.tier_code,
+            tier_name=gym.tier_code,
+            branches_used=branches_used,
+            members_used=members_used,
+            gym_status=gym.status,
+        )
+    return TenantTierOut(
+        tier_code=tier.code,
+        tier_name=tier.name,
+        description=tier.description,
+        price_minor=tier.price_minor,
+        max_branches=tier.max_branches,
+        max_members=tier.max_members,
+        branches_used=branches_used,
+        members_used=members_used,
+        gym_status=gym.status,
     )
