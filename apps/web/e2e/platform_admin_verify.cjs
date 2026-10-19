@@ -196,6 +196,69 @@ async function main() {
     const tierGone = await page.getByText("Verify Tier Plus", { exact: true }).count();
     check("tier deleted from list", tierGone === 0, `remaining=${tierGone}`);
 
+    // ── Gyms: tier deleted while gym is tombstoned → attach on restore ──
+    // Create a custom tier and point this run's gym at it.
+    await page.getByRole("button", { name: /new tier/i }).click();
+    await page.locator('input[placeholder="e.g. premium"]').fill(`gymt-${ts}`);
+    await page.locator('input[placeholder="e.g. Premium"]').fill("Gym Tier Hold");
+    await page.locator('input[placeholder="e.g. 799"]').fill("299");
+    await page.locator('input[placeholder="e.g. For growing operators"]').fill("Held by a tombstoned gym");
+    await page.getByRole("button", { name: /create tier/i }).click();
+    await page.getByText("Tier created", { exact: true }).waitFor({ timeout: 10000 });
+
+    await page.goto(`${BASE}/platform/gyms`);
+    let holdRow = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
+    await holdRow.waitFor({ timeout: 15000 });
+    await holdRow.getByRole("button", { name: "Edit" }).click();
+    await page.locator("#gym-edit-tier").selectOption("gymt-" + ts);
+    await page.getByRole("button", { name: /save changes/i }).click();
+    await page.getByText("Gym updated").waitFor({ timeout: 10000 });
+
+    // Delete the gym, then its tier — must succeed (a tombstoned gym no
+    // longer pins the tier).
+    holdRow = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
+    await holdRow.getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("button", { name: /delete gym/i }).click();
+    await page.getByText(new RegExp(`Verify Gym ${ts} deleted`)).waitFor({ timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    await page.goto(`${BASE}/platform/subscriptions`);
+    const holdCard = page.locator("div.rounded-2xl").filter({ hasText: "Gym Tier Hold" }).first();
+    await holdCard.waitFor({ timeout: 15000 });
+    await holdCard.getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("button", { name: /delete tier/i }).click();
+    await page.getByText("Gym Tier Hold deleted").waitFor({ timeout: 10000 });
+    await page.waitForTimeout(1000);
+    const holdGone = await page.getByText("Gym Tier Hold", { exact: true }).count();
+    check("tier deleted while only a deleted gym referenced it", holdGone === 0, `remaining=${holdGone}`);
+
+    // Restore must now offer attaching an active subscription.
+    await page.goto(`${BASE}/platform/gyms`);
+    const showDeletedHold = page.locator('label:has-text("Show deleted") input');
+    await showDeletedHold.check();
+    const deadRow = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
+    await deadRow.waitFor({ timeout: 15000 });
+    await deadRow.getByRole("button", { name: "Restore" }).click();
+    await must(
+      "attach subscription modal opens on restore",
+      page.getByText("Attach a subscription").waitFor({ timeout: 10000 }),
+    );
+    await page.locator("#attach-tier").selectOption("starter");
+    await page.getByRole("button", { name: /restore gym/i }).click();
+    await must(
+      "gym restored after attaching active tier",
+      page.getByText(new RegExp(`Verify Gym ${ts} restored`)).waitFor({ timeout: 10000 }),
+    );
+    await showDeletedHold.uncheck();
+    const attachedRow = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
+    await attachedRow.waitFor({ timeout: 15000 });
+    const attachedText = await attachedRow.innerText();
+    check(
+      "restored gym back in live list on attached tier",
+      attachedText.toLowerCase().includes("starter"),
+      attachedText.slice(0, 80),
+    );
+
     // ── Platform revenue: MoM chart + sold list ──
     await page.goto(`${BASE}/platform/revenue`);
     await page.getByText("Subscription revenue").waitFor({ timeout: 15000 });
