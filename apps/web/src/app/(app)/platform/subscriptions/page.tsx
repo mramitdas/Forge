@@ -20,6 +20,7 @@ import {
   usePlatformTiers,
   useUpdateTier,
 } from "@/lib/hooks";
+import { ApiError } from "@/lib/api";
 import type { SubscriptionTierOut } from "@/lib/types";
 
 function price(price_minor: number | null): string {
@@ -228,7 +229,18 @@ export default function PlatformSubscriptionsPage() {
     updateTier
       .mutateAsync({ code: tier.code, body: { is_active: next } })
       .then(() => setToast(`${tier.name} is now ${next ? "active" : "disabled"}`))
-      .catch(() => setToast("Could not update tier"));
+      .catch((e) => {
+        const detail =
+          e instanceof ApiError
+            ? (e.detail as { error?: { message?: string } } | null)?.error
+                ?.message
+            : undefined;
+        setToast(
+          detail
+            ? `Could not update tier: ${detail}`
+            : "Could not update tier",
+        );
+      });
   }
 
   async function confirmDelete() {
