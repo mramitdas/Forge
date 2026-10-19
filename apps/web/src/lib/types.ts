@@ -101,6 +101,12 @@ export interface TenantTierOut {
   gym_status: string;
 }
 
+export interface InvoiceSummaryOut {
+  outstanding_minor: number;
+  collected_minor: number;
+  overdue_minor: number;
+}
+
 export interface CheckInOut {
   id: string;
   member_id: string;

@@ -289,8 +289,8 @@ async function main() {
     // Fixture: pay an open invoice (creates a server-side "Payment received"
     // notification for every tenant user). If none is open, mint one via a
     // subscription like member_account_verify.cjs does.
-    let invoices = await (await api.get(`${BASE}/api/v1/invoices`, { headers: auth })).json();
-    let openInv = invoices.find((i) => i.status === "open" || i.status === "overdue");
+    let invoices = await (await api.get(`${BASE}/api/v1/invoices?page_size=100`, { headers: auth })).json();
+    let openInv = invoices.items.find((i) => i.status === "open" || i.status === "overdue");
     if (!openInv) {
       const branches = await (await api.get(`${BASE}/api/v1/branches`, { headers: auth })).json();
       const member = await (
@@ -326,8 +326,8 @@ async function main() {
         })
       ).json();
       await api.post(`${BASE}/api/v1/plans/subscriptions/${sub.id}/activate`, { headers: auth });
-      invoices = await (await api.get(`${BASE}/api/v1/invoices`, { headers: auth })).json();
-      openInv = invoices.find((i) => i.status === "open" || i.status === "overdue");
+      invoices = await (await api.get(`${BASE}/api/v1/invoices?page_size=100`, { headers: auth })).json();
+      openInv = invoices.items.find((i) => i.status === "open" || i.status === "overdue");
     }
     const payRes = await api.post(`${BASE}/api/v1/invoices/${openInv.id}/pay`, {
       headers: auth,

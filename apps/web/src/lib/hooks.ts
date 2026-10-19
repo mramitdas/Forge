@@ -24,6 +24,7 @@ import type {
   GymSettingsOut,
   GymSubscriptionOut,
   InvoiceOut,
+  InvoiceSummaryOut,
   MemberOut,
   MemberTimelineOut,
   MeOut,
@@ -254,8 +255,8 @@ export function useMemberCtx(): {
     enabled: can("attendance.records.view"),
   });
   const invoicesQ = useQuery({
-    queryKey: ["invoices"],
-    queryFn: () => apiFetch<InvoiceOut[]>("/invoices"),
+    queryKey: ["invoices", "ctx"],
+    queryFn: () => apiFetch<PageOut<InvoiceOut>>("/invoices?page_size=200"),
     enabled: can("billing.invoices.view"),
   });
 
@@ -264,7 +265,7 @@ export function useMemberCtx(): {
       ctx: {
         subscriptions: subsQ.data ?? [],
         checkins: checkinsQ.data ?? [],
-        invoices: invoicesQ.data ?? [],
+        invoices: invoicesQ.data?.items ?? [],
       },
       members: membersQ.data ?? [],
       isLoading:
@@ -490,15 +491,51 @@ export function useCheckins(): { items: CheckinRecord[]; isLoading: boolean; isE
   }, [q.data, q.isLoading, q.isError, ctxQ.members, ctxQ.isError, branchesQ.data, branchesQ.isError]);
 }
 
-export function useInvoicesData(): { invoices: Invoice[]; isLoading: boolean; isError: boolean } {
+export function useInvoicesPage(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+}): {
+  invoices: Invoice[];
+  total: number;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
   const q = useQuery({
-    queryKey: ["invoices"],
-    queryFn: () => apiFetch<InvoiceOut[]>("/invoices"),
+    queryKey: ["invoices", "page", params],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      });
+      if (params.search) sp.set("q", params.search);
+      return apiFetch<PageOut<InvoiceOut>>(`/invoices?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    enabled: can("billing.invoices.view"),
   });
-  return useMemo(
-    () => ({ invoices: (q.data ?? []).map(toUiInvoice), isLoading: q.isLoading, isError: q.isError }),
-    [q.data, q.isLoading, q.isError],
-  );
+  const page = q.data ?? { items: [] as InvoiceOut[], total: 0 };
+  return {
+    invoices: page.items.map(toUiInvoice),
+    total: page.total ?? page.items.length,
+    isLoading: q.isLoading,
+    isError: q.isError,
+  };
+}
+
+export function useInvoiceSummary(): {
+  summary: InvoiceSummaryOut | undefined;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
+  const q = useQuery({
+    queryKey: ["invoices", "summary"],
+    queryFn: () => apiFetch<InvoiceSummaryOut>("/invoices/summary"),
+    enabled: can("billing.invoices.view"),
+  });
+  return { summary: q.data, isLoading: q.isLoading, isError: q.isError };
 }
 
 export function useExpensesData(): {

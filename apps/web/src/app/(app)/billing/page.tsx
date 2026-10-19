@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Button,
@@ -14,7 +14,7 @@ import {
 import { Async, Skeleton, SkeletonText } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
 import { inr } from "@/lib/mock";
-import { useInvoicesData, useMemberCtx, usePayInvoice } from "@/lib/hooks";
+import { useInvoiceSummary, useInvoicesPage, useMemberCtx, usePayInvoice } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
 
@@ -62,17 +62,7 @@ const methods = [
 ];
 
 function SummaryCards() {
-  const { invoices, isLoading, isError } = useInvoicesData();
-
-  const outstanding = invoices
-    .filter((i) => i.status === "open" || i.status === "overdue")
-    .reduce((a, i) => a + (i.total - i.paid), 0);
-  const collected = invoices
-    .filter((i) => i.status === "paid")
-    .reduce((a, i) => a + i.paid, 0);
-  const overdue = invoices
-    .filter((i) => i.status === "overdue")
-    .reduce((a, i) => a + (i.total - i.paid), 0);
+  const { summary, isLoading, isError } = useInvoiceSummary();
 
   return (
     <Async
@@ -91,9 +81,9 @@ function SummaryCards() {
     >
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Outstanding", value: inr(outstanding), tone: "text-amber" },
-          { label: "Collected", value: inr(collected), tone: "text-green" },
-          { label: "Overdue", value: inr(overdue), tone: "text-red" },
+          { label: "Outstanding", value: inr(summary?.outstanding_minor ?? 0), tone: "text-amber" },
+          { label: "Collected", value: inr(summary?.collected_minor ?? 0), tone: "text-green" },
+          { label: "Overdue", value: inr(summary?.overdue_minor ?? 0), tone: "text-red" },
         ].map((c) => (
           <Card key={c.label} className="p-4">
             <p className="text-[12px] font-medium text-ink-faint">{c.label}</p>
@@ -106,32 +96,34 @@ function SummaryCards() {
 }
 
 export default function BillingPage() {
+  const PAGE_SIZE = 20;
   const [paying, setPaying] = useState<string | null>(null);
   const [method, setMethod] = useState("upi");
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-  const { invoices, isLoading, isError } = useInvoicesData();
+  const { invoices, total, isLoading, isError } = useInvoicesPage({
+    page,
+    pageSize: PAGE_SIZE,
+    search: search.trim() || undefined,
+  });
   const { members: rawMembers } = useMemberCtx();
   const payInvoice = usePayInvoice();
   const can = useCan();
   const payGuard = useInFlight();
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const memberMap = useMemo(
     () => new Map(rawMembers.map((m) => [m.id, m.full_name || m.first_name])),
     [rawMembers],
   );
   const memberName = (id: string) => memberMap.get(id) ?? "Unknown";
-
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return invoices;
-    return invoices.filter(
-      (i) =>
-        i.number.toLowerCase().includes(needle) ||
-        memberName(i.memberId).toLowerCase().includes(needle),
-    );
-  }, [invoices, search, memberMap]);
 
   const invoice = invoices.find((i) => i.id === paying);
 
@@ -171,7 +163,7 @@ export default function BillingPage() {
                 className="h-8! w-52! text-[12px]!"
               />
               <Badge tone="gray">
-                {search.trim() ? `${filtered.length} of ${invoices.length}` : `${invoices.length} total`}
+                {search.trim() ? `${invoices.length} of ${total}` : `${total} total`}
               </Badge>
             </div>
           </div>
@@ -188,7 +180,7 @@ export default function BillingPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((i) => (
+              {invoices.map((i) => (
                 <tr key={i.id} className="group border-b border-line last:border-0 hover:bg-accent-soft/40 transition-colors">
                   <td className="px-5 py-3">
                     <Link href={`/billing/${i.id}`} className="font-medium text-accent hover:underline">
@@ -212,14 +204,14 @@ export default function BillingPage() {
                   </td>
                 </tr>
               ))}
-              {search.trim() && filtered.length === 0 && (
+              {search.trim() && invoices.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-8 text-center text-[13px] text-ink-faint">
                     No invoices match “{search}”.
                   </td>
                 </tr>
               )}
-              {!search.trim() && invoices.length === 0 && (
+              {!search.trim() && total === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-8 text-center text-[13px] text-ink-faint">
                     No invoices yet.
@@ -228,6 +220,19 @@ export default function BillingPage() {
               )}
             </tbody>
           </table>
+          <div className="flex items-center justify-between border-t border-line px-5 py-3 text-[13px] text-ink-faint">
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <span className="flex gap-2">
+              <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                Previous
+              </Button>
+              <Button variant="secondary" size="xs" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            </span>
+          </div>
         </Card>
       </Async>
 

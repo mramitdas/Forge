@@ -100,13 +100,13 @@ async function main() {
       branch_id: branchId,
     });
     const invA = await (
-      await api.get(`${BASE}/api/v1/invoices?member_id=${memberA.body.id}`, { headers: auth })
+      await api.get(`${BASE}/api/v1/invoices?member_id=${memberA.body.id}&page_size=100`, { headers: auth })
     ).json();
     const invB = await (
-      await api.get(`${BASE}/api/v1/invoices?member_id=${memberB.body.id}`, { headers: auth })
+      await api.get(`${BASE}/api/v1/invoices?member_id=${memberB.body.id}&page_size=100`, { headers: auth })
     ).json();
-    const invAOpen = invA.find((i) => i.status === "open");
-    const invBOpen = invB.find((i) => i.status === "open");
+    const invAOpen = invA.items.find((i) => i.status === "open");
+    const invBOpen = invB.items.find((i) => i.status === "open");
     const fixturesOk =
       memberA.status === 201 &&
       memberB.status === 201 &&
@@ -164,13 +164,26 @@ async function main() {
     await page.goto(`${BASE}/billing`);
     await page.getByText("Outstanding").waitFor({ timeout: 20000 });
     await must("billing page renders summary cards + invoices table", page.getByText("Invoices", { exact: true }).waitFor({ timeout: 10000 }));
+    await must("billing pager renders Page X of Y", page.getByText(/^Page \d+ of \d+$/).waitFor({ timeout: 10000 }));
 
     const searchBox = page.getByPlaceholder("Search invoice # or member");
+    const searchResp = () =>
+      page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/v1/invoices?") &&
+          r.url().includes("q=") &&
+          r.status() === 200,
+        { timeout: 15000 },
+      );
+    const respA = searchResp();
     await searchBox.fill(invAOpen.number);
+    await respA;
     await page.locator("tbody tr", { hasText: invAOpen.number }).first().waitFor({ timeout: 10000 });
     const rowsWithB = await page.locator("tbody tr", { hasText: invBOpen.number }).count();
     check("billing search narrows to one invoice", rowsWithB === 0, `other rows=${rowsWithB}`);
+    const respName = searchResp();
     await searchBox.fill(MEMBER_A);
+    await respName;
     await page.locator("tbody tr", { hasText: invAOpen.number }).first().waitFor({ timeout: 10000 });
     const memberRowsB = await page.locator("tbody tr", { hasText: invBOpen.number }).count();
     check("billing search by member name filters rows", memberRowsB === 0, `other rows=${memberRowsB}`);
@@ -230,6 +243,7 @@ async function main() {
     // ── 4. Subscriptions ──
     await page.goto(`${BASE}/subscriptions`);
     await must("subscriptions page renders with count", page.getByText(/\d+ subscriptions/).waitFor({ timeout: 20000 }));
+    await must("subscriptions page shows Gym plan tier card", page.getByText("Gym plan", { exact: true }).waitFor({ timeout: 10000 }));
 
     const subRowA = page.locator("tbody tr", { hasText: MEMBER_A });
     await subRowA.first().waitFor({ timeout: 15000 });
