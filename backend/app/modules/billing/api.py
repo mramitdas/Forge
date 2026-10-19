@@ -10,6 +10,8 @@ from app.deps import Actor, get_session_for_actor, require_permission
 from app.modules.billing import service as billing_svc
 from app.modules.billing.schemas import (
     InvoiceOut,
+    InvoicePage,
+    InvoiceSummaryOut,
     PaymentCapture,
     PaymentCaptureResult,
     PaymentOut,
@@ -18,20 +20,37 @@ from app.modules.billing.schemas import (
 router = APIRouter(prefix="/invoices", tags=["billing"])
 
 
-@router.get("", response_model=list[InvoiceOut])
+@router.get("", response_model=InvoicePage)
 async def list_invoices(
     actor: Annotated[Actor, Depends(require_permission("billing.invoices.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     member_id: Annotated[uuid.UUID | None, Query()] = None,
-) -> list[InvoiceOut]:
-    invoices = await billing_svc.list_invoices(
-        session, tenant_id=actor.tenant_id, member_id=member_id
+    q: Annotated[str | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> InvoicePage:
+    invoices, total = await billing_svc.list_invoices(
+        session,
+        tenant_id=actor.tenant_id,
+        member_id=member_id,
+        q=q,
+        page=page,
+        page_size=page_size,
     )
     out: list[InvoiceOut] = []
     for inv in invoices:
         loaded = await billing_svc.get_invoice(session, inv.id)
         out.append(InvoiceOut.model_validate(loaded))
-    return out
+    return InvoicePage(items=out, total=total, page=page, page_size=page_size)
+
+
+@router.get("/summary", response_model=InvoiceSummaryOut)
+async def invoice_summary(
+    actor: Annotated[Actor, Depends(require_permission("billing.invoices.view"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> InvoiceSummaryOut:
+    summary = await billing_svc.invoice_summary(session, tenant_id=actor.tenant_id)
+    return InvoiceSummaryOut(**summary)
 
 
 @router.get("/{invoice_id}", response_model=InvoiceOut)

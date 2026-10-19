@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from app.modules.billing.models import (
     InvoiceSequence,
     Payment,
 )
+from app.modules.members.models import Member
 from app.modules.membership.models import Subscription
 
 
@@ -115,15 +116,67 @@ async def get_invoice(session: AsyncSession, invoice_id: uuid.UUID) -> Invoice:
 
 
 async def list_invoices(
-    session: AsyncSession, *, tenant_id: uuid.UUID, member_id: uuid.UUID | None = None
-) -> list[Invoice]:
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    member_id: uuid.UUID | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[list[Invoice], int]:
     stmt = select(Invoice).where(
         Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None)
     )
     if member_id:
         stmt = stmt.where(Invoice.member_id == member_id)
-    rows = await session.scalars(stmt.order_by(Invoice.issue_date.desc()))
-    return list(rows)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.join(Member, Member.id == Invoice.member_id, isouter=True).where(
+            or_(
+                Invoice.number.ilike(like),
+                Member.first_name.ilike(like),
+                Member.last_name.ilike(like),
+            )
+        )
+    total = (
+        await session.scalar(select(func.count()).select_from(stmt.subquery()))
+    ) or 0
+    rows = await session.scalars(
+        stmt.order_by(Invoice.issue_date.desc(), Invoice.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return list(rows), total
+
+
+async def invoice_summary(
+    session: AsyncSession, *, tenant_id: uuid.UUID
+) -> dict[str, int]:
+    base = (Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+    open_statuses = ("open", "partial")
+
+    outstanding = await session.scalar(
+        select(func.coalesce(func.sum(Invoice.total_minor - Invoice.paid_minor), 0)).where(
+            *base, Invoice.status.in_(open_statuses)
+        )
+    )
+    collected = await session.scalar(
+        select(func.coalesce(func.sum(Invoice.paid_minor), 0)).where(
+            *base, Invoice.status != "void"
+        )
+    )
+    overdue = await session.scalar(
+        select(func.coalesce(func.sum(Invoice.total_minor - Invoice.paid_minor), 0)).where(
+            *base,
+            Invoice.status.in_(open_statuses),
+            Invoice.due_date < datetime.now(UTC),
+        )
+    )
+    return {
+        "outstanding_minor": int(outstanding or 0),
+        "collected_minor": int(collected or 0),
+        "overdue_minor": int(overdue or 0),
+    }
 
 
 async def capture_payment(

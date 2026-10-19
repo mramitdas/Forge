@@ -50,7 +50,7 @@ async def test_payment_notification_uses_invoice_number(
     assert sub.status_code == 201, sub.text
 
     invoices = await client.get("/api/v1/invoices", headers=headers)
-    invoice = next(i for i in invoices.json() if i["member_id"] == member["id"])
+    invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
     assert invoice["number"].startswith("INV-"), invoice
 
     paid = await client.post(

@@ -92,7 +92,7 @@ async def test_full_slice_member_to_checkin(client, gym_a):
     # Invoice exists and is open.
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
     assert invoices.status_code == 200
-    invoice = next(i for i in invoices.json() if i["member_id"] == member["id"])
+    invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
     assert invoice["status"] == "open"
     assert invoice["number"].startswith("INV-")
     assert invoice["total_minor"] == 153400  # (120000 + 10000) + 18% GST
@@ -186,7 +186,7 @@ async def test_outbox_dispatches_payment_notification(client, dispatcher, gym_a)
         json={"member_id": member["id"], "plan_id": plan["id"], "branch_id": branch_id},
     )
     invoices = (await client.get("/api/v1/invoices", headers=_headers(token))).json()
-    invoice = next(i for i in invoices if i["member_id"] == member["id"])
+    invoice = next(i for i in invoices["items"] if i["member_id"] == member["id"])
     await client.post(
         f"/api/v1/invoices/{invoice['id']}/pay",
         headers=_headers(token),

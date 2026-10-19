@@ -37,6 +37,19 @@ class InvoiceLineOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class InvoicePage(BaseModel):
+    items: list[InvoiceOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class InvoiceSummaryOut(BaseModel):
+    outstanding_minor: int
+    collected_minor: int
+    overdue_minor: int
+
+
 class PaymentCapture(BaseModel):
     method: str = Field(pattern=r"^(card|upi|netbanking|cash|credit|wallet)$")
     idempotency_key: str = Field(min_length=8, max_length=128)

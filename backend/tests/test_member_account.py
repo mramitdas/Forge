@@ -185,7 +185,7 @@ async def test_member_delete_cascades_to_children(client, gym_acct):
     )
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
-    invoice = next(i for i in invoices.json() if i["member_id"] == member["id"])
+    invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
     paid = await client.post(
         f"/api/v1/invoices/{invoice['id']}/pay",
         headers=_headers(token),
@@ -214,7 +214,7 @@ async def test_member_delete_cascades_to_children(client, gym_acct):
     assert subs.json() == [], subs.text
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
-    assert [i for i in invoices.json() if i["member_id"] == member["id"]] == []
+    assert [i for i in invoices.json()["items"] if i["member_id"] == member["id"]] == []
 
     attendance = await client.get(
         "/api/v1/checkin",
@@ -275,7 +275,7 @@ async def test_subscription_renew_extends_term_and_enables_member(client, gym_ac
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
     assert invoices.status_code == 200
-    member_invoices = [i for i in invoices.json() if i["member_id"] == member["id"]]
+    member_invoices = [i for i in invoices.json()["items"] if i["member_id"] == member["id"]]
     assert len(member_invoices) == 2
 
 
@@ -444,7 +444,7 @@ async def test_invoice_void_for_unpaid(client, gym_acct):
     await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
-    invoice = next(i for i in invoices.json() if i["member_id"] == member["id"])
+    invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
     voided = await client.post(
         f"/api/v1/invoices/{invoice['id']}/void", headers=_headers(token)
     )
@@ -476,7 +476,7 @@ async def test_paid_invoice_cannot_be_voided(client, gym_acct):
     await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
-    invoice = next(i for i in invoices.json() if i["member_id"] == member["id"])
+    invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
     paid = await client.post(
         f"/api/v1/invoices/{invoice['id']}/pay",
         headers=_headers(token),
@@ -510,7 +510,7 @@ async def test_invoice_applies_plan_gst(client, gym_acct):
     await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
-    invoice = next(i for i in invoices.json() if i["member_id"] == member["id"])
+    invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
     assert invoice["tax_minor"] == 18000  # 100000 * 18%
     assert invoice["total_minor"] == 118000
     assert invoice["lines"][0]["tax_rate_bp"] == 1800
