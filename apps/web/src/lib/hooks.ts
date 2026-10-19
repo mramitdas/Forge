@@ -836,10 +836,17 @@ export function usePlatformSummary(): {
   );
 }
 
-export function usePlatformGyms(): { gyms: GymOut[]; isLoading: boolean; isError: boolean } {
+export function usePlatformGyms(includeDeleted = false): {
+  gyms: GymOut[];
+  isLoading: boolean;
+  isError: boolean;
+} {
   const q = useQuery({
-    queryKey: ["platform", "gyms"],
-    queryFn: () => apiFetch<GymOut[]>("/platform/gyms"),
+    queryKey: ["platform", "gyms", includeDeleted],
+    queryFn: () =>
+      apiFetch<GymOut[]>(
+        `/platform/gyms${includeDeleted ? "?include_deleted=true" : ""}`,
+      ),
   });
   return useMemo(
     () => ({ gyms: q.data ?? [], isLoading: q.isLoading, isError: q.isError }),
@@ -919,6 +926,17 @@ export function useDeleteGym() {
   return useMutation({
     mutationFn: (gymId: string) =>
       apiFetch<void>(`/platform/gyms/${gymId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform"] });
+    },
+  });
+}
+
+export function useRestoreGym() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (gymId: string) =>
+      apiFetch<GymOut>(`/platform/gyms/${gymId}/restore`, { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["platform"] });
     },

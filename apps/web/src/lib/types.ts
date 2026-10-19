@@ -196,6 +196,7 @@ export interface GymOut {
   currency: string;
   cross_branch_access: boolean;
   created_at: string;
+  deleted_at?: string | null;
 }
 
 export interface GymOwnerOut {

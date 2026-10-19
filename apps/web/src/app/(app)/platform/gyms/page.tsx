@@ -21,16 +21,19 @@ import {
   usePlatformGyms,
   usePlatformTiers,
   useProvisionGym,
+  useRestoreGym,
   useUpdateGym,
 } from "@/lib/hooks";
 import type { GymOut } from "@/lib/types";
 
 export default function PlatformGymsPage() {
-  const { gyms, isLoading, isError } = usePlatformGyms();
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { gyms, isLoading, isError } = usePlatformGyms(showDeleted);
   const { tiers } = usePlatformTiers();
   const provision = useProvisionGym();
   const updateGym = useUpdateGym();
   const deleteGym = useDeleteGym();
+  const restoreGym = useRestoreGym();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<GymOut | null>(null);
   const [deleting, setDeleting] = useState<GymOut | null>(null);
@@ -118,6 +121,13 @@ export default function PlatformGymsPage() {
       .catch(() => setToast("Could not update gym"));
   }
 
+  function restore(gym: GymOut) {
+    restoreGym.mutate(gym.id, {
+      onSuccess: () => setToast(`${gym.name} restored`),
+      onError: () => setToast("Could not restore gym"),
+    });
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -136,6 +146,17 @@ export default function PlatformGymsPage() {
 
       <Async loading={isLoading} error={isError} skeleton={<TableSkeleton columns={6} rows={4} />}>
         <Card className="overflow-hidden">
+          <div className="flex items-center justify-end border-b border-line px-5 py-2.5">
+            <label className="flex items-center gap-2 text-[13px] text-ink-soft">
+              <input
+                type="checkbox"
+                checked={showDeleted}
+                onChange={(e) => setShowDeleted(e.target.checked)}
+                className="accent-accent"
+              />
+              Show deleted
+            </label>
+          </div>
           <table className="w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-fill text-[12px] text-ink-faint">
@@ -149,7 +170,10 @@ export default function PlatformGymsPage() {
             </thead>
             <tbody>
               {gyms.map((g) => (
-                <tr key={g.id} className="border-b border-line last:border-0 hover:bg-accent-soft/40">
+                <tr
+                  key={g.id}
+                  className={`border-b border-line last:border-0 hover:bg-accent-soft/40${g.deleted_at ? " opacity-60" : ""}`}
+                >
                   <td className="px-5 py-3">
                     <p className="font-medium">{g.name}</p>
                     <div className="flex items-center gap-1.5 text-[12px] text-ink-faint">
@@ -185,24 +209,37 @@ export default function PlatformGymsPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="xs" onClick={() => openEdit(g)}>
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => setStatus(g, g.status === "suspended" ? "active" : "suspended")}
-                      >
-                        {g.status === "suspended" ? "Enable" : "Suspend"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className="text-red hover:bg-red-soft/50 hover:text-red"
-                        onClick={() => setDeleting(g)}
-                      >
-                        Delete
-                      </Button>
+                      {g.deleted_at ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={restoreGym.isPending}
+                          onClick={() => restore(g)}
+                        >
+                          {restoreGym.isPending ? "Restoring…" : "Restore"}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button variant="ghost" size="xs" onClick={() => openEdit(g)}>
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => setStatus(g, g.status === "suspended" ? "active" : "suspended")}
+                          >
+                            {g.status === "suspended" ? "Enable" : "Suspend"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-red hover:bg-red-soft/50 hover:text-red"
+                            onClick={() => setDeleting(g)}
+                          >
+                            Delete
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
