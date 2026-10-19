@@ -122,10 +122,13 @@ export default function PlatformGymsPage() {
   }
 
   function restore(gym: GymOut) {
-    restoreGym.mutate(gym.id, {
-      onSuccess: () => setToast(`${gym.name} restored`),
-      onError: () => setToast("Could not restore gym"),
-    });
+    restoreGym.mutate(
+      { gymId: gym.id },
+      {
+        onSuccess: () => setToast(`${gym.name} restored`),
+        onError: () => setToast("Could not restore gym"),
+      },
+    );
   }
 
   return (

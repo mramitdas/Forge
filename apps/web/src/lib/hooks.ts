@@ -935,8 +935,11 @@ export function useDeleteGym() {
 export function useRestoreGym() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (gymId: string) =>
-      apiFetch<GymOut>(`/platform/gyms/${gymId}/restore`, { method: "POST" }),
+    mutationFn: ({ gymId, tierCode }: { gymId: string; tierCode?: string }) =>
+      apiFetch<GymOut>(`/platform/gyms/${gymId}/restore`, {
+        method: "POST",
+        body: tierCode !== undefined ? JSON.stringify({ tier_code: tierCode }) : undefined,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["platform"] });
     },
