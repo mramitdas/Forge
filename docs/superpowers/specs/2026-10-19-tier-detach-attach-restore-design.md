@@ -99,7 +99,7 @@ Two gaps left by the gym soft-delete recovery round:
 `update_tier` gains the same live-gym check `delete_tier` already has:
 a **disable transition** (`is_active: false` while the tier is currently
 active) counts live gyms (`deleted_at IS NULL`) on the tier → 409
-`TIER_IN_USER`→ actually `TIER_IN_USE`, message *"Tier is still referenced by
+`TIER_IN_USE`, message *"Tier is still referenced by
 gyms; re-point those gyms before disabling"*. Re-enabling and all other
 field edits (name/price/limits) stay unguarded.
 
