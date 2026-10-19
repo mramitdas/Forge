@@ -269,6 +269,164 @@ async function main() {
       attachedText.slice(0, 80),
     );
 
+    // ── Settings (platform admin): split name + frozen email + checklist ──
+    await page.goto(`${BASE}/settings`);
+    let seededFirst = "";
+    let seededLast = "";
+    await must(
+      "settings: profile inputs render with frozen email",
+      (async () => {
+        const firstInput = page.locator("#settings-first-name");
+        await firstInput.waitFor({ timeout: 15000 });
+        seededFirst = await firstInput.inputValue();
+        seededLast = await page.locator("#settings-last-name").inputValue();
+        const emailInput = page.locator("#settings-email");
+        await emailInput.waitFor({ timeout: 5000 });
+        if (seededFirst !== "Platform" || seededLast !== "Admin") {
+          throw new Error(`fixture name drifted: "${seededFirst} ${seededLast}"`);
+        }
+        if (!(await emailInput.isDisabled())) throw new Error("email input not disabled");
+        if ((await emailInput.getAttribute("readonly")) === null) {
+          throw new Error("email input not readonly");
+        }
+        const emailVal = await emailInput.inputValue();
+        if (emailVal !== ADMIN.email) throw new Error(`email=${emailVal}`);
+      })(),
+    );
+
+    // Split-name save persists, then restore the seeded values so the
+    // fixture full_name ("Platform Admin") stays intact for other runs.
+    await page.locator("#settings-last-name").fill("E2E Temp");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await must(
+      "settings: split-name save persists",
+      page.getByText("Profile updated").waitFor({ timeout: 10000 }),
+    );
+
+    // Toasts are manual-dismiss only — clear the one above so the wait
+    // below observes THIS save's toast, not the previous one.
+    const dismissToast = page.locator('button[aria-label="Dismiss"]');
+    if ((await dismissToast.count()) > 0) {
+      await dismissToast.click();
+      await dismissToast.waitFor({ state: "detached", timeout: 5000 });
+    }
+    await page.locator("#settings-first-name").fill(seededFirst);
+    await page.locator("#settings-last-name").fill(seededLast);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await must(
+      "settings: seeded names restored",
+      page.getByText("Profile updated").waitFor({ timeout: 10000 }),
+    );
+
+    check(
+      "settings: role/permissions sections absent",
+      (await page.getByText("Granted permissions").count()) === 0 &&
+        (await page.getByText("Your role & permissions").count()) === 0,
+    );
+
+    check(
+      "settings: password card renders",
+      (await page.locator("#settings-current-password").count()) === 1 &&
+        (await page.locator("#settings-new-password").count()) === 1 &&
+        (await page.locator("#settings-confirm-password").count()) === 1 &&
+        (await page.getByRole("button", { name: "Update password" }).count()) === 1,
+    );
+
+    // Checklist is live; do NOT click Update password — the admin fixture
+    // password must stay admin-pass-123 for other e2e scripts (the API
+    // success path is covered by pytest).
+    await must(
+      "settings: live checklist fails weak then passes strong",
+      (async () => {
+        await page.locator("#settings-current-password").fill("whatever-1");
+        await page.locator("#settings-new-password").fill("alllowercase1!");
+        await page.waitForFunction(
+          () => {
+            const ul = document.querySelector('ul[aria-label="Password strength"]');
+            if (!ul) return false;
+            const rows = [...ul.querySelectorAll("li")];
+            const upper = rows.find((li) => (li.textContent ?? "").includes("Uppercase letter"));
+            const btn = [...document.querySelectorAll("button")].find((b) =>
+              /update password/i.test(b.textContent ?? ""),
+            );
+            return (
+              rows.filter((li) => (li.textContent ?? "").includes("✗")).length > 0 &&
+              (upper?.textContent ?? "").includes("✗") &&
+              btn?.disabled === true
+            );
+          },
+          null,
+          { timeout: 5000 },
+        );
+        await page.locator("#settings-new-password").fill("Owner-Pass-123!");
+        await page.locator("#settings-confirm-password").fill("Owner-Pass-123!");
+        await page.waitForFunction(
+          () => {
+            const ul = document.querySelector('ul[aria-label="Password strength"]');
+            if (!ul) return false;
+            const rows = [...ul.querySelectorAll("li")];
+            const btn = [...document.querySelectorAll("button")].find((b) =>
+              /update password/i.test(b.textContent ?? ""),
+            );
+            return (
+              rows.length === 5 &&
+              rows.every((li) => (li.textContent ?? "").includes("✓")) &&
+              btn?.disabled === false
+            );
+          },
+          null,
+          { timeout: 5000 },
+        );
+      })(),
+    );
+
+    await page.locator("#settings-confirm-password").fill("Mismatch-Pass-1!");
+    await must(
+      "settings: mismatch hint shows, then fields cleared",
+      (async () => {
+        await page.getByText("Passwords do not match.").waitFor({ timeout: 5000 });
+        await page.locator("#settings-current-password").fill("");
+        await page.locator("#settings-new-password").fill("");
+        await page.locator("#settings-confirm-password").fill("");
+        await page
+          .getByText("Passwords do not match.")
+          .waitFor({ state: "detached", timeout: 5000 });
+        for (const id of [
+          "#settings-current-password",
+          "#settings-new-password",
+          "#settings-confirm-password",
+        ]) {
+          if ((await page.locator(id).inputValue()) !== "") throw new Error(`${id} not cleared`);
+        }
+      })(),
+    );
+
+    await must(
+      "settings: ends with clean toast + untouched form",
+      (async () => {
+        const dismiss = page.locator('button[aria-label="Dismiss"]');
+        if ((await dismiss.count()) > 0) {
+          await dismiss.click();
+          await dismiss.waitFor({ state: "detached", timeout: 5000 });
+        }
+        if ((await page.getByText("Profile updated").count()) > 0) {
+          throw new Error("stale toast still visible");
+        }
+        if ((await page.getByText("Passwords do not match.").count()) > 0) {
+          throw new Error("stale mismatch hint still visible");
+        }
+        if ((await page.locator("#settings-first-name").inputValue()) !== seededFirst) {
+          throw new Error("first name drifted at end");
+        }
+        if ((await page.locator("#settings-last-name").inputValue()) !== seededLast) {
+          throw new Error("last name drifted at end");
+        }
+        if ((await page.locator("#settings-email").inputValue()) !== ADMIN.email) {
+          throw new Error("email drifted at end");
+        }
+      })(),
+    );
+
     // ── Platform revenue: MoM chart + sold list ──
     await page.goto(`${BASE}/platform/revenue`);
     await page.getByText("Subscription revenue").waitFor({ timeout: 15000 });
