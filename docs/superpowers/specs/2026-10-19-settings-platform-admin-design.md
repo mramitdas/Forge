@@ -42,7 +42,7 @@ Gym users keep the existing page unchanged (byte-for-byte).
 - `MeUpdateRequest` adds:
   - `first_name: str | None = Field(default=None, min_length=1, max_length=100)`
   - `last_name: str | None = Field(default=None, min_length=0, max_length=100)` (allow empty string; strip)
-- `MeOut` adds `first_name: str`, `last_name: str` (seeded from user row; `""` when unset).
+- `UserOut` (embedded as `MeOut.user`, also on `/employees`) adds `first_name: str`, `last_name: str` (seeded from user row; `""` when unset).
 
 ### Service (`identity/service.py`)
 
@@ -111,13 +111,13 @@ Gym users keep the existing page unchanged (byte-for-byte).
 ## 5. Testing
 
 - **Backend pytest** (`tests/test_identity_*.py` or existing auth tests):
-  - update-me with first/last → columns set, `full_name` recomputed, `MeOut` returns all three.
+  - update-me with first/last → columns set, `full_name` recomputed, `MeOut.user` returns all three.
   - update-me legacy `full_name` → split into first/last as well.
   - platform actor changes email → 403 `EMAIL_FROZEN`; gym actor changes email → 200.
   - change-password weak new → 422 `PASSWORD_TOO_WEAK` with failed codes; strong → 200 and login with new password works.
 - **FE unit**: `npm test` includes `password.test.ts`.
 - **E2E**:
-  - `platform_admin_verify.cjs` +checks (Settings section): page shows First name/Last name seeded; email disabled; save name persists (toast + sidebar updates via refreshMe); password checklist flips live; weak submit blocked (button disabled); strong submit succeeds (use throwaway password, then change back).
+   - `platform_admin_verify.cjs` +checks (Settings section): page shows First name/Last name seeded; email disabled; save name persists (toast + sidebar updates via refreshMe, then restores the seeded name); password checklist flips live; weak submit blocked (button disabled); strong password enables the button — **no real submission** (the admin fixture password must survive for the other e2e scripts; the API success path is covered by pytest).
   - `gym_ops_verify.cjs`: **untouched**, must stay green.
 - Full battery after (platform gate mandatory if `hooks.ts`/`ui.tsx`/`layout.tsx` touched).
 
