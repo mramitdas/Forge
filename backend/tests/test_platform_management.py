@@ -418,3 +418,54 @@ async def test_gym_subscription_counts_exclude_soft_deleted(client, platform_tok
     )
     assert deleted.status_code == 204, deleted.text
     assert await counts() == (0, 0)
+
+
+async def test_delete_gym_cascades_members(client, platform_token):
+    """Gym delete must tombstone members, not just users + branches."""
+    gym = await provision_gym(client, platform_token, "delcasc")
+    owner = await login(client, "owner-delcasc@example.com", "owner-pass-123")
+    oh = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    branch = await client.post(
+        "/api/v1/branches",
+        headers=oh,
+        json={"name": "Main", "code": "DC", "timezone": "Asia/Kolkata", "country_code": "+91"},
+    )
+    assert branch.status_code == 201, branch.text
+    member = await client.post(
+        "/api/v1/members",
+        headers=oh,
+        json={
+            "first_name": "Casc", "last_name": "Member",
+            "email": "casc-member@example.com", "phone": "9000000000",
+            "country_code": "+91", "branch_id": branch.json()["id"], "status": "active",
+        },
+    )
+    assert member.status_code == 201, member.text
+
+    deleted = await client.delete(
+        f"/api/v1/platform/gyms/{gym['id']}",
+        headers={"Authorization": f"Bearer {platform_token}"},
+    )
+    assert deleted.status_code == 204
+
+    # The member row must be soft-deleted. Verify via direct DB read (the
+    # member list endpoint scopes through the gym, so it would hide the row
+    # either way). The read is tenant-scoped, so stamp the gym's tenant
+    # context first.
+    import uuid as _uuid
+
+    from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
+    from app.db.session import get_sessionmaker
+    from app.modules.members.models import Member
+
+    maker = get_sessionmaker()
+    token_ctx = set_tenant_context(TenantContext(tenant_id=_uuid.UUID(str(gym["id"]))))
+    try:
+        async with maker() as session:
+            await session.begin()
+            row = await session.get(Member, member.json()["id"])
+            assert row is not None
+            assert row.deleted_at is not None
+    finally:
+        reset_tenant_context(token_ctx)

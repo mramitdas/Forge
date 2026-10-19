@@ -208,6 +208,14 @@ async def delete_gym(
     for branch in branches:
         branch.deleted_at = now
         branch.deleted_by = actor_id
+    members = await session.scalars(
+        select(Member)
+        .join(Branch, Member.branch_id == Branch.id)
+        .where(Branch.gym_id == gym_id, Member.deleted_at.is_(None))
+    )
+    for member in members:
+        member.deleted_at = now
+        member.deleted_by = actor_id
     await session.flush()
     await bus.emit(
         session,
