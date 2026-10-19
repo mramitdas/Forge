@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Card,
@@ -65,6 +65,7 @@ function TierFormModal({
 }) {
   const createTier = useCreateTier();
   const updateTier = useUpdateTier();
+  const target = editing?.code ?? null;
   const [form, setForm] = useState({
     code: "",
     name: "",
@@ -74,6 +75,12 @@ function TierFormModal({
     max_members: "",
   });
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    reset(editing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, target]);
 
   function reset(editing: SubscriptionTierOut | null) {
     setForm({
