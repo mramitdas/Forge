@@ -52,7 +52,7 @@ function CountryCodeSelect({
   onChange: (v: string) => void;
 }) {
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
+    <Select id="member-detail-country-code" aria-label="Country code" value={value} onChange={(e) => onChange(e.target.value)}>
       {COUNTRY_CODES.map((c) => (
         <option key={c.dial} value={c.dial}>
           {c.dial} · {c.iso} · {c.name}
@@ -513,12 +513,16 @@ export default function MemberDetailPage() {
             <Field label="First name">
               <Input
                 required
+                id="member-edit-first-name"
+                aria-label="First name"
                 value={editForm.first_name}
                 onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
               />
             </Field>
             <Field label="Last name">
               <Input
+                id="member-edit-last-name"
+                aria-label="Last name"
                 value={editForm.last_name}
                 onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
               />
@@ -527,6 +531,8 @@ export default function MemberDetailPage() {
           <Field label="Email">
             <Input
               type="email"
+              id="member-edit-email"
+              aria-label="Email"
               value={editForm.email}
               onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
             />
@@ -540,6 +546,8 @@ export default function MemberDetailPage() {
             </Field>
             <Field label="Phone number">
               <Input
+                id="member-edit-phone"
+                aria-label="Phone number"
                 value={editForm.phone}
                 onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
               />
@@ -548,6 +556,8 @@ export default function MemberDetailPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Gender">
               <Select
+                id="member-edit-gender"
+                aria-label="Gender"
                 value={editForm.gender}
                 onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
               >
@@ -558,6 +568,8 @@ export default function MemberDetailPage() {
             </Field>
             <Field label="Status">
               <Select
+                id="member-edit-status"
+                aria-label="Status"
                 value={editForm.status}
                 onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
               >
@@ -589,6 +601,8 @@ export default function MemberDetailPage() {
           <Field label="New plan">
             <Select
               required
+              id="member-edit-new-plan"
+              aria-label="New plan"
               value={upgradePlanId}
               onChange={(e) => setUpgradePlanId(e.target.value)}
             >
@@ -623,6 +637,8 @@ export default function MemberDetailPage() {
             <Input
               type="date"
               required
+              id="member-edit-start-date"
+              aria-label="Start date"
               value={renewStart}
               onChange={(e) => setRenewStart(e.target.value)}
             />

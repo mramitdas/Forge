@@ -44,7 +44,7 @@ function CountryCodeSelect({
   onChange: (v: string) => void;
 }) {
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
+    <Select id="branch-country-code" aria-label="Country code" value={value} onChange={(e) => onChange(e.target.value)}>
       {COUNTRY_CODES.map((c) => (
         <option key={c.dial} value={c.dial}>
           {c.dial} · {c.iso} · {c.name}
@@ -294,6 +294,8 @@ export default function BranchesPage() {
           <Field label="Branch name">
             <Input
               required
+              id="branch-name"
+              aria-label="Branch name"
               placeholder="e.g. Downtown"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -302,13 +304,15 @@ export default function BranchesPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Code">
               <Input
+                id="branch-code"
+                aria-label="Code"
                 placeholder="e.g. DT"
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
               />
             </Field>
             <Field label="Timezone">
-              <Select value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
+              <Select id="branch-timezone" aria-label="Timezone" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
                 {TIMEZONES.map((tz) => (
                   <option key={tz} value={tz}>{tz}</option>
                 ))}
@@ -317,6 +321,8 @@ export default function BranchesPage() {
           </div>
           <Field label="Address">
             <Input
+              id="branch-address"
+              aria-label="Address"
               placeholder="Street, city"
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
@@ -328,6 +334,8 @@ export default function BranchesPage() {
             </Field>
             <Field label="Phone">
               <Input
+                id="branch-phone"
+                aria-label="Phone"
                 placeholder="98765 43210"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -336,6 +344,8 @@ export default function BranchesPage() {
           </div>
           <Field label="GST number">
             <Input
+              id="branch-gst-number"
+              aria-label="GST number"
               placeholder="e.g. 27ABCDE1234F1Z5"
               value={form.gst_number}
               onChange={(e) => setForm({ ...form, gst_number: e.target.value })}
@@ -355,6 +365,8 @@ export default function BranchesPage() {
           <Field label="Branch name">
             <Input
               required
+              id="branch-edit-name"
+              aria-label="Branch name"
               value={editForm.name}
               onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
             />
@@ -362,12 +374,14 @@ export default function BranchesPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Code">
               <Input
+                id="branch-edit-code"
+                aria-label="Code"
                 value={editForm.code}
                 onChange={(e) => setEditForm({ ...editForm, code: e.target.value })}
               />
             </Field>
             <Field label="Timezone">
-              <Select value={editForm.timezone} onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}>
+              <Select id="branch-edit-timezone" aria-label="Timezone" value={editForm.timezone} onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}>
                 {TIMEZONES.map((tz) => (
                   <option key={tz} value={tz}>{tz}</option>
                 ))}
@@ -376,6 +390,8 @@ export default function BranchesPage() {
           </div>
           <Field label="Address">
             <Input
+              id="branch-edit-address"
+              aria-label="Address"
               value={editForm.address}
               onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
             />
@@ -386,6 +402,8 @@ export default function BranchesPage() {
             </Field>
             <Field label="Phone">
               <Input
+                id="branch-edit-phone"
+                aria-label="Phone"
                 value={editForm.phone}
                 onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
               />
@@ -393,6 +411,8 @@ export default function BranchesPage() {
           </div>
           <Field label="GST number">
             <Input
+              id="branch-edit-gst-number"
+              aria-label="GST number"
               placeholder="e.g. 27ABCDE1234F1Z5"
               value={editForm.gst_number}
               onChange={(e) => setEditForm({ ...editForm, gst_number: e.target.value })}

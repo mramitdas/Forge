@@ -31,7 +31,7 @@ function CountryCodeSelect({
   onChange: (v: string) => void;
 }) {
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
+    <Select id="member-country-code" aria-label="Country code" value={value} onChange={(e) => onChange(e.target.value)}>
       {COUNTRY_CODES.map((c) => (
         <option key={c.dial} value={c.dial}>
           {c.dial} · {c.iso} · {c.name}
@@ -162,6 +162,8 @@ export default function MembersPage() {
           />
         </div>
         <Select
+          id="members-branch-filter"
+          aria-label="Filter by branch"
           value={branch}
           onChange={(e) => { setBranch(e.target.value); setPage(1); }}
           className="w-44"
@@ -327,6 +329,8 @@ export default function MembersPage() {
             <Field label="Branch">
               <Select
                 required
+                id="member-branch"
+                aria-label="Branch"
                 value={form.branchId}
                 onChange={(e) => setForm({ ...form, branchId: e.target.value })}
               >
@@ -338,6 +342,8 @@ export default function MembersPage() {
             </Field>
             <Field label="Intended plan">
               <Select
+                id="member-plan"
+                aria-label="Intended plan"
                 value={form.planId}
                 onChange={(e) => setForm({ ...form, planId: e.target.value })}
               >

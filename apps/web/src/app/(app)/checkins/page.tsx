@@ -214,14 +214,14 @@ function QuickCheckinCard() {
             )}
             <div className="grid grid-cols-2 gap-4">
               <Field label="Branch">
-                <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                <Select id="checkin-branch" aria-label="Branch" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </Select>
               </Field>
               <Field label="Source">
-                <Select value={source} onChange={(e) => setSource(e.target.value)}>
+                <Select id="checkin-source" aria-label="Source" value={source} onChange={(e) => setSource(e.target.value)}>
                   {sourceLabels.map((s) => (
                     <option key={s} value={sourceValue[s]}>{s}</option>
                   ))}

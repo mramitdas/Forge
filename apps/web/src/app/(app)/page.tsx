@@ -151,6 +151,8 @@ function OverviewHeader() {
           <Field label="Member">
             <div className="relative">
               <Input
+                id="quick-checkin-member"
+                aria-label="Member"
                 placeholder="Search member…"
                 value={member ? member.full_name || member.first_name : ""}
                 onChange={(e) => {
@@ -185,7 +187,7 @@ function OverviewHeader() {
           <div className="grid grid-cols-2 gap-4">
             {branches.length > 0 && (
               <Field label="Branch">
-                <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                <Select id="quick-checkin-branch" aria-label="Branch" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
@@ -193,7 +195,7 @@ function OverviewHeader() {
               </Field>
             )}
             <Field label="Source">
-              <Select value={source} onChange={(e) => setSource(e.target.value)}>
+              <Select id="quick-checkin-source" aria-label="Source" value={source} onChange={(e) => setSource(e.target.value)}>
                 <option value="biometric">Biometric</option>
                 <option value="qr">QR</option>
                 <option value="rfid">RFID</option>
