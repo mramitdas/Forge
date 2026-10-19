@@ -45,6 +45,11 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   page.setDefaultTimeout(60000);
+  let api = null;
+  let auth = null;
+  let roleId = null;
+  let condMemberId = null;
+  let condPlanId = null;
 
   try {
     // ── Login once via UI ──
@@ -56,12 +61,12 @@ async function main() {
     check("owner login lands on dashboard", true, page.url());
 
     // API session for fixtures (custom role, invoice payment).
-    const api = page.context().request;
+    api = page.context().request;
     const loginRes = await api.post(`${BASE}/api/v1/auth/login`, {
       data: { email: OWNER.email, password: OWNER.password },
     });
     const { access_token } = await loginRes.json();
-    const auth = { Authorization: `Bearer ${access_token}` };
+    auth = { Authorization: `Bearer ${access_token}` };
 
     // ── Overview dashboard ──
     await page.getByText(/good morning/i).waitFor({ timeout: 20000 });
@@ -168,6 +173,8 @@ async function main() {
       .first();
     await roleCard.waitFor({ timeout: 15000 });
     await must("roles: custom role visible in UI list", roleCard.getByText("2 permissions", { exact: true }).waitFor({ timeout: 10000 }));
+    const rolesList = await (await api.get(`${BASE}/api/v1/permissions/roles`, { headers: auth })).json();
+    roleId = (rolesList.find((r) => r.name === ROLE_NAME) || {}).id || null;
 
     // Cancel must reset modal state (no stale draft on reopen).
     await page.getByRole("button", { name: /new role/i }).click();
@@ -325,6 +332,8 @@ async function main() {
           data: { member_id: member.id, plan_id: plan.id, branch_id: branches[0].id },
         })
       ).json();
+      condMemberId = member.id;
+      condPlanId = plan.id;
       await api.post(`${BASE}/api/v1/plans/subscriptions/${sub.id}/activate`, { headers: auth });
       invoices = await (await api.get(`${BASE}/api/v1/invoices?page_size=100`, { headers: auth })).json();
       openInv = invoices.items.find((i) => i.status === "open" || i.status === "overdue");
@@ -393,6 +402,26 @@ async function main() {
       check("unexpected failure", false, String(err).slice(0, 200));
     }
   } finally {
+    if (auth && roleId) {
+      try {
+        const res = await api.delete(`${BASE}/api/v1/permissions/roles/${roleId}`, { headers: auth });
+        check("teardown: E2E role deleted", res.status() === 204 || res.status() === 404, `status ${res.status()}`);
+      } catch (e) {
+        check("teardown: E2E role deleted", false, String(e).slice(0, 200));
+      }
+    }
+    for (const [id, label, kind] of [
+      [condMemberId, "conditional member", "members"],
+      [condPlanId, "conditional plan", "plans"],
+    ]) {
+      if (!auth || !id) continue;
+      try {
+        const res = await api.delete(`${BASE}/api/v1/${kind}/${id}`, { headers: auth });
+        check(`teardown: ${label} deleted`, res.status() === 204 || res.status() === 404, `status ${res.status()}`);
+      } catch (e) {
+        check(`teardown: ${label} deleted`, false, String(e).slice(0, 200));
+      }
+    }
     await browser.close();
   }
 

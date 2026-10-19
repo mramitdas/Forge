@@ -31,6 +31,10 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   page.setDefaultTimeout(60000);
+  let api = null;
+  let auth = null;
+  let renewPlanId = null;
+  let upgradePlanId = null;
 
   try {
     await page.goto(`${BASE}/login`);
@@ -41,12 +45,12 @@ async function main() {
     check("owner login lands on dashboard", true, page.url());
 
     // Create a member via the API so the UI flow is exercised minimally.
-    const api = page.context().request;
+    api = page.context().request;
     const loginRes = await api.post(`${BASE}/api/v1/auth/login`, {
       data: { email: OWNER.email, password: OWNER.password },
     });
     const { access_token } = await loginRes.json();
-    const auth = { Authorization: `Bearer ${access_token}` };
+    auth = { Authorization: `Bearer ${access_token}` };
     const branches = await (await api.get(`${BASE}/api/v1/branches`, { headers: auth })).json();
     const branchId = branches[0].id;
     const created = await api.post(`${BASE}/api/v1/members`, {
@@ -77,6 +81,7 @@ async function main() {
       },
     });
     const plan = await planRes.json();
+    renewPlanId = plan.id;
     const subRes = await api.post(`${BASE}/api/v1/plans/subscribe`, {
       headers: auth,
       data: { member_id: member.id, plan_id: plan.id, branch_id: branchId },
@@ -96,6 +101,7 @@ async function main() {
         },
       })
     ).json();
+    upgradePlanId = upgradePlan.id;
 
     await page.goto(`${BASE}/members/${member.id}`);
     await must("member detail renders", page.getByRole("heading", { name: MEMBER_NAME }).waitFor({ timeout: 15000 }));
@@ -165,6 +171,20 @@ async function main() {
       check("unexpected failure", false, String(err).slice(0, 200));
     }
   } finally {
+    if (auth) {
+      for (const [id, label] of [
+        [renewPlanId, "Renew Plan"],
+        [upgradePlanId, "Upgrade Plan"],
+      ]) {
+        if (!id) continue;
+        try {
+          const res = await api.delete(`${BASE}/api/v1/plans/${id}`, { headers: auth });
+          check(`teardown: ${label} deleted`, res.status() === 204 || res.status() === 404, `status ${res.status()}`);
+        } catch (e) {
+          check(`teardown: ${label} deleted`, false, String(e).slice(0, 200));
+        }
+      }
+    }
     await browser.close();
   }
 

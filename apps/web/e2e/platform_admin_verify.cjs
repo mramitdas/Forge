@@ -118,6 +118,15 @@ async function main() {
     const bannerCount = await page.getByText(/Viewing the gym workspace as/).count();
     check("exit impersonation returns to platform", bannerCount === 0, page.url());
 
+    // ── Subscriptions: change tier via overview dropdown (this run's gym only) ──
+    await page.goto(`${BASE}/platform`);
+    await page.getByText("Gym subscriptions").waitFor({ timeout: 10000 });
+    const tierRow = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
+    await tierRow.waitFor({ timeout: 15000 });
+    const tierSelect = tierRow.locator("select").first();
+    await tierSelect.selectOption({ label: "Pro" });
+    await must("subscription tier changed via overview dropdown", page.getByText("Subscription tier updated").waitFor({ timeout: 10000 }));
+
     // ── Gyms: delete (must run after owner tests since it disables the owner) ──
     await page.goto(`${BASE}/platform/gyms`);
     const delRow = page.locator("tr", { hasText: `Verify Gym ${ts}` }).first();
@@ -128,13 +137,6 @@ async function main() {
     await page.waitForTimeout(1000);
     const stillThere = await page.locator("tr", { hasText: `Verify Gym ${ts}` }).count();
     check("gym deleted from table", stillThere === 0, `remaining rows=${stillThere}`);
-
-    // ── Subscriptions: change tier via overview dropdown ──
-    await page.goto(`${BASE}/platform`);
-    await page.getByText("Gym subscriptions").waitFor({ timeout: 10000 });
-    const tierSelect = page.locator('table select').first();
-    await tierSelect.selectOption({ label: "Pro" });
-    await must("subscription tier changed via overview dropdown", page.getByText("Subscription tier updated").waitFor({ timeout: 10000 }));
 
     // ── Platform subscriptions: pricing cards + tier CRUD ──
     await page.goto(`${BASE}/platform/subscriptions`);

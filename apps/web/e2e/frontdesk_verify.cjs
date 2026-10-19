@@ -35,6 +35,12 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   page.setDefaultTimeout(60000);
+  let api = null;
+  let auth = null;
+  let memberAId = null;
+  let memberBId = null;
+  let planAId = null;
+  let planBId = null;
 
   try {
     await page.goto(`${BASE}/login`);
@@ -45,10 +51,10 @@ async function main() {
     check("owner login lands on dashboard", true, page.url());
 
     // ── API fixtures: 2 members, 2 plans, sub A (activated), sub B (pending) ──
-    const api = page.context().request;
+    api = page.context().request;
     const loginRes = await api.post(`${BASE}/api/v1/auth/login`, { data: OWNER });
     const { access_token } = await loginRes.json();
-    const auth = { Authorization: `Bearer ${access_token}` };
+    auth = { Authorization: `Bearer ${access_token}` };
     async function post(path, data) {
       const res = await api.post(`${BASE}/api/v1${path}`, { headers: auth, data });
       return { status: res.status(), body: await res.json() };
@@ -105,6 +111,10 @@ async function main() {
     const invB = await (
       await api.get(`${BASE}/api/v1/invoices?member_id=${memberB.body.id}&page_size=100`, { headers: auth })
     ).json();
+    memberAId = memberA.body.id;
+    memberBId = memberB.body.id;
+    planAId = planA.body.id;
+    planBId = planB.body.id;
     const invAOpen = invA.items.find((i) => i.status === "open");
     const invBOpen = invB.items.find((i) => i.status === "open");
     const fixturesOk =
@@ -261,6 +271,23 @@ async function main() {
       check("unexpected failure", false, String(err).slice(0, 300));
     }
   } finally {
+    // Teardown: member deletes cascade subs/invoices/payments/check-ins.
+    if (auth) {
+      for (const [kind, id, label] of [
+        ["members", memberAId, "member A"],
+        ["members", memberBId, "member B"],
+        ["plans", planAId, "plan A"],
+        ["plans", planBId, "plan B"],
+      ]) {
+        if (!id) continue;
+        try {
+          const res = await api.delete(`${BASE}/api/v1/${kind}/${id}`, { headers: auth });
+          check(`teardown: ${label} deleted`, res.status() === 204 || res.status() === 404, `status ${res.status()}`);
+        } catch (e) {
+          check(`teardown: ${label} deleted`, false, String(e).slice(0, 200));
+        }
+      }
+    }
     await browser.close();
   }
 
