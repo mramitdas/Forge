@@ -260,6 +260,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       canAny(perms, Array.isArray(item.perm) ? item.perm : [item.perm]),
   );
   const visibleNav = isPlatform ? platformNav : gymNav;
+  // Longest-prefix match so a parent route (e.g. /platform) doesn't stay
+  // active on its children (/platform/gyms). Tenant siblings never prefix one
+  // another, so this is a no-op for the workspace nav.
+  const activeHref = visibleNav.reduce<string | null>((best, item) => {
+    const matches =
+      item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+    if (!matches) return best;
+    if (best === null || item.href.length > best.length) return item.href;
+    return best;
+  }, null);
   const current = nav.find((item) =>
     item.href === "/" ? pathname === "/" : pathname.startsWith(item.href),
   );
@@ -297,8 +307,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
           {visibleNav.map((item) => {
-            const active =
-              item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const active = item.href === activeHref;
             return (
               <Link
                 key={item.href}
