@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { Async, Count } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
+import { ApiError } from "@/lib/api";
 import { CURRENCIES, currencyByCode } from "@/lib/currencies";
 import { TIMEZONES } from "@/lib/timezones";
 import {
@@ -37,6 +38,8 @@ export default function PlatformGymsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<GymOut | null>(null);
   const [deleting, setDeleting] = useState<GymOut | null>(null);
+  const [attach, setAttach] = useState<GymOut | null>(null);
+  const [attachTier, setAttachTier] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -121,12 +124,41 @@ export default function PlatformGymsPage() {
       .catch(() => setToast("Could not update gym"));
   }
 
+  function openAttach(gym: GymOut) {
+    setAttachTier("");
+    setAttach(gym);
+  }
+
   function restore(gym: GymOut) {
+    const current = tiers.find((t) => t.code === gym.tier_code);
+    if (!current || !current.is_active) {
+      openAttach(gym);
+      return;
+    }
+    doRestore(gym);
+  }
+
+  function doRestore(gym: GymOut, tierCode?: string) {
     restoreGym.mutate(
-      { gymId: gym.id },
+      { gymId: gym.id, tierCode },
       {
-        onSuccess: () => setToast(`${gym.name} restored`),
-        onError: () => setToast("Could not restore gym"),
+        onSuccess: () => {
+          setAttach(null);
+          setToast(`${gym.name} restored`);
+        },
+        onError: (err) => {
+          // The tier vanished or was disabled between page load and the
+          // click — offer the attach dialog instead of a dead-end toast.
+          if (
+            tierCode === undefined &&
+            err instanceof ApiError &&
+            (err.code === "TIER_MISSING" || err.code === "TIER_DISABLED")
+          ) {
+            openAttach(gym);
+            return;
+          }
+          setToast("Could not restore gym");
+        },
       },
     );
   }
@@ -360,6 +392,51 @@ export default function PlatformGymsPage() {
             <Button type="button" variant="secondary" onClick={() => setDeleting(null)}>Cancel</Button>
             <Button type="button" variant="danger" disabled={deleteGym.isPending} onClick={confirmDelete}>
               {deleteGym.isPending ? "Deleting…" : "Delete gym"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!attach}
+        onClose={() => setAttach(null)}
+        title="Attach a subscription"
+        subtitle={attach?.name ?? ""}
+      >
+        <div className="space-y-4">
+          <p className="text-[13px] text-ink-soft">
+            This gym&apos;s subscription is no longer available. Pick an active
+            subscription to re-activate {attach?.name} with.
+          </p>
+          <Field label="Subscription tier">
+            <Select
+              id="attach-tier"
+              aria-label="Subscription tier"
+              value={attachTier}
+              onChange={(e) => setAttachTier(e.target.value)}
+            >
+              <option value="">Select a tier…</option>
+              {tiers
+                .filter((t) => t.is_active)
+                .map((t) => (
+                  <option key={t.code} value={t.code}>
+                    {t.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setAttach(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!attachTier || restoreGym.isPending}
+              onClick={() => {
+                if (attach) doRestore(attach, attachTier);
+              }}
+            >
+              {restoreGym.isPending ? "Restoring…" : "Restore gym"}
             </Button>
           </div>
         </div>
