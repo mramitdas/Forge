@@ -93,3 +93,21 @@ Two gaps left by the gym soft-delete recovery round:
   scenario creates custom tier `gymt-${ts}`, assigns, deletes gym, deletes
   that tier (must succeed), Show deleted → Restore → attach modal → pick
   active tier → toast → gym reappears. Full 7-script battery after.
+
+## Addendum: usage guard on tier disable (2026-10-19 follow-up)
+
+`update_tier` gains the same live-gym check `delete_tier` already has:
+a **disable transition** (`is_active: false` while the tier is currently
+active) counts live gyms (`deleted_at IS NULL`) on the tier → 409
+`TIER_IN_USER`→ actually `TIER_IN_USE`, message *"Tier is still referenced by
+gyms; re-point those gyms before disabling"*. Re-enabling and all other
+field edits (name/price/limits) stay unguarded.
+
+- UI: subscriptions-page toggle appends the server message to its error
+  toast (`Could not update tier: …`) so the operator sees why; the switch
+  already reverts (server-driven state).
+- E2E: platform gate +1 check — toggling the in-use `starter` tier shows
+  the error toast and leaves the switch on (28 → 29).
+- Tests: new pytest for the 409; `test_disabled_tier_blocks_assignment`
+  reworked onto its own unused custom tier (it previously disabled `pro`,
+  which a live gym references).
