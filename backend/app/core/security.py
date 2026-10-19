@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -12,6 +13,26 @@ from app.core.config import get_settings
 from app.core.errors import UnauthenticatedError
 
 _hasher = PasswordHasher(time_cost=2, memory_cost=19 * 1024, parallelism=1)
+
+
+def password_rule_failures(password: str) -> list[str]:
+    """Return the complexity rule codes `password` fails.
+
+    Codes: uppercase, lowercase, digit, special, length. Mirrored on the
+    frontend by apps/web/src/lib/password.ts (keep in sync).
+    """
+    failures: list[str] = []
+    if not re.search(r"[A-Z]", password):
+        failures.append("uppercase")
+    if not re.search(r"[a-z]", password):
+        failures.append("lowercase")
+    if not re.search(r"\d", password):
+        failures.append("digit")
+    if not re.search(r"[^A-Za-z0-9]", password):
+        failures.append("special")
+    if len(password) < 8:
+        failures.append("length")
+    return failures
 
 
 def hash_password(password: str) -> str:

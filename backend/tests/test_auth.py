@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.core.security import hash_password
 from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
 from app.db.session import get_sessionmaker
 from app.modules.identity.models import Credential, User
@@ -302,6 +303,21 @@ async def _set_must_change(client, *, flag: bool) -> str:
     return login_res.json()["access_token"]
 
 
+async def _restore_password(email: str, password: str) -> None:
+    """Direct-DB reset of a shared-fixture password (the API rejects weak
+    passwords now, so tests can't round-trip back to owner-pass-123)."""
+    maker = get_sessionmaker()
+    token_ctx = set_tenant_context(TenantContext(tenant_id=None, platform_scope=True))
+    async with maker() as session:
+        await session.begin()
+        user_id = await session.scalar(select(User.id).where(User.email == email))
+        cred = await session.scalar(select(Credential).where(Credential.user_id == user_id))
+        cred.password_hash = hash_password(password)
+        cred.must_change = False
+        await session.commit()
+    reset_tenant_context(token_ctx)
+
+
 async def test_must_change_blocks_protected_routes(client, gym_a):
     token = await _set_must_change(client, flag=True)
     res = await client.get(
@@ -321,7 +337,7 @@ async def test_change_password_clears_flag_and_rotates(client, gym_a):
     res = await client.post(
         "/api/v1/auth/change-password",
         headers={"Authorization": f"Bearer {token}"},
-        json={"current_password": "owner-pass-123", "new_password": "owner-pass-123"},
+        json={"current_password": "owner-pass-123", "new_password": "Owner-Pass-123!"},
     )
     assert res.status_code == 200, res.text
     body = res.json()
@@ -331,13 +347,16 @@ async def test_change_password_clears_flag_and_rotates(client, gym_a):
     ok = await client.get("/api/v1/members", headers=new_headers)
     assert ok.status_code == 200, ok.text
 
-    # Flag is cleared in the DB too — a fresh login is fully unblocked.
+    # Flag is cleared in the DB too — a fresh login with the NEW password works.
     login_res = await client.post(
         "/api/v1/auth/login",
-        json={"email": "owner-gyma@example.com", "password": "owner-pass-123"},
+        json={"email": "owner-gyma@example.com", "password": "Owner-Pass-123!"},
     )
     assert login_res.status_code == 200
     assert login_res.json()["must_change"] is False
+    # Restore the shared fixture password (direct DB — the API can't set a
+    # weak password anymore).
+    await _restore_password("owner-gyma@example.com", "owner-pass-123")
 
 
 async def test_change_password_rejects_wrong_current(client, gym_a):
@@ -431,7 +450,7 @@ async def test_change_password_revokes_old_refresh_token(client, gym_a):
     res = await client.post(
         "/api/v1/auth/change-password",
         headers={"Authorization": f"Bearer {tokens['access_token']}"},
-        json={"current_password": "owner-pass-123", "new_password": "owner-pass-123"},
+        json={"current_password": "owner-pass-123", "new_password": "Owner-Pass-123!"},
     )
     assert res.status_code == 200, res.text
 
@@ -445,4 +464,43 @@ async def test_change_password_revokes_old_refresh_token(client, gym_a):
     )
     assert rotated.status_code == 200, rotated.text
 
+    await _restore_password("owner-gyma@example.com", "owner-pass-123")
     await _set_must_change(client, flag=False)
+
+
+async def test_change_password_rejects_weak_new(client, gym_a):
+    token = await _set_must_change(client, flag=False)
+    weak_samples = [
+        ("alllowercase1!", ["uppercase"]),
+        ("ALLUPPERCASE1!", ["lowercase"]),
+        ("NoDigits!!xx", ["digit"]),
+        ("NoSpecial123", ["special"]),
+        ("Ab1!", ["length"]),
+        ("owner-pass-123", ["uppercase"]),
+    ]
+    for weak, expected_failed in weak_samples:
+        res = await client.post(
+            "/api/v1/auth/change-password",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"current_password": "owner-pass-123", "new_password": weak},
+        )
+        assert res.status_code == 422, (weak, res.text)
+        body = res.json()["error"]
+        assert body["code"] == "PASSWORD_TOO_WEAK", (weak, body)
+        assert body["details"]["failed"] == expected_failed, (weak, body["details"])
+
+
+async def test_change_password_accepts_strong_new(client, gym_a):
+    token = await _set_must_change(client, flag=False)
+    res = await client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "owner-pass-123", "new_password": "Owner-Pass-123!"},
+    )
+    assert res.status_code == 200, res.text
+    login_res = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "owner-gyma@example.com", "password": "Owner-Pass-123!"},
+    )
+    assert login_res.status_code == 200, login_res.text
+    await _restore_password("owner-gyma@example.com", "owner-pass-123")

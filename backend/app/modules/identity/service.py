@@ -19,6 +19,7 @@ from app.core.security import (
     create_access_token,
     generate_refresh_token,
     hash_password,
+    password_rule_failures,
     verify_password,
 )
 from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
@@ -244,6 +245,13 @@ async def change_password(
     user, credential = row
     if not verify_password(current_password, credential.password_hash):
         raise ValidationError("Current password is incorrect", code="INVALID_CURRENT_PASSWORD")
+    failures = password_rule_failures(new_password)
+    if failures:
+        raise ValidationError(
+            "Password does not meet the complexity requirements",
+            code="PASSWORD_TOO_WEAK",
+            details={"failed": failures},
+        )
     credential.password_hash = hash_password(new_password)
     credential.must_change = False
     records = await session.scalars(
