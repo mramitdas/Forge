@@ -64,7 +64,14 @@ async function main() {
     await page.locator('input[type="number"]').fill("25000");
     await page.getByRole("button", { name: "Save expense" }).click();
     await page.getByText("Expense recorded").waitFor({ timeout: 10000 });
-    await page.waitForTimeout(500);
+    // The toast fires before the invalidation-refetch settles the list (two
+    // queries are now invalidated on create) — wait for the exact expected
+    // row count instead of a fixed sleep that can lose the race.
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("table tbody tr").length === n,
+      startsAt + 1,
+      { timeout: 15000 },
+    );
     check("expense created via modal", (await rowCount(page)) === startsAt + 1);
 
     // Row content: ₹25,000 rendered with inr formatting
@@ -88,7 +95,13 @@ async function main() {
     await page.locator("table tbody tr", { hasText: "₹25,000" }).first()
       .getByRole("button", { name: "Delete" }).click();
     await page.getByText("Expense deleted").waitFor({ timeout: 10000 });
-    await page.waitForTimeout(500);
+    // Same race as create: the toast precedes the refetch that drops the row
+    // — wait for the list to settle back to the starting count.
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("table tbody tr").length === n,
+      startsAt,
+      { timeout: 15000 },
+    );
     check("expense deleted", (await rowCount(page)) === startsAt);
 
     // ── Imported gym: 58 GMS expenses, categories, total ──

@@ -220,6 +220,12 @@ async function main() {
     await page.waitForURL(/\/billing$/, { timeout: 10000 });
     const voidRow = page.locator("tbody tr", { hasText: invBOpen.number });
     await must("invoice B voided via detail UI (Void badge on billing list)", voidRow.first().getByText("Void", { exact: true }).waitFor({ timeout: 15000 }), invBOpen.number);
+    const voidPayNow = voidRow.first().getByRole("button", { name: "Pay now" });
+    check(
+      "billing: void invoice shows no Pay now button",
+      (await voidPayNow.count()) === 0,
+      invBOpen.number,
+    );
 
     // ── 4. Subscriptions ──
     await page.goto(`${BASE}/subscriptions`);

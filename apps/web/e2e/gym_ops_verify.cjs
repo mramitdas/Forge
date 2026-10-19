@@ -360,6 +360,34 @@ async function main() {
     await targetRow.locator("span.bg-accent").waitFor({ state: "detached", timeout: 15000 });
     check("notifications: mark-read clears unread indicator", unreadBefore >= 1, `unread before=${unreadBefore}`);
     await must("notifications: single mark-read shows toast", page.getByText("Notification marked as read", { exact: true }).waitFor({ timeout: 10000 }));
+
+    // Mark-all coverage: the single mark-read above may have been the last
+    // unread (button then disabled — unread===0) or other unread rows may
+    // remain (earlier runs / async outbox deliveries). Both are the same
+    // passing outcome: click mark-all when anything is unread, then require
+    // zero unread dots anywhere in the list. Scoped to notification row
+    // buttons — the only <button>s on this page containing span.bg-accent
+    // dots (nav badges are <a> links, filter chips have no such span).
+    const unreadDots = page
+      .locator("button", { has: page.locator("span.bg-accent") })
+      .locator("span.bg-accent");
+    const markAllBtn = page.getByRole("button", { name: /mark all read/i });
+    const dotsBefore = await unreadDots.count();
+    if (dotsBefore > 0) {
+      await markAllBtn.click();
+    }
+    await must(
+      "notifications: mark-all clears every remaining unread dot",
+      unreadDots.first().waitFor({ state: "detached", timeout: 15000 }),
+      dotsBefore > 0
+        ? `clicked mark-all, unread dots before=${dotsBefore}`
+        : "already all read after single mark-read",
+    );
+    check(
+      "notifications: mark-all button reachable",
+      (await markAllBtn.count()) > 0,
+      dotsBefore > 0 ? "mark-all clicked" : "mark-all present but disabled (unread=0)",
+    );
   } catch (err) {
     if (!(err && typeof err === "object" && err.named)) {
       check("unexpected failure", false, String(err).slice(0, 200));
