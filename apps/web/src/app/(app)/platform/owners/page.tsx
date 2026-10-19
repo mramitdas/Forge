@@ -145,13 +145,13 @@ export default function PlatformOwnersPage() {
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit gym owner" subtitle={editing?.gym_name ?? ""}>
         <form onSubmit={saveEdit} className="space-y-4">
           <Field label="Full name">
-            <Input required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            <Input required id="owner-full-name" aria-label="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           </Field>
           <Field label="Email">
-            <Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input required id="owner-email" aria-label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
           <Field label="Reset password">
-            <Input type="text" placeholder="Leave blank to keep current" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <Input id="owner-reset-password" aria-label="Reset password" type="text" placeholder="Leave blank to keep current" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>

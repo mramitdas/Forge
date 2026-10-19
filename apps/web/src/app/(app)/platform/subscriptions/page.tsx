@@ -128,6 +128,8 @@ function TierFormModal({
             <Field label="Code">
               <Input
                 required
+                id="tier-code"
+                aria-label="Code"
                 pattern="[a-z0-9-]+"
                 placeholder="e.g. premium"
                 value={form.code}
@@ -138,6 +140,8 @@ function TierFormModal({
           <Field label="Name">
             <Input
               required
+              id="tier-name"
+              aria-label="Name"
               placeholder="e.g. Premium"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -147,6 +151,8 @@ function TierFormModal({
             <Field label="Monthly price (₹)">
               <Input
                 type="number"
+                id="tier-monthly-price"
+                aria-label="Monthly price (₹)"
                 min={0}
                 placeholder="e.g. 799"
                 value={form.price_minor}
@@ -156,6 +162,8 @@ function TierFormModal({
             <Field label="Max branches">
               <Input
                 type="number"
+                id="tier-max-branches"
+                aria-label="Max branches"
                 min={1}
                 placeholder="Empty = unlimited"
                 value={form.max_branches}
@@ -167,6 +175,8 @@ function TierFormModal({
             <Field label="Max members">
               <Input
                 type="number"
+                id="tier-max-members"
+                aria-label="Max members"
                 min={1}
                 placeholder="Empty = unlimited"
                 value={form.max_members}
@@ -175,6 +185,8 @@ function TierFormModal({
             </Field>
             <Field label="Description">
               <Input
+                id="tier-description"
+                aria-label="Description"
                 placeholder="e.g. For growing operators"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}

@@ -140,6 +140,8 @@ function GymSubscriptions() {
                 <td className="px-4 py-3">
                   <Select
                     value={s.tier_code}
+                    id="platform-tier-select"
+                    aria-label="Tier"
                     disabled={changeTier.isPending}
                     onChange={(e) => changeTierFor(s.gym_id, e.target.value)}
                     className="h-8 w-[140px] px-2 text-[12px] capitalize"

@@ -217,14 +217,14 @@ export default function PlatformGymsPage() {
         <form onSubmit={provisionGym} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Gym name">
-              <Input required placeholder="e.g. Iron Temple" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input required id="gym-name" aria-label="Gym name" placeholder="e.g. Iron Temple" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </Field>
             <Field label="Slug">
-              <Input required placeholder="e.g. iron-temple" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
+              <Input required id="gym-slug" aria-label="Slug" placeholder="e.g. iron-temple" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
             </Field>
           </div>
           <Field label="Tier">
-            <Select value={form.tier_code} onChange={(e) => setForm({ ...form, tier_code: e.target.value })}>
+            <Select id="gym-tier" aria-label="Tier" value={form.tier_code} onChange={(e) => setForm({ ...form, tier_code: e.target.value })}>
               {tiers.filter((t) => t.is_active).map((t) => (
                 <option key={t.code} value={t.code}>{t.name}</option>
               ))}
@@ -232,14 +232,14 @@ export default function PlatformGymsPage() {
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Owner name">
-              <Input required placeholder="e.g. Aisha Kapoor" value={form.owner_name} onChange={(e) => setForm({ ...form, owner_name: e.target.value })} />
+              <Input required id="gym-owner-name" aria-label="Owner name" placeholder="e.g. Aisha Kapoor" value={form.owner_name} onChange={(e) => setForm({ ...form, owner_name: e.target.value })} />
             </Field>
             <Field label="Owner email">
-              <Input required type="email" placeholder="owner@gym.com" value={form.owner_email} onChange={(e) => setForm({ ...form, owner_email: e.target.value })} />
+              <Input required id="gym-owner-email" aria-label="Owner email" type="email" placeholder="owner@gym.com" value={form.owner_email} onChange={(e) => setForm({ ...form, owner_email: e.target.value })} />
             </Field>
           </div>
           <Field label="Owner password">
-            <Input required type="text" placeholder="min 8 chars" value={form.owner_password} onChange={(e) => setForm({ ...form, owner_password: e.target.value })} />
+            <Input required id="gym-owner-password" aria-label="Owner password" type="text" placeholder="min 8 chars" value={form.owner_password} onChange={(e) => setForm({ ...form, owner_password: e.target.value })} />
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
@@ -253,11 +253,13 @@ export default function PlatformGymsPage() {
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit gym" subtitle={editing?.name ?? ""}>
         <form onSubmit={saveEdit} className="space-y-4">
           <Field label="Gym name">
-            <Input required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+            <Input required id="gym-edit-name" aria-label="Gym name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Timezone">
               <Select
+                id="gym-edit-timezone"
+                aria-label="Timezone"
                 value={editForm.timezone}
                 onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}
               >
@@ -275,6 +277,8 @@ export default function PlatformGymsPage() {
                   {currencyByCode(editForm.currency).cc}
                 </span>
                 <Select
+                  id="gym-edit-currency"
+                  aria-label="Currency"
                   value={editForm.currency}
                   onChange={(e) => setEditForm({ ...editForm, currency: e.target.value })}
                 >
@@ -288,7 +292,7 @@ export default function PlatformGymsPage() {
             </Field>
           </div>
           <Field label="Tier">
-            <Select value={editForm.tier_code} onChange={(e) => setEditForm({ ...editForm, tier_code: e.target.value })}>
+            <Select id="gym-edit-tier" aria-label="Tier" value={editForm.tier_code} onChange={(e) => setEditForm({ ...editForm, tier_code: e.target.value })}>
               {tiers
                 .filter((t) => t.is_active || t.code === editForm.tier_code)
                 .map((t) => (
