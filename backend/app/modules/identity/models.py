@@ -62,6 +62,12 @@ class User(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    first_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="", server_default=""
+    )
+    last_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="", server_default=""
+    )
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_platform: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -161,3 +167,11 @@ class UserRole(Base):
 
     user: Mapped[User] = relationship(back_populates="roles")
     role: Mapped[Role] = relationship(back_populates="assignments")
+
+
+def split_full_name(full_name: str) -> tuple[str, str]:
+    """Split a display name into (first, last). Single-word → last is ""."""
+    parts = full_name.strip().split(maxsplit=1)
+    if not parts:
+        return "", ""
+    return parts[0], parts[1] if len(parts) > 1 else ""

@@ -31,6 +31,7 @@ from app.modules.identity.models import (
     RolePermission,
     User,
     UserRole,
+    split_full_name,
 )
 from app.modules.identity.permissions import PERMISSIONS, ROLE_TEMPLATES, template_permission_codes
 from app.modules.identity.schemas import TokenResponse
@@ -420,10 +421,13 @@ async def create_employee(
     )
     if existing.first() is not None:
         raise ConflictError("User already exists", code="EMAIL_TAKEN")
+    first, last = split_full_name(full_name)
     user = User(
         tenant_id=tenant_id,
         email=email.lower(),
         full_name=full_name,
+        first_name=first,
+        last_name=last,
         phone=phone,
         is_active=True,
         is_platform=False,

@@ -11,7 +11,7 @@ from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.security import hash_password
 from app.kernel.events import bus
 from app.modules.identity import service as identity_svc
-from app.modules.identity.models import Credential, Role, User, UserRole
+from app.modules.identity.models import Credential, Role, User, UserRole, split_full_name
 from app.modules.identity.permissions import ROLE_TEMPLATES, template_permission_codes
 from app.modules.identity.schemas import TokenResponse
 from app.modules.identity.service import create_role
@@ -77,10 +77,13 @@ async def provision_gym(
         )
     )
 
+    owner_first, owner_last = split_full_name(owner_name)
     owner = User(
         tenant_id=gym.id,
         email=owner_email.lower(),
         full_name=owner_name,
+        first_name=owner_first,
+        last_name=owner_last,
         is_active=True,
         is_platform=False,
     )
