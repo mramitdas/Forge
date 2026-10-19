@@ -613,107 +613,25 @@ EMAIL_FROZEN on email changes."
 
 ---
 
-### Task 4: Frontend — `passwordChecks` util (TDD)
+### Task 4: Frontend — `passwordChecks` util (TDD) — DONE (`1f39754`)
 
 **Files:**
 - Create: `apps/web/src/lib/password.ts`
 - Test: `apps/web/src/lib/password.test.ts`
 
-- [ ] **Step 1: Write the failing test**
-
-Create `apps/web/src/lib/password.test.ts` (same node:test style as `src/lib/adapters.test.ts`):
+**Implemented API** (rule keys are the backend codes — `digit`, not `number`; keep in sync with `password_rule_failures`):
 
 ```ts
-import { test } from "node:test";
-import assert from "node:assert/strict";
-import { allChecksPass, passwordChecks } from "./password.ts";
-
-test("empty password fails everything", () => {
-  const c = passwordChecks("");
-  assert.deepEqual(c, {
-    uppercase: false,
-    lowercase: false,
-    number: false,
-    special: false,
-    length: false,
-  });
-  assert.equal(allChecksPass(c), false);
-});
-
-test("partial password: only its rules pass", () => {
-  const c = passwordChecks("abc1!");
-  assert.equal(c.uppercase, false);
-  assert.equal(c.lowercase, true);
-  assert.equal(c.number, true);
-  assert.equal(c.special, true);
-  assert.equal(c.length, false); // 5 chars
-  assert.equal(allChecksPass(c), false);
-});
-
-test("strong password passes every rule", () => {
-  const c = passwordChecks("Owner-Pass-123!");
-  assert.deepEqual(c, {
-    uppercase: true,
-    lowercase: true,
-    number: true,
-    special: true,
-    length: true,
-  });
-  assert.equal(allChecksPass(c), true);
-});
-
-test("hyphen and space count as special; digits do not satisfy upper/lower", () => {
-  assert.equal(passwordChecks("AAAA-BBBB12").special, true);
-  assert.equal(passwordChecks("AAAA BBBB12").special, true);
-  assert.equal(passwordChecks("ABCDEFGHIJ1!").lowercase, false);
-});
+export type PasswordRule = "uppercase" | "lowercase" | "digit" | "special" | "length";
+export type PasswordChecks = Record<PasswordRule, boolean>;
+export type PasswordCheckResult = { checks: PasswordChecks; failed: PasswordRule[] };
+export function passwordChecks(password: string): PasswordCheckResult;
+export function allChecksPass(result: PasswordCheckResult): boolean;
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+`failed` is ordered by `RULE_ORDER` (uppercase, lowercase, digit, special, length) and mirrors the backend's `details.failed` lists exactly. Frontend is equal-or-stricter than backend on unicode (JS `\d` is ASCII-only; Python `\d` matches Unicode Nd) — safe direction, pinned by a unit test.
 
-Run: `cd apps/web && npm test`
-Expected: FAIL — cannot resolve `./password.ts`.
-
-- [ ] **Step 3: Implement the util**
-
-Create `apps/web/src/lib/password.ts`:
-
-```ts
-// Mirrors backend/app/core/security.py:password_rule_failures — keep in sync.
-export interface PasswordChecks {
-  uppercase: boolean;
-  lowercase: boolean;
-  number: boolean;
-  special: boolean;
-  length: boolean;
-}
-
-export function passwordChecks(pw: string): PasswordChecks {
-  return {
-    uppercase: /[A-Z]/.test(pw),
-    lowercase: /[a-z]/.test(pw),
-    number: /[0-9]/.test(pw),
-    special: /[^A-Za-z0-9]/.test(pw),
-    length: pw.length >= 8,
-  };
-}
-
-export function allChecksPass(c: PasswordChecks): boolean {
-  return c.uppercase && c.lowercase && c.number && c.special && c.length;
-}
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `cd apps/web && npm test`
-Expected: all pass (was 10; expect 14).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add apps/web/src/lib/password.ts apps/web/src/lib/password.test.ts
-git commit -m "feat(web): passwordChecks util + unit tests"
-```
+Tests: empty → all five failed; 7 weak samples with exact `failed` arrays; strong passwords pass; 7-vs-8 length boundary; unicode Arabic-Indic digit not counted; canonical order pinned. Lib tests: 10 → 15.
 
 ---
 
@@ -931,7 +849,7 @@ export default function PlatformSettings() {
 - [ ] **Step 3: Type-check + platform gate (hooks.ts is a shared frozen-surface file)**
 
 Run: `cd apps/web && npx tsc --noEmit && npm test`
-Expected: clean / 14 pass.
+Expected: clean / 15 pass.
 
 Run: `cd apps/web && NODE_PATH="$(npm root -g)" node e2e/platform_admin_verify.cjs`
 Expected: 30/30 (gate untouched by this task; runs because `hooks.ts` changed).
@@ -959,22 +877,22 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useUpdateMe } from "@/lib/hooks";
 import { allChecksPass, passwordChecks } from "@/lib/password";
-import type { PasswordChecks } from "@/lib/password";
+import type { PasswordRule } from "@/lib/password";
 import type { TokenResponse } from "@/lib/types";
 ```
 
 Add the checklist component above `export default function PlatformSettings`:
 
 ```tsx
-const CHECK_ROWS: { key: keyof PasswordChecks; label: string }[] = [
+const CHECK_ROWS: { key: PasswordRule; label: string }[] = [
   { key: "uppercase", label: "Uppercase letter" },
   { key: "lowercase", label: "Lowercase letter" },
-  { key: "number", label: "Number" },
+  { key: "digit", label: "Number" },
   { key: "special", label: "Special character" },
   { key: "length", label: "At least 8 characters" },
 ];
 
-function PasswordChecklist({ checks }: { checks: PasswordChecks }) {
+function PasswordChecklist({ checks }: { checks: Record<PasswordRule, boolean> }) {
   return (
     <ul className="mt-2 space-y-1" aria-label="Password strength">
       {CHECK_ROWS.map((row) => (
@@ -1003,9 +921,9 @@ Inside the component, after the profile state, add password state + derived flag
   const [currentError, setCurrentError] = useState<string | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
 
-  const checks = passwordChecks(next);
+  const result = passwordChecks(next);
   const canSubmitPassword =
-    allChecksPass(checks) && next === confirm && next.length > 0 && current.length > 0;
+    allChecksPass(result) && next === confirm && next.length > 0 && current.length > 0;
 ```
 
 Add the submit handler (after `saveProfile`):
@@ -1075,7 +993,7 @@ Replace the `{/* Password card added in Task 7. */}` placeholder with:
                 onChange={(e) => setNext(e.target.value)}
               />
             </Field>
-            <PasswordChecklist checks={checks} />
+            <PasswordChecklist checks={result.checks} />
           </div>
           <Field label="Confirm new password">
             <Input
@@ -1107,7 +1025,7 @@ Replace the `{/* Password card added in Task 7. */}` placeholder with:
 - [ ] **Step 2: Type-check + unit**
 
 Run: `cd apps/web && npx tsc --noEmit && npm test`
-Expected: clean / 14 pass.
+Expected: clean / 15 pass.
 
 - [ ] **Step 3: Manual smoke (dev server is running)**
 
@@ -1226,7 +1144,7 @@ Expected: 99 passed; ruff clean.
 - [ ] **Step 2: Frontend**
 
 Run: `cd apps/web && npx tsc --noEmit && npm test`
-Expected: clean; 14 pass.
+Expected: clean; 15 pass.
 
 - [ ] **Step 3: E2E battery (sequential)**
 

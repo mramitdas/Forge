@@ -32,6 +32,29 @@ test("boundary: 7 chars fails length, 8 chars passes length", () => {
   assert.equal(passwordChecks("Ab1!xyzw").failed.includes("length"), false);
 });
 
+test("length counts code points, not UTF-16 units (mirrors Python len)", () => {
+  // 8 UTF-16 units but 7 code points — emoji must not inflate the length.
+  assert.equal(passwordChecks("😀Ab1!xy").failed.includes("length"), true);
+  assert.equal(passwordChecks("😀😀Ab1!xy").failed.includes("length"), false);
+});
+
+test("checks map exposes every rule (the checklist renders these)", () => {
+  assert.deepEqual(passwordChecks("Ab1!xyzw").checks, {
+    uppercase: true,
+    lowercase: true,
+    digit: true,
+    special: true,
+    length: true,
+  });
+  assert.deepEqual(passwordChecks("abc").checks, {
+    uppercase: false,
+    lowercase: true,
+    digit: false,
+    special: false,
+    length: false,
+  });
+});
+
 test("unicode digits do NOT count as a digit (stricter than backend, which uses Python \\d)", () => {
   // Python re \d matches Unicode Nd (e.g. Arabic-Indic ١); JS /\d/ is ASCII-only.
   // Backend is therefore more lenient — frontend reject + backend accept is the

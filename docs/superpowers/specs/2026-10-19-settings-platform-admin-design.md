@@ -90,7 +90,7 @@ Gym users keep the existing page unchanged (byte-for-byte).
     - `PASSWORD_TOO_WEAK` (422) → toast listing failed rules (client blocks this; API defense only).
   - No role/permissions, granted-permissions, gym-profile, or danger-zone sections.
 - `src/app/(app)/settings/GymSettings.tsx` (new): today's page content moved **verbatim** (Profile full-name+email, Your role & permissions, Granted permissions, Gym profile, Branch access, Danger zone). All existing labels, ids, and selectors preserved so `gym_ops_verify.cjs` passes untouched.
-- `src/lib/password.ts` (new): pure `passwordChecks(pw: string): { uppercase, lowercase, number, special, length: boolean }`.
+- `src/lib/password.ts` (new): pure `passwordChecks(pw: string): { checks: PasswordChecks; failed: PasswordRule[] }` where rule keys are exactly the backend codes `uppercase | lowercase | digit | special | length` (keep in sync with `password_rule_failures`); `allChecksPass(result)` helper.
 - `src/lib/password.test.ts` (new): node:test unit matrix (empty, partial rules, all-pass, unicode edge).
 - `PasswordChecklist` small component colocated in `PlatformSettings.tsx` (or imported sibling).
 
