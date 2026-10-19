@@ -1113,3 +1113,14 @@ export function useCreateRole() {
     },
   });
 }
+
+export function useDeleteRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (roleId: string) =>
+      apiFetch<void>(`/permissions/roles/${roleId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["roles"] });
+    },
+  });
+}

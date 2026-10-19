@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, EmptyState, Input, Modal, Switch, Toast } from "@/components/ui";
 import { Async } from "@/components/skeleton";
 import { RoleCardSkeleton } from "@/components/skeletons";
-import { useCreateRole, usePermissionCatalog, useRoles, useUpdateRole } from "@/lib/hooks";
+import { useCreateRole, useDeleteRole, usePermissionCatalog, useRoles, useUpdateRole } from "@/lib/hooks";
 import { useInFlight } from "@/lib/inflight";
 
 const MODULE_LABELS: Record<string, string> = {
@@ -33,6 +33,9 @@ export default function RolesPage() {
   const [newDesc, setNewDesc] = useState("");
   const [newPerms, setNewPerms] = useState<Set<string>>(new Set());
   const addGuard = useInFlight();
+  const deleteRole = useDeleteRole();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const saveGuard = useInFlight();
 
   useEffect(() => {
     if (!initializedRef.current && roles.length > 0) {
@@ -81,16 +84,18 @@ export default function RolesPage() {
 
   async function save(roleId: string, name: string) {
     const codes = draft[roleId] ? [...draft[roleId]] : [];
-    setSaving(roleId);
-    try {
-      await updateRole.mutateAsync({ roleId, body: { permission_codes: codes } });
-      setDraft((d) => ({ ...d, [roleId]: new Set(codes) }));
-      setToast({ type: "success", message: `Saved ${name} permissions` });
-    } catch {
-      setToast({ type: "error", message: "Could not save role — it may be locked" });
-    } finally {
-      setSaving(null);
-    }
+    await saveGuard.run(async () => {
+      setSaving(roleId);
+      try {
+        await updateRole.mutateAsync({ roleId, body: { permission_codes: codes } });
+        setDraft((d) => ({ ...d, [roleId]: new Set(codes) }));
+        setToast({ type: "success", message: `Saved ${name} permissions` });
+      } catch {
+        setToast({ type: "error", message: "Could not save role — it may be locked" });
+      } finally {
+        setSaving(null);
+      }
+    });
   }
 
   function toggleNewPerm(code: string) {
@@ -133,6 +138,21 @@ export default function RolesPage() {
         setToast({ type: "error", message: "Could not create role" });
       }
     });
+  }
+
+  async function confirmDeleteRole() {
+    if (!deleteTarget) return;
+    try {
+      await deleteRole.mutateAsync(deleteTarget.id);
+      setToast({ type: "success", message: `${deleteTarget.name} deleted` });
+      setDeleteTarget(null);
+    } catch (err) {
+      const d = (err as { detail?: { message?: string; error?: { message?: string } } })?.detail;
+      setToast({
+        type: "error",
+        message: d?.error?.message ?? d?.message ?? "Could not delete role",
+      });
+    }
   }
 
   return (
@@ -199,14 +219,24 @@ export default function RolesPage() {
                   {role.description && <p className="text-[12px] text-ink-faint">{role.description}</p>}
                 </div>
               </div>
-              <div className="shrink-0">
+              <div className="flex shrink-0 items-center gap-2">
                 {role.is_editable && dirty && (
-                  <Button size="sm" disabled={saving === role.id} onClick={() => save(role.id, role.name)}>
+                  <Button size="sm" disabled={saving === role.id || saveGuard.busy} onClick={() => save(role.id, role.name)}>
                     {saving === role.id ? "Saving…" : `Save (${current.size} perms)`}
                   </Button>
                 )}
                 {role.is_editable && !dirty && (
                   <span className="text-[12px] text-ink-faint">{current.size} permissions</span>
+                )}
+                {role.is_editable && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red hover:bg-red-soft"
+                    onClick={() => setDeleteTarget({ id: role.id, name: role.name })}
+                  >
+                    Delete
+                  </Button>
                 )}
               </div>
             </div>
@@ -333,6 +363,30 @@ export default function RolesPage() {
               {createRole.isPending ? "Creating…" : `Create role (${newPerms.size} perms)`}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title={`Delete ${deleteTarget?.name ?? ""}?`}
+        subtitle="Staff assigned to this role will lose its permissions"
+      >
+        <p className="text-[13px] text-ink-soft">
+          Deleting {deleteTarget?.name ?? "this role"} is permanent and cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={deleteRole.isPending}
+            onClick={confirmDeleteRole}
+          >
+            Delete role
+          </Button>
         </div>
       </Modal>
 
