@@ -560,11 +560,12 @@ async def delete_tier(session: AsyncSession, *, code: str) -> None:
     in_use = await session.scalar(
         select(func.count())
         .select_from(Gym)
-        .where(Gym.tier_code == code, Gym.deleted_at.is_(None))
+        .where(Gym.tier_code == code)
     )
     if in_use:
         raise ConflictError(
-            "Tier is assigned to active gyms; disable it instead",
+            "Tier is still referenced by gyms (including deleted ones); "
+            "re-point those gyms before deleting",
             code="TIER_IN_USE",
         )
     await session.delete(tier)

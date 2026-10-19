@@ -469,3 +469,60 @@ async def test_delete_gym_cascades_members(client, platform_token):
             assert row.deleted_at is not None
     finally:
         reset_tenant_context(token_ctx)
+
+
+async def test_delete_tier_blocked_by_soft_deleted_gym(client, platform_token):
+    """A soft-deleted gym still referencing a tier must block its deletion."""
+    created = await client.post(
+        "/api/v1/platform/tiers",
+        headers=await _headers(platform_token),
+        json={"code": "ghost", "name": "Ghost", "max_branches": 1, "max_members": 10},
+    )
+    assert created.status_code == 201, created.text
+
+    gym = await provision_gym(client, platform_token, "ghostgym")
+    changed = await client.patch(
+        f"/api/v1/platform/subscriptions/{gym['id']}",
+        headers=await _headers(platform_token),
+        json={"tier_code": "ghost"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    deleted_gym = await client.delete(
+        f"/api/v1/platform/gyms/{gym['id']}",
+        headers=await _headers(platform_token),
+    )
+    assert deleted_gym.status_code == 204
+
+    # The gym is soft-deleted but still references 'ghost'. Deletion of the
+    # tier must be refused.
+    blocked = await client.delete(
+        "/api/v1/platform/tiers/ghost", headers=await _headers(platform_token)
+    )
+    assert blocked.status_code == 409
+
+    # A soft-deleted gym can't be re-pointed via the API (change_gym_tier
+    # returns 404 for deleted gyms), so re-point it with a direct DB write —
+    # this mirrors an operator cleaning up tombstoned rows before deleting a
+    # tier. Then the tier becomes deletable.
+    import uuid as _uuid
+
+    from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
+    from app.db.session import get_sessionmaker
+    from app.modules.tenancy.models import Gym
+
+    maker = get_sessionmaker()
+    token_ctx = set_tenant_context(TenantContext(tenant_id=_uuid.UUID(str(gym["id"]))))
+    try:
+        async with maker() as session:
+            await session.begin()
+            row = await session.get(Gym, gym["id"])
+            row.tier_code = "starter"
+            await session.commit()
+    finally:
+        reset_tenant_context(token_ctx)
+
+    allowed = await client.delete(
+        "/api/v1/platform/tiers/ghost", headers=await _headers(platform_token)
+    )
+    assert allowed.status_code == 204
