@@ -36,6 +36,8 @@ class UserOut(BaseModel):
     id: uuid.UUID
     email: EmailStr
     full_name: str
+    first_name: str = ""
+    last_name: str = ""
     phone: str | None
     is_active: bool
     is_platform: bool
@@ -76,10 +78,17 @@ class MeOut(BaseModel):
 class MeUpdateRequest(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=200)
     email: EmailStr | None = None
+    first_name: str | None = Field(default=None, min_length=1, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
 
     @field_validator("full_name", mode="before")
     @classmethod
     def normalize_name(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("first_name", "last_name", mode="before")
+    @classmethod
+    def normalize_split_names(cls, v: object) -> object:
         return v.strip() if isinstance(v, str) else v
 
 

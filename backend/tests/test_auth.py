@@ -523,3 +523,66 @@ async def test_change_password_wrong_current_checked_before_strength(client, gym
     )
     assert res.status_code == 422, res.text
     assert res.json()["error"]["code"] == "INVALID_CURRENT_PASSWORD"
+
+
+async def test_update_me_first_last_name(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    before = await client.get("/api/v1/auth/me", headers=headers)
+    assert before.status_code == 200
+    original = before.json()["user"]["full_name"]
+
+    res = await client.patch(
+        "/api/v1/auth/me",
+        headers=headers,
+        json={"first_name": "Ada", "last_name": "Lovelace"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()["user"]
+    assert body["first_name"] == "Ada"
+    assert body["last_name"] == "Lovelace"
+    assert body["full_name"] == "Ada Lovelace"
+
+    # Legacy full_name path keeps the split columns in sync too.
+    res2 = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"full_name": original}
+    )
+    assert res2.status_code == 200, res2.text
+    me = (await client.get("/api/v1/auth/me", headers=headers)).json()["user"]
+    assert me["full_name"] == original
+    parts = original.split(" ", 1)
+    assert me["first_name"] == parts[0]
+    assert me["last_name"] == (parts[1] if len(parts) > 1 else "")
+
+
+async def test_update_me_platform_email_frozen(client, platform_token):
+    headers = {"Authorization": f"Bearer {platform_token}"}
+    before = await client.get("/api/v1/auth/me", headers=headers)
+    assert before.status_code == 200
+    original_full = before.json()["user"]["full_name"]
+
+    # Split-name update works for platform actors.
+    res = await client.patch(
+        "/api/v1/auth/me",
+        headers=headers,
+        json={"first_name": "Frozen", "last_name": "Admin"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["user"]["full_name"] == "Frozen Admin"
+    assert res.json()["user"]["first_name"] == "Frozen"
+
+    # Email change is rejected for platform actors.
+    frozen = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"email": "not-frozen@example.com"}
+    )
+    assert frozen.status_code == 403, frozen.text
+    assert frozen.json()["error"]["code"] == "EMAIL_FROZEN"
+
+    # Email untouched after the rejected attempt.
+    me = (await client.get("/api/v1/auth/me", headers=headers)).json()
+    assert me["user"]["email"] == "platform@example.com"
+
+    # Restore the seeded name so later runs see the original state.
+    await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"full_name": original_full}
+    )

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import ForbiddenError
 from app.db.session import get_platform_session
 from app.deps import Actor, get_actor_context, get_session_for_actor, require_permission
 from app.modules.identity import service as identity_svc
@@ -111,11 +112,15 @@ async def update_me_route(
     actor: Annotated[Actor, Depends(get_actor_context)],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> MeOut:
+    if actor.is_platform and body.email is not None and body.email.lower() != actor.email:
+        raise ForbiddenError("Email can't be changed", code="EMAIL_FROZEN")
     user = await identity_svc.update_me(
         session,
         user_id=actor.user_id,
         full_name=body.full_name,
         email=body.email,
+        first_name=body.first_name,
+        last_name=body.last_name,
     )
     return await _me_payload(session, actor, user)
 

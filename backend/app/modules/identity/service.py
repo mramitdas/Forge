@@ -149,12 +149,23 @@ async def update_me(
     user_id: uuid.UUID,
     full_name: str | None = None,
     email: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
 ) -> User:
     user = await session.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise NotFoundError("User not found", code="NOT_FOUND")
-    if full_name is not None:
+    if first_name is not None or last_name is not None:
+        new_first = (first_name if first_name is not None else user.first_name).strip()
+        new_last = (last_name if last_name is not None else user.last_name).strip()
+        if not new_first:
+            raise ValidationError("First name is required", code="VALIDATION")
+        user.first_name = new_first
+        user.last_name = new_last
+        user.full_name = f"{new_first} {new_last}".strip()
+    elif full_name is not None:
         user.full_name = full_name.strip()
+        user.first_name, user.last_name = split_full_name(user.full_name)
     if email is not None:
         normalized = email.lower()
         if normalized != user.email and await _email_taken_elsewhere(
