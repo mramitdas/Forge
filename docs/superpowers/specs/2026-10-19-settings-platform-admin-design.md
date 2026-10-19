@@ -27,8 +27,8 @@ Gym users keep the existing page unchanged (byte-for-byte).
 ## 1. Data model & migration
 
 - `users` (identity module) gains:
-  - `first_name: String(100)` (nullable at DDL time, backfilled, new writes required non-null via app logic)
-  - `last_name: String(100)` (nullable at DDL time, backfilled; may be `""`)
+  - `first_name: String(100)` (NOT NULL, `server_default ""`, backfilled; app sets a value on every write path)
+  - `last_name: String(100)` (NOT NULL, `server_default ""`, backfilled; may be `""`)
 - Alembic migration:
   - Add both columns.
   - Backfill: split `full_name` on first space — `"Ada Lovelace"` → `Ada` / `Lovelace`; single-word → `first_name = full_name`, `last_name = ""`.

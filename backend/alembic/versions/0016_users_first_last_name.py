@@ -43,10 +43,10 @@ def upgrade() -> None:
     op.execute(
         """
         UPDATE users SET
-          first_name = split_part(full_name, ' ', 1),
+          first_name = btrim(split_part(full_name, ' ', 1)),
           last_name = CASE
             WHEN position(' ' IN full_name) > 0
-            THEN substring(full_name FROM position(' ' IN full_name) + 1)
+            THEN btrim(substring(full_name FROM position(' ' IN full_name) + 1))
             ELSE ''
           END
         """
@@ -54,5 +54,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("users", "last_name")
-    op.drop_column("users", "first_name")
+    op.drop_column("users", "last_name", if_exists=True)
+    op.drop_column("users", "first_name", if_exists=True)

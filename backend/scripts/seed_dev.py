@@ -17,7 +17,7 @@ from app.core.tenant import (
     set_tenant_context,
 )
 from app.db.session import get_sessionmaker
-from app.modules.identity.models import Credential, Role, User, UserRole
+from app.modules.identity.models import Credential, Role, User, UserRole, split_full_name
 from app.modules.identity.permissions import ROLE_TEMPLATES
 from app.modules.identity.service import assign_role, seed_platform_roles
 from app.modules.membership.service import create_plan
@@ -105,10 +105,13 @@ async def seed() -> None:
                 select(User.id).where(User.email == PLATFORM_EMAIL)
             )
             if existing.first() is None:
+                admin_first, admin_last = split_full_name("Platform Admin")
                 user = User(
                     tenant_id=uuid.UUID(settings.platform_tenant_id),
                     email=PLATFORM_EMAIL,
                     full_name="Platform Admin",
+                    first_name=admin_first,
+                    last_name=admin_last,
                     is_active=True,
                     is_platform=True,
                 )
@@ -215,10 +218,13 @@ async def seed() -> None:
                     if role_id is None:
                         print(f"role {staff['role_name']!r} not found, skipping")
                         continue
+                    staff_first, staff_last = split_full_name(staff["full_name"])
                     user = User(
                         tenant_id=gym_id,
                         email=staff["email"],
                         full_name=staff["full_name"],
+                        first_name=staff_first,
+                        last_name=staff_last,
                         is_active=True,
                         is_platform=False,
                     )

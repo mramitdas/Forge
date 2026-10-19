@@ -555,6 +555,7 @@ async def update_owner(
         user.email = email.lower()
     if full_name is not None:
         user.full_name = full_name
+        user.first_name, user.last_name = split_full_name(user.full_name)
     if is_active is not None:
         user.is_active = is_active
     if password is not None:
