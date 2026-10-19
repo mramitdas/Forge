@@ -296,27 +296,40 @@ async function main() {
 
     // Split-name save persists, then restore the seeded values so the
     // fixture full_name ("Platform Admin") stays intact for other runs.
-    await page.locator("#settings-last-name").fill("E2E Temp");
-    await page.getByRole("button", { name: "Save changes" }).click();
-    await must(
-      "settings: split-name save persists",
-      page.getByText("Profile updated").waitFor({ timeout: 10000 }),
-    );
-
-    // Toasts are manual-dismiss only — clear the one above so the wait
-    // below observes THIS save's toast, not the previous one.
-    const dismissToast = page.locator('button[aria-label="Dismiss"]');
-    if ((await dismissToast.count()) > 0) {
-      await dismissToast.click();
-      await dismissToast.waitFor({ state: "detached", timeout: 5000 });
+    // The restore runs in `finally` so a failed toast wait can never leave
+    // the shared fixture renamed (the next run would then die on the
+    // fixture-name assertion with no self-heal).
+    try {
+      await must(
+        "settings: split-name save persists",
+        (async () => {
+          await page.locator("#settings-last-name").fill("E2E Temp");
+          await page.getByRole("button", { name: "Save changes" }).click();
+          await page.getByText("Profile updated").waitFor({ timeout: 10000 });
+        })(),
+      );
+    } catch {
+      // must() already recorded this check as failed (and marked the error
+      // named); swallow it so the finally-block restore and the remaining
+      // checks still run and get reported.
+    } finally {
+      // Toasts are manual-dismiss only — clear any toast so the wait
+      // below observes THIS save's toast, not a previous one.
+      const dismissToast = page.locator('button[aria-label="Dismiss"]');
+      if ((await dismissToast.count()) > 0) {
+        await dismissToast.click();
+        await dismissToast.waitFor({ state: "detached", timeout: 5000 });
+      }
+      await must(
+        "settings: seeded names restored",
+        (async () => {
+          await page.locator("#settings-first-name").fill(seededFirst);
+          await page.locator("#settings-last-name").fill(seededLast);
+          await page.getByRole("button", { name: "Save changes" }).click();
+          await page.getByText("Profile updated").waitFor({ timeout: 10000 });
+        })(),
+      );
     }
-    await page.locator("#settings-first-name").fill(seededFirst);
-    await page.locator("#settings-last-name").fill(seededLast);
-    await page.getByRole("button", { name: "Save changes" }).click();
-    await must(
-      "settings: seeded names restored",
-      page.getByText("Profile updated").waitFor({ timeout: 10000 }),
-    );
 
     check(
       "settings: role/permissions sections absent",
