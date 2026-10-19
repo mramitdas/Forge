@@ -814,7 +814,12 @@ export function useMarkAllNotificationsRead() {
 
 export function useUpdateMe() {
   return useMutation({
-    mutationFn: (body: { full_name?: string; email?: string }) =>
+    mutationFn: (body: {
+      full_name?: string;
+      email?: string;
+      first_name?: string;
+      last_name?: string;
+    }) =>
       apiFetch<MeOut>("/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
   });
 }
