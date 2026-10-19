@@ -33,6 +33,7 @@ from app.modules.tenancy.schemas import (
     PlatformRevenueOut,
     PlatformSummaryOut,
     ProvisionGymRequest,
+    RestoreGymRequest,
     SubscriptionEventOut,
     SubscriptionTierCreate,
     SubscriptionTierOut,
@@ -136,8 +137,15 @@ async def restore_gym_endpoint(
     gym_id: str,
     actor: Annotated[Actor, Depends(require_permission("platform.gyms.update"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+    body: RestoreGymRequest | None = None,
 ) -> Gym:
-    return await restore_gym(session, gym_id=gym_id)
+    return await restore_gym(
+        session,
+        gym_id=gym_id,
+        tier_code=body.tier_code if body is not None else None,
+        actor_user_id=actor.user_id,
+        actor_email=actor.email,
+    )
 
 
 async def _owner_out(session: AsyncSession, user: User) -> GymOwnerOut:

@@ -231,12 +231,20 @@ async def restore_gym(
     session: AsyncSession,
     *,
     gym_id: uuid.UUID,
+    tier_code: str | None = None,
+    actor_user_id: uuid.UUID | None = None,
+    actor_email: str | None = None,
 ) -> Gym:
     """Un-soft-delete a gym and everything `delete_gym` cascaded.
 
     Restores only rows whose `deleted_at` matches the gym's `deleted_at`
     exactly — i.e. the set tombstoned by that single delete. Rows a user
     deleted later (different timestamp) are left deleted.
+
+    `tier_code` optionally re-attaches an active subscription for gyms
+    whose tier was deleted/disabled while they were tombstoned; all tier
+    validation runs before any un-tombstoning so a rejected request never
+    leaves a half-restored gym.
     """
     gym = await session.get(Gym, gym_id)
     if gym is None:
@@ -246,11 +254,18 @@ async def restore_gym(
 
     stamp = gym.deleted_at
 
-    tier = await session.get(SubscriptionTier, gym.tier_code)
-    if tier is None:
-        raise ConflictError("Gym's tier no longer exists", code="TIER_MISSING")
-    if not tier.is_active:
-        raise ConflictError("Gym's tier is disabled", code="TIER_DISABLED")
+    if tier_code is not None:
+        tier = await session.get(SubscriptionTier, tier_code)
+        if tier is None:
+            raise ConflictError("Unknown tier", code="UNKNOWN_TIER")
+        if not tier.is_active:
+            raise ConflictError("Tier is disabled", code="TIER_DISABLED")
+    else:
+        tier = await session.get(SubscriptionTier, gym.tier_code)
+        if tier is None:
+            raise ConflictError("Gym's tier no longer exists", code="TIER_MISSING")
+        if not tier.is_active:
+            raise ConflictError("Gym's tier is disabled", code="TIER_DISABLED")
 
     users = await session.scalars(
         select(User).where(User.tenant_id == gym_id, User.deleted_at == stamp)
@@ -280,6 +295,17 @@ async def restore_gym(
 
     gym.deleted_at = None
     gym.deleted_by = None
+    if tier_code is not None and tier_code != gym.tier_code:
+        previous = gym.tier_code
+        gym.tier_code = tier_code
+        await _apply_tier(session, gym)
+        await _record_tier_change(
+            session,
+            gym=gym,
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
+            from_tier_code=previous,
+        )
     await session.flush()
     await bus.emit(
         session,

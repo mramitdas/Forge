@@ -163,6 +163,10 @@ class SubscriptionUpdateRequest(BaseModel):
     tier_code: str = Field(min_length=1, max_length=40)
 
 
+class RestoreGymRequest(BaseModel):
+    tier_code: str | None = Field(default=None, min_length=1, max_length=40)
+
+
 class PlatformSummaryOut(BaseModel):
     gyms_total: int
     gyms_trial: int

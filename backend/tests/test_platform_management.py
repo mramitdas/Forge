@@ -675,3 +675,105 @@ async def test_restore_gym_errors(client, platform_token):
         json={"is_active": True},
     )
     assert reenabled.status_code == 200
+
+
+async def test_restore_gym_with_tier_code_attaches_active_tier(client, platform_token):
+    """Restore with {tier_code} re-attaches a new tier when the old one is gone."""
+    headers = {"Authorization": f"Bearer {platform_token}"}
+
+    created = await client.post(
+        "/api/v1/platform/tiers",
+        headers=headers,
+        json={"code": "reclaim", "name": "Reclaim", "max_branches": 2, "max_members": 50},
+    )
+    assert created.status_code == 201, created.text
+
+    gym = await provision_gym(client, platform_token, "reclaimgym")
+    changed = await client.patch(
+        f"/api/v1/platform/subscriptions/{gym['id']}",
+        headers=headers,
+        json={"tier_code": "reclaim"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    deleted_gym = await client.delete(f"/api/v1/platform/gyms/{gym['id']}", headers=headers)
+    assert deleted_gym.status_code == 204
+
+    # The gym's tier is deleted while it is tombstoned.
+    deleted_tier = await client.delete("/api/v1/platform/tiers/reclaim", headers=headers)
+    assert deleted_tier.status_code == 204, deleted_tier.text
+
+    # No body -> the dangling tier is still reported, gym stays deleted.
+    blocked = await client.post(f"/api/v1/platform/gyms/{gym['id']}/restore", headers=headers)
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "TIER_MISSING"
+
+    # With {tier_code} -> gym comes back on the supplied active tier.
+    restored = await client.post(
+        f"/api/v1/platform/gyms/{gym['id']}/restore",
+        headers=headers,
+        json={"tier_code": "starter"},
+    )
+    assert restored.status_code == 200, restored.text
+    body = restored.json()
+    assert body["deleted_at"] is None
+    assert body["tier_code"] == "starter"
+
+    # The attach is audited through the normal tier-change event path.
+    events = await client.get("/api/v1/platform/subscription-events", headers=headers)
+    assert events.status_code == 200
+    attach = next(
+        e for e in events.json()
+        if e["gym_id"] == gym["id"] and e["to_tier_code"] == "starter"
+    )
+    assert attach["from_tier_code"] == "reclaim"
+    assert attach["event_type"] == "tier_changed"
+
+    # Gym is visible in the live list again.
+    listing = await client.get("/api/v1/platform/gyms", headers=headers)
+    assert any(g["id"] == gym["id"] for g in listing.json())
+
+
+async def test_restore_gym_invalid_tier_code_leaves_gym_deleted(client, platform_token):
+    """A rejected {tier_code} never leaves a half-restored gym."""
+    headers = {"Authorization": f"Bearer {platform_token}"}
+
+    gym = await provision_gym(client, platform_token, "badattach")
+    deleted = await client.delete(f"/api/v1/platform/gyms/{gym['id']}", headers=headers)
+    assert deleted.status_code == 204
+
+    unknown = await client.post(
+        f"/api/v1/platform/gyms/{gym['id']}/restore",
+        headers=headers,
+        json={"tier_code": "no-such-tier"},
+    )
+    assert unknown.status_code == 409
+    assert unknown.json()["error"]["code"] == "UNKNOWN_TIER"
+
+    created = await client.post(
+        "/api/v1/platform/tiers",
+        headers=headers,
+        json={"code": "disatt", "name": "Dis Attach"},
+    )
+    assert created.status_code == 201, created.text
+    disabled = await client.patch(
+        "/api/v1/platform/tiers/disatt",
+        headers=headers,
+        json={"is_active": False},
+    )
+    assert disabled.status_code == 200
+
+    inactive = await client.post(
+        f"/api/v1/platform/gyms/{gym['id']}/restore",
+        headers=headers,
+        json={"tier_code": "disatt"},
+    )
+    assert inactive.status_code == 409
+    assert inactive.json()["error"]["code"] == "TIER_DISABLED"
+
+    # Both rejections left the gym fully deleted (no partial restore).
+    listing = await client.get(
+        "/api/v1/platform/gyms?include_deleted=true", headers=headers
+    )
+    row = next(g for g in listing.json() if g["id"] == gym["id"])
+    assert row["deleted_at"] is not None
