@@ -626,6 +626,17 @@ async def update_tier(
     tier = await session.get(SubscriptionTier, code)
     if tier is None:
         raise NotFoundError("Tier not found", code="NOT_FOUND")
+    if is_active is False and tier.is_active:
+        in_use = await session.scalar(
+            select(func.count())
+            .select_from(Gym)
+            .where(Gym.tier_code == code, Gym.deleted_at.is_(None))
+        )
+        if in_use:
+            raise ConflictError(
+                "Tier is still referenced by gyms; re-point those gyms before disabling",
+                code="TIER_IN_USE",
+            )
     if name is not None:
         tier.name = name
     if description is not None:

@@ -3,7 +3,9 @@ from __future__ import annotations
 from httpx import AsyncClient
 
 
-async def provision_gym(client: AsyncClient, token: str, slug: str) -> dict:
+async def provision_gym(
+    client: AsyncClient, token: str, slug: str, tier_code: str = "starter"
+) -> dict:
     response = await client.post(
         "/api/v1/platform/gyms",
         headers={"Authorization": f"Bearer {token}"},
@@ -13,7 +15,7 @@ async def provision_gym(client: AsyncClient, token: str, slug: str) -> dict:
             "owner_email": f"owner-{slug}@example.com",
             "owner_name": f"Owner {slug}",
             "owner_password": "owner-pass-123",
-            "tier_code": "starter",
+            "tier_code": tier_code,
             "timezone": "Asia/Kolkata",
             "currency": "INR",
         },

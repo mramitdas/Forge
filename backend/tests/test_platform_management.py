@@ -255,8 +255,15 @@ async def test_tier_in_use_cannot_be_deleted(client, platform_token):
 
 
 async def test_disabled_tier_blocks_assignment(client, platform_token, gym_b):
+    created = await client.post(
+        "/api/v1/platform/tiers",
+        headers=await _headers(platform_token),
+        json={"code": "disblk", "name": "Disblk", "max_branches": 1, "max_members": 100},
+    )
+    assert created.status_code == 201, created.text
+
     disabled = await client.patch(
-        "/api/v1/platform/tiers/pro",
+        "/api/v1/platform/tiers/disblk",
         headers=await _headers(platform_token),
         json={"is_active": False},
     )
@@ -271,7 +278,7 @@ async def test_disabled_tier_blocks_assignment(client, platform_token, gym_b):
             "owner_email": "owner-dis-tier@gym-erp.dev",
             "owner_name": "Owner",
             "owner_password": "owner-pass-123",
-            "tier_code": "pro",
+            "tier_code": "disblk",
         },
     )
     assert provision.status_code == 409
@@ -279,16 +286,53 @@ async def test_disabled_tier_blocks_assignment(client, platform_token, gym_b):
     change = await client.patch(
         f"/api/v1/platform/subscriptions/{gym_b['id']}",
         headers=await _headers(platform_token),
-        json={"tier_code": "pro"},
+        json={"tier_code": "disblk"},
     )
     assert change.status_code == 409
 
     reenabled = await client.patch(
-        "/api/v1/platform/tiers/pro",
+        "/api/v1/platform/tiers/disblk",
         headers=await _headers(platform_token),
         json={"is_active": True},
     )
     assert reenabled.status_code == 200
+
+
+async def test_disable_tier_in_use_blocked(client, platform_token):
+    created = await client.post(
+        "/api/v1/platform/tiers",
+        headers=await _headers(platform_token),
+        json={"code": "dislive", "name": "Dislive", "max_branches": 1, "max_members": 100},
+    )
+    assert created.status_code == 201, created.text
+
+    gym = await provision_gym(client, platform_token, "dislivegym", "dislive")
+
+    disabled = await client.patch(
+        "/api/v1/platform/tiers/dislive",
+        headers=await _headers(platform_token),
+        json={"is_active": False},
+    )
+    assert disabled.status_code == 409, disabled.text
+    assert disabled.json()["error"]["code"] == "TIER_IN_USE"
+
+    tiers = await client.get("/api/v1/platform/tiers", headers=await _headers(platform_token))
+    row = next(t for t in tiers.json() if t["code"] == "dislive")
+    assert row["is_active"] is True
+
+    repointed = await client.patch(
+        f"/api/v1/platform/subscriptions/{gym['id']}",
+        headers=await _headers(platform_token),
+        json={"tier_code": "starter"},
+    )
+    assert repointed.status_code == 200
+
+    disabled2 = await client.patch(
+        "/api/v1/platform/tiers/dislive",
+        headers=await _headers(platform_token),
+        json={"is_active": False},
+    )
+    assert disabled2.status_code == 200, disabled2.text
 
 
 async def test_subscription_events_recorded(client, platform_token):
@@ -656,25 +700,31 @@ async def test_restore_gym_errors(client, platform_token):
     assert live.status_code == 409
     assert live.json()["error"]["code"] == "GYM_NOT_DELETED"
 
-    # Disable the gym's tier, then delete + restore the gym -> 409 TIER_DISABLED.
+    # Create a dedicated tier, delete the gym, then disable the tier (only
+    # deleted gyms reference it now), restore -> 409 TIER_DISABLED.
+    created = await client.post(
+        "/api/v1/platform/tiers",
+        headers=headers,
+        json={"code": "restier", "name": "Res Tier", "max_branches": 1, "max_members": 100},
+    )
+    assert created.status_code == 201, created.text
+    repointed = await client.patch(
+        f"/api/v1/platform/subscriptions/{gym['id']}",
+        headers=headers,
+        json={"tier_code": "restier"},
+    )
+    assert repointed.status_code == 200
+    deleted = await client.delete(f"/api/v1/platform/gyms/{gym['id']}", headers=headers)
+    assert deleted.status_code == 204
     disabled = await client.patch(
-        "/api/v1/platform/tiers/starter",
+        "/api/v1/platform/tiers/restier",
         headers=headers,
         json={"is_active": False},
     )
     assert disabled.status_code == 200
-    deleted = await client.delete(f"/api/v1/platform/gyms/{gym['id']}", headers=headers)
-    assert deleted.status_code == 204
     blocked = await client.post(f"/api/v1/platform/gyms/{gym['id']}/restore", headers=headers)
     assert blocked.status_code == 409
     assert blocked.json()["error"]["code"] == "TIER_DISABLED"
-    # Re-enable for other tests.
-    reenabled = await client.patch(
-        "/api/v1/platform/tiers/starter",
-        headers=headers,
-        json={"is_active": True},
-    )
-    assert reenabled.status_code == 200
 
 
 async def test_restore_gym_with_tier_code_attaches_active_tier(client, platform_token):
