@@ -472,8 +472,8 @@ async def test_delete_gym_cascades_members(client, platform_token):
         reset_tenant_context(token_ctx)
 
 
-async def test_delete_tier_blocked_by_soft_deleted_gym(client, platform_token):
-    """A soft-deleted gym still referencing a tier must block its deletion."""
+async def test_delete_tier_allowed_when_only_deleted_gym_references(client, platform_token):
+    """Only soft-deleted gyms referencing a tier must NOT block its deletion."""
     created = await client.post(
         "/api/v1/platform/tiers",
         headers=await _headers(platform_token),
@@ -495,38 +495,12 @@ async def test_delete_tier_blocked_by_soft_deleted_gym(client, platform_token):
     )
     assert deleted_gym.status_code == 204
 
-    # The gym is soft-deleted but still references 'ghost'. Deletion of the
-    # tier must be refused.
-    blocked = await client.delete(
-        "/api/v1/platform/tiers/ghost", headers=await _headers(platform_token)
-    )
-    assert blocked.status_code == 409
-
-    # A soft-deleted gym can't be re-pointed via the API (change_gym_tier
-    # returns 404 for deleted gyms), so re-point it with a direct DB write —
-    # this mirrors an operator cleaning up tombstoned rows before deleting a
-    # tier. Then the tier becomes deletable.
-    import uuid as _uuid
-
-    from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
-    from app.db.session import get_sessionmaker
-    from app.modules.tenancy.models import Gym
-
-    maker = get_sessionmaker()
-    token_ctx = set_tenant_context(TenantContext(tenant_id=_uuid.UUID(str(gym["id"]))))
-    try:
-        async with maker() as session:
-            await session.begin()
-            row = await session.get(Gym, gym["id"])
-            row.tier_code = "starter"
-            await session.commit()
-    finally:
-        reset_tenant_context(token_ctx)
-
+    # The tombstoned gym still references 'ghost', but a deleted gym does
+    # not pin the tier — deletion succeeds without any re-pointing.
     allowed = await client.delete(
         "/api/v1/platform/tiers/ghost", headers=await _headers(platform_token)
     )
-    assert allowed.status_code == 204
+    assert allowed.status_code == 204, allowed.text
 
 
 async def test_list_gyms_include_deleted_flag(client, platform_token):
