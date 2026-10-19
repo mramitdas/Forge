@@ -50,6 +50,7 @@ from app.modules.tenancy.service import (
     list_subscription_events,
     platform_revenue,
     provision_gym,
+    restore_gym,
     update_branch,
     update_owner,
     update_tier,
@@ -128,6 +129,15 @@ async def remove_gym(
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await delete_gym(session, gym_id=gym_id, actor_id=actor.user_id)
+
+
+@platform_router.post("/gyms/{gym_id}/restore", response_model=GymOut)
+async def restore_gym_endpoint(
+    gym_id: str,
+    actor: Annotated[Actor, Depends(require_permission("platform.gyms.update"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> Gym:
+    return await restore_gym(session, gym_id=gym_id)
 
 
 async def _owner_out(session: AsyncSession, user: User) -> GymOwnerOut:

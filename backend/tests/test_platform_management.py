@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from itertools import pairwise
 
@@ -555,3 +556,148 @@ async def test_gym_out_live_gym_has_null_deleted_at(client, platform_token):
     listing = await client.get("/api/v1/platform/gyms", headers=headers)
     row = next(g for g in listing.json() if g["slug"] == "livedel")
     assert row["deleted_at"] is None
+
+
+async def test_restore_gym_full_cascade(client, platform_token):
+    """Restore un-tombstones the gym + users + branches + members."""
+    gym = await provision_gym(client, platform_token, "restgym")
+    owner = await login(client, "owner-restgym@example.com", "owner-pass-123")
+    oh = {"Authorization": f"Bearer {owner['access_token']}"}
+    headers = {"Authorization": f"Bearer {platform_token}"}
+
+    branch = await client.post(
+        "/api/v1/branches", headers=oh,
+        json={"name": "Main", "code": "RG", "timezone": "Asia/Kolkata", "country_code": "+91"},
+    )
+    assert branch.status_code == 201, branch.text
+    member = await client.post(
+        "/api/v1/members", headers=oh,
+        json={
+            "first_name": "Rest", "last_name": "Member",
+            "email": "rest-member@example.com", "phone": "9000000000",
+            "country_code": "+91", "branch_id": branch.json()["id"], "status": "active",
+        },
+    )
+    assert member.status_code == 201, member.text
+
+    deleted = await client.delete(f"/api/v1/platform/gyms/{gym['id']}", headers=headers)
+    assert deleted.status_code == 204
+
+    restored = await client.post(
+        f"/api/v1/platform/gyms/{gym['id']}/restore", headers=headers
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["deleted_at"] is None
+
+    # Owner can log in again (user un-tombstoned).
+    allowed = await login(client, "owner-restgym@example.com", "owner-pass-123")
+    assert allowed["access_token"]
+
+    # Member is alive again. The read is tenant-scoped, so stamp the gym's
+    # tenant context first.
+    from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
+    from app.db.session import get_sessionmaker
+    from app.modules.members.models import Member
+
+    maker = get_sessionmaker()
+    token_ctx = set_tenant_context(TenantContext(tenant_id=uuid.UUID(str(gym["id"]))))
+    try:
+        async with maker() as session:
+            await session.begin()
+            row = await session.get(Member, member.json()["id"])
+            assert row.deleted_at is None
+    finally:
+        reset_tenant_context(token_ctx)
+
+
+async def test_restore_gym_later_deleted_member_stays_deleted(client, platform_token):
+    """A member deleted AFTER the gym delete (different timestamp) stays deleted."""
+    gym = await provision_gym(client, platform_token, "restdiff")
+    owner = await login(client, "owner-restdiff@example.com", "owner-pass-123")
+    oh = {"Authorization": f"Bearer {owner['access_token']}"}
+    headers = {"Authorization": f"Bearer {platform_token}"}
+
+    branch = await client.post(
+        "/api/v1/branches", headers=oh,
+        json={"name": "Main", "code": "RD", "timezone": "Asia/Kolkata", "country_code": "+91"},
+    )
+    assert branch.status_code == 201, branch.text
+    member = await client.post(
+        "/api/v1/members", headers=oh,
+        json={
+            "first_name": "Diff", "last_name": "Member",
+            "email": "diff-member@example.com", "phone": "9000000001",
+            "country_code": "+91", "branch_id": branch.json()["id"], "status": "active",
+        },
+    )
+    assert member.status_code == 201, member.text
+
+    deleted = await client.delete(f"/api/v1/platform/gyms/{gym['id']}", headers=headers)
+    assert deleted.status_code == 204
+
+    # Soft-delete the member independently (simulates a later manual delete).
+    # This happens after the gym delete, so its deleted_at differs from the
+    # gym's cascade timestamp.
+    from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
+    from app.db.session import get_sessionmaker
+    from app.modules.members.models import Member
+
+    maker = get_sessionmaker()
+    token_ctx = set_tenant_context(TenantContext(tenant_id=uuid.UUID(str(gym["id"]))))
+    try:
+        async with maker() as session:
+            await session.begin()
+            row = await session.get(Member, member.json()["id"])
+            row.deleted_at = datetime.now(UTC)
+            await session.commit()
+    finally:
+        reset_tenant_context(token_ctx)
+
+    restored = await client.post(
+        f"/api/v1/platform/gyms/{gym['id']}/restore", headers=headers
+    )
+    assert restored.status_code == 200, restored.text
+
+    token_ctx2 = set_tenant_context(TenantContext(tenant_id=uuid.UUID(str(gym["id"]))))
+    try:
+        async with maker() as session:
+            await session.begin()
+            row = await session.get(Member, member.json()["id"])
+            assert row.deleted_at is not None  # the later delete is preserved
+    finally:
+        reset_tenant_context(token_ctx2)
+
+
+async def test_restore_gym_errors(client, platform_token):
+    """Restore: 404 missing gym, 409 live gym, 409 disabled tier."""
+    headers = {"Authorization": f"Bearer {platform_token}"}
+
+    missing = await client.post(
+        "/api/v1/platform/gyms/00000000-0000-0000-0000-000000000000/restore", headers=headers
+    )
+    assert missing.status_code == 404
+
+    gym = await provision_gym(client, platform_token, "restlive")
+    live = await client.post(f"/api/v1/platform/gyms/{gym['id']}/restore", headers=headers)
+    assert live.status_code == 409
+    assert live.json()["error"]["code"] == "GYM_NOT_DELETED"
+
+    # Disable the gym's tier, then delete + restore the gym -> 409 TIER_DISABLED.
+    disabled = await client.patch(
+        "/api/v1/platform/tiers/starter",
+        headers=headers,
+        json={"is_active": False},
+    )
+    assert disabled.status_code == 200
+    deleted = await client.delete(f"/api/v1/platform/gyms/{gym['id']}", headers=headers)
+    assert deleted.status_code == 204
+    blocked = await client.post(f"/api/v1/platform/gyms/{gym['id']}/restore", headers=headers)
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "TIER_DISABLED"
+    # Re-enable for other tests.
+    reenabled = await client.patch(
+        "/api/v1/platform/tiers/starter",
+        headers=headers,
+        json={"is_active": True},
+    )
+    assert reenabled.status_code == 200

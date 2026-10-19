@@ -227,6 +227,71 @@ async def delete_gym(
     )
 
 
+async def restore_gym(
+    session: AsyncSession,
+    *,
+    gym_id: uuid.UUID,
+) -> Gym:
+    """Un-soft-delete a gym and everything `delete_gym` cascaded.
+
+    Restores only rows whose `deleted_at` matches the gym's `deleted_at`
+    exactly — i.e. the set tombstoned by that single delete. Rows a user
+    deleted later (different timestamp) are left deleted.
+    """
+    gym = await session.get(Gym, gym_id)
+    if gym is None:
+        raise NotFoundError("Gym not found", code="NOT_FOUND")
+    if gym.deleted_at is None:
+        raise ConflictError("Gym is not deleted", code="GYM_NOT_DELETED")
+
+    stamp = gym.deleted_at
+
+    tier = await session.get(SubscriptionTier, gym.tier_code)
+    if tier is None:
+        raise ConflictError("Gym's tier no longer exists", code="TIER_MISSING")
+    if not tier.is_active:
+        raise ConflictError("Gym's tier is disabled", code="TIER_DISABLED")
+
+    users = await session.scalars(
+        select(User).where(User.tenant_id == gym_id, User.deleted_at == stamp)
+    )
+    for user in users:
+        user.deleted_at = None
+        user.deleted_by = None
+
+    branches = await session.scalars(
+        select(Branch).where(Branch.gym_id == gym_id, Branch.deleted_at == stamp)
+    )
+    branch_ids = []
+    for branch in branches:
+        branch.deleted_at = None
+        branch.deleted_by = None
+        branch_ids.append(branch.id)
+
+    if branch_ids:
+        members = await session.scalars(
+            select(Member).where(
+                Member.branch_id.in_(branch_ids), Member.deleted_at == stamp
+            )
+        )
+        for member in members:
+            member.deleted_at = None
+            member.deleted_by = None
+
+    gym.deleted_at = None
+    gym.deleted_by = None
+    await session.flush()
+    await bus.emit(
+        session,
+        tenant_id=gym_id,
+        aggregate_type="gym",
+        aggregate_id=gym_id,
+        event_type="tenancy.gym.restored",
+        payload={"gym_id": str(gym_id)},
+    )
+    return gym
+
+
 async def _get_branch(
     session: AsyncSession, *, gym_id: uuid.UUID, branch_id: uuid.UUID
 ) -> Branch:
