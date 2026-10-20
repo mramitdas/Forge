@@ -145,7 +145,7 @@ test.describe("gyms — provision & edit", () => {
     await page.goto("/platform/gyms");
     const row = gymRow(page, GYM);
     const toggle = row.getByRole("switch", { name: `Cross-branch access for ${GYM}` });
-    const before = await toggle.getAttribute("aria-checked");
+    const before = (await toggle.getAttribute("aria-checked")) ?? "false";
     await toggle.click();
     await expectToast(page, "Gym setting updated");
     const flipped = before === "true" ? "false" : "true";
