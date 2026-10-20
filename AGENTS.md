@@ -28,19 +28,18 @@ user approval.
    (`apps/web/src/components/ui.tsx`, `components/skeleton*.tsx`,
    `lib/hooks.ts`, `lib/api.ts`, `(app)/layout.tsx`), the panel's behavior
    must remain byte-for-byte identical.
-3. After ANY change to shared files listed above (even unrelated to the
-   panel), run the regression gate before finishing:
+3. After **any** change to super-admin surfaces (`/platform/**`, the settings
+   dispatcher / `PlatformSettings.tsx`) **or** shared files
+   (`components/ui.tsx`, `components/skeleton*`, `lib/hooks.ts`, `lib/api.ts`,
+   `(app)/layout.tsx`), run:
 
    ```bash
-   cd apps/web && NODE_PATH="$(npm root -g)" node e2e/platform_admin_verify.cjs
+   cd apps/web && npx playwright test e2e/platform
    ```
 
-   All checks must pass (100%, currently 38/38 — includes the Settings
-   section: split-name save with fixture restore, frozen email, live password
-   checklist; it never submits a real password change). This script provisions
-   and deletes a throwaway gym, exercises gym/owner management, tier CRUD,
-   settings, and the revenue chart, so it also validates the backend
-   `platform_*` API.
+   100% pass required. If a legitimate UI change breaks a test, **update the
+   test in the same commit**. (`platform_admin_verify.cjs` retired; the other
+   six e2e scripts remain house-style gates for their own domains.)
 
 ## Settings page is role-split
 
@@ -83,6 +82,30 @@ shared/session-scoped fixture's password or name:
   mid-test cannot poison the session-scoped fixture for later tests.
 - Never submit a real password change in e2e scripts (fixtures must survive
   for the other suites); the API success path is covered by pytest.
+
+## Playwright platform suite
+
+The super-admin gate is a proper `@playwright/test` suite under
+`apps/web/e2e/platform/`:
+
+- `auth.setup.ts` logs in once per run (storageState); spec files never
+  re-login.
+- One spec per module: `overview`, `gyms`, `owners`, `subscriptions`,
+  `settings`, `impersonation`. `subscriptions.spec.ts` is serial (tier state
+  is shared); everything else is parallel-safe.
+- Helpers in `fixtures.ts`: `provisionGym`, `deleteGymIfExists`, `expectToast`,
+  `dismissToasts`, `ts()`. Toasts live in a persistent `div[role="status"]`
+  portal and do NOT auto-dismiss.
+- Data hygiene: throwaway gyms/tiers use timestamped names and are cleaned up
+  in `afterAll`; tests that rename the admin restore `Platform`/`Admin` in a
+  `finally`; NEVER submit a real password change for the admin (checklist
+  state only — the API path is pytest's job).
+- No `webServer` block in `playwright.config.ts` on purpose — the suite runs
+  against the already-running `make dev` / `make web` servers.
+- The six remaining house-style scripts (`gym_ops`, `plans`,
+  `member_account`, `role_visibility`, `frontdesk`, `expenses`) are unchanged
+  and still run with
+  `NODE_PATH="$(npm root -g)" node e2e/<name>_verify.cjs`.
 
 ## Dev servers
 
