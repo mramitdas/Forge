@@ -46,7 +46,8 @@ test.describe("gyms — provision & edit", () => {
     await expect(row).toBeVisible({ timeout: 20000 });
     await expect(row).toContainText(SLUG);
     await expect(row.getByText(/^(active|trial|suspended)$/)).toBeVisible();
-    await expect(row).toContainText(/starter|pro|enterprise/);
+    // Tier is the 4th column — row-level match could false-pass on the slug.
+    await expect(row.locator("td").nth(3)).toContainText(/starter|pro|enterprise/);
   });
 
   test("provision happy path (own throwaway, deleted inline)", async ({ page }) => {
@@ -128,9 +129,9 @@ test.describe("gyms — provision & edit", () => {
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expectToast(page, "Gym updated");
     const row = gymRow(page, `${GYM} Edited`);
-    await expect(row).toContainText("Europe/Paris");
-    await expect(row).toContainText("USD");
-    await expect(row).toContainText("pro");
+    await expect(row).toContainText("Europe/Paris", { timeout: 15000 });
+    await expect(row).toContainText("USD", { timeout: 15000 });
+    await expect(row.locator("td").nth(3)).toHaveText("pro", { timeout: 15000 });
     await row.getByRole("button", { name: "Edit" }).click();
     await dialog.locator("#gym-edit-name").fill(GYM);
     await dialog.locator("#gym-edit-timezone").selectOption("Asia/Kolkata");
@@ -147,11 +148,15 @@ test.describe("gyms — provision & edit", () => {
     const before = await toggle.getAttribute("aria-checked");
     await toggle.click();
     await expectToast(page, "Gym setting updated");
+    const flipped = before === "true" ? "false" : "true";
     await expect(gymRow(page, GYM).getByRole("switch", { name: `Cross-branch access for ${GYM}` })).toHaveAttribute(
-      "aria-checked", before === "true" ? "false" : "true",
+      "aria-checked", flipped, { timeout: 15000 },
     );
     await gymRow(page, GYM).getByRole("switch", { name: `Cross-branch access for ${GYM}` }).click();
     await expectToast(page, "Gym setting updated");
+    await expect(gymRow(page, GYM).getByRole("switch", { name: `Cross-branch access for ${GYM}` })).toHaveAttribute(
+      "aria-checked", before, { timeout: 15000 },
+    );
   });
 
   test("cancel closes provision modal without creating", async ({ page }) => {
@@ -236,9 +241,11 @@ test.describe("gyms — lifecycle", () => {
     // The real trigger is TIER_MISSING/TIER_DISABLED on restore:
     // create tier → provision gym on it → delete gym → disable tier →
     // restore → Attach a subscription modal → pick tier → restore succeeds.
-    const tierCode = `pwlife-${T}`;
-    const t2 = `${T}b`;
-    const name2 = `PW Life2 ${t2}`;
+    // Fresh ids per run (incl. retries): a mid-test failure + retry would
+    // otherwise hit TIER_EXISTS / SLUG_TAKEN on the module-level T.
+    const t = ts();
+    const tierCode = `pwlife-${t}`;
+    const name2 = `PW Life2 ${t}`;
 
     await page.goto("/platform/subscriptions");
     await page.getByRole("button", { name: /new tier/i }).click();
@@ -250,8 +257,8 @@ test.describe("gyms — lifecycle", () => {
     await expectToast(page, "Tier created");
 
     await provisionGym(page, {
-      name: name2, slug: `pw-life2-${t2}`, ownerName: "PW Life2",
-      ownerEmail: `pw-life2-${t2}@gym-erp.dev`, ownerPassword: "Pw-Provision-123!",
+      name: name2, slug: `pw-life2-${t}`, ownerName: "PW Life2",
+      ownerEmail: `pw-life2-${t}@gym-erp.dev`, ownerPassword: "Pw-Provision-123!",
       tierCode,
     });
 
@@ -270,13 +277,18 @@ test.describe("gyms — lifecycle", () => {
     await expect(page.getByRole("dialog").locator("#modal-title")).toHaveText("Attach a subscription", { timeout: 15000 });
     // Attach dropdown lists only ACTIVE tiers (backend restore also rejects
     // inactive tier_code), so the disabled pwlife tier can't be re-selected —
-    // attach the seeded active "starter" tier instead.
-    await page.getByRole("dialog").locator("#attach-tier").selectOption("starter");
-    await page.getByRole("dialog").getByRole("button", { name: "Restore gym" }).click();
+    // attach the seeded active "starter" tier instead. Assert the option is
+    // rendered first (a bare option-count check would pass on the always-
+    // present "Select a tier…" placeholder while tiers are still loading).
+    const attachDialog = page.getByRole("dialog");
+    await expect(attachDialog.locator('#attach-tier option[value="starter"]')).toHaveCount(1, { timeout: 15000 });
+    await attachDialog.locator("#attach-tier").selectOption("starter");
+    await attachDialog.getByRole("button", { name: "Restore gym" }).click();
     await expectToast(page, `${name2} restored`);
     await page.getByLabel("Show deleted").uncheck();
 
     await expect(gymRow(page, name2)).toBeVisible({ timeout: 15000 });
+    await expect(gymRow(page, name2).locator("td").nth(3)).toContainText("starter");
     await gymRow(page, name2).getByRole("button", { name: "Delete" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete gym" }).click();
     await expectToast(page, `${name2} deleted`);
@@ -289,9 +301,14 @@ test.describe("gyms — lifecycle", () => {
 
   test("Show deleted checkbox toggles the filtered query", async ({ page }) => {
     await page.goto("/platform/gyms");
+    // GYM is never deleted at this point (runs last, prior tests restore it),
+    // so it must stay visible across the refetch the checkbox triggers.
+    await expect(gymRow(page, GYM)).toBeVisible({ timeout: 20000 });
     await page.getByLabel("Show deleted").check();
     await expect(page.getByLabel("Show deleted")).toBeChecked();
+    await expect(gymRow(page, GYM)).toBeVisible({ timeout: 15000 });
     await page.getByLabel("Show deleted").uncheck();
     await expect(page.getByLabel("Show deleted")).not.toBeChecked();
+    await expect(gymRow(page, GYM)).toBeVisible({ timeout: 15000 });
   });
 });
