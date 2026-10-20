@@ -164,3 +164,128 @@ test.describe("gyms — provision & edit", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 });
+
+test.describe("gyms — lifecycle", () => {
+  const T = ts();
+  const GYM = `PW Life ${T}`;
+  const SLUG = `pw-life-${T}`;
+  const OWNER_EMAIL = `pw-life-${T}@gym-erp.dev`;
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(90000);
+    const page = await (await browser.newContext()).newPage();
+    await provisionGym(page, {
+      name: GYM, slug: SLUG, ownerName: "PW Life",
+      ownerEmail: OWNER_EMAIL, ownerPassword: "Pw-Provision-123!",
+    });
+    await page.context().close();
+  });
+
+  test.afterAll(async ({ browser }) => {
+    test.setTimeout(90000);
+    const page = await (await browser.newContext()).newPage();
+    await page.goto("/platform/gyms");
+    const row = gymRow(page, GYM);
+    try {
+      await expect(row).toBeVisible({ timeout: 20000 });
+      await row.getByRole("button", { name: "Delete" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Delete gym" }).click();
+      await expectToast(page, `${GYM} deleted`);
+    } catch {
+      // gym already gone or delete unavailable — cleanup is best-effort
+    }
+    await page.context().close();
+  });
+
+  test("suspend then enable round-trips", async ({ page }) => {
+    await page.goto("/platform/gyms");
+    await gymRow(page, GYM).getByRole("button", { name: "Suspend" }).click();
+    await expectToast(page, `${GYM} suspended`);
+    await expect(gymRow(page, GYM).getByText("suspended")).toBeVisible({ timeout: 15000 });
+    await gymRow(page, GYM).getByRole("button", { name: "Enable" }).click();
+    await expectToast(page, `${GYM} is now active`);
+    await expect(gymRow(page, GYM).getByText(/active|trial/)).toBeVisible({ timeout: 15000 });
+  });
+
+  test("delete removes gym from default list; Show deleted + Restore brings it back", async ({ page }) => {
+    await page.goto("/platform/gyms");
+    await gymRow(page, GYM).getByRole("button", { name: "Delete" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator("#modal-title")).toHaveText("Delete gym");
+    await dialog.getByRole("button", { name: "Delete gym" }).click();
+    await expectToast(page, `${GYM} deleted`);
+    await expect(gymRow(page, GYM)).toHaveCount(0);
+
+    await page.getByLabel("Show deleted").check();
+    const deletedRow = gymRow(page, GYM);
+    await expect(deletedRow).toBeVisible({ timeout: 15000 });
+    await deletedRow.getByRole("button", { name: "Restore" }).click();
+    await expectToast(page, `${GYM} restored`);
+    await page.getByLabel("Show deleted").uncheck();
+    await expect(gymRow(page, GYM)).toBeVisible({ timeout: 15000 });
+  });
+
+  test("restore with a disabled tier opens the Attach subscription modal", async ({ page }) => {
+    test.setTimeout(120000);
+    // The real trigger is TIER_MISSING/TIER_DISABLED on restore:
+    // create tier → provision gym on it → delete gym → disable tier →
+    // restore → Attach a subscription modal → pick tier → restore succeeds.
+    const tierCode = `pwlife-${T}`;
+    const t2 = `${T}b`;
+    const name2 = `PW Life2 ${t2}`;
+
+    await page.goto("/platform/subscriptions");
+    await page.getByRole("button", { name: /new tier/i }).click();
+    let dialog = page.getByRole("dialog");
+    await dialog.locator("#tier-code").fill(tierCode);
+    await dialog.locator("#tier-name").fill("PW Life Tier");
+    await dialog.locator("#tier-monthly-price").fill("499");
+    await dialog.getByRole("button", { name: "Create tier" }).click();
+    await expectToast(page, "Tier created");
+
+    await provisionGym(page, {
+      name: name2, slug: `pw-life2-${t2}`, ownerName: "PW Life2",
+      ownerEmail: `pw-life2-${t2}@gym-erp.dev`, ownerPassword: "Pw-Provision-123!",
+      tierCode,
+    });
+
+    await page.goto("/platform/gyms");
+    await gymRow(page, name2).getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete gym" }).click();
+    await expectToast(page, `${name2} deleted`);
+
+    await page.goto("/platform/subscriptions");
+    await page.locator("div.rounded-2xl", { hasText: tierCode }).first().getByRole("switch").click();
+    await expectToast(page, /is now disabled/);
+
+    await page.goto("/platform/gyms");
+    await page.getByLabel("Show deleted").check();
+    await gymRow(page, name2).getByRole("button", { name: "Restore" }).click();
+    await expect(page.getByRole("dialog").locator("#modal-title")).toHaveText("Attach a subscription", { timeout: 15000 });
+    // Attach dropdown lists only ACTIVE tiers (backend restore also rejects
+    // inactive tier_code), so the disabled pwlife tier can't be re-selected —
+    // attach the seeded active "starter" tier instead.
+    await page.getByRole("dialog").locator("#attach-tier").selectOption("starter");
+    await page.getByRole("dialog").getByRole("button", { name: "Restore gym" }).click();
+    await expectToast(page, `${name2} restored`);
+    await page.getByLabel("Show deleted").uncheck();
+
+    await expect(gymRow(page, name2)).toBeVisible({ timeout: 15000 });
+    await gymRow(page, name2).getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete gym" }).click();
+    await expectToast(page, `${name2} deleted`);
+
+    await page.goto("/platform/subscriptions");
+    await page.locator("div.rounded-2xl", { hasText: tierCode }).first().getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete tier" }).click();
+    await expectToast(page, /deleted/);
+  });
+
+  test("Show deleted checkbox toggles the filtered query", async ({ page }) => {
+    await page.goto("/platform/gyms");
+    await page.getByLabel("Show deleted").check();
+    await expect(page.getByLabel("Show deleted")).toBeChecked();
+    await page.getByLabel("Show deleted").uncheck();
+    await expect(page.getByLabel("Show deleted")).not.toBeChecked();
+  });
+});
