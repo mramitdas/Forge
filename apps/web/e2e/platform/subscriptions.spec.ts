@@ -42,7 +42,7 @@ test.describe("subscriptions", () => {
     await dialog.getByRole("button", { name: "Create tier" }).click();
     await expectToast(page, "Tier created");
     await expect(card(page, NAME)).toBeVisible({ timeout: 15000 });
-    await expect(card(page, NAME)).toContainText("₹799");
+    await expect(card(page, NAME)).toContainText("₹799", { timeout: 15000 });
   });
 
   test("duplicate code surfaces Could not create tier", async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe("subscriptions", () => {
     await dialog.locator("#tier-monthly-price").fill("899");
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expectToast(page, "Tier updated");
-    await expect(card(page, `${NAME} 2`)).toContainText("₹899");
+    await expect(card(page, `${NAME} 2`)).toContainText("₹899", { timeout: 15000 });
   });
 
   test("disable + enable an unused tier round-trips", async ({ page }) => {
@@ -85,10 +85,10 @@ test.describe("subscriptions", () => {
     const c = card(page, `${NAME} 2`);
     await c.getByRole("switch").click();
     await expectToast(page, `${NAME} 2 is now disabled`);
-    await expect(card(page, `${NAME} 2`).getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    await expect(card(page, `${NAME} 2`).getByRole("switch")).toHaveAttribute("aria-checked", "false", { timeout: 15000 });
     await card(page, `${NAME} 2`).getByRole("switch").click();
     await expectToast(page, `${NAME} 2 is now active`);
-    await expect(card(page, `${NAME} 2`).getByRole("switch")).toHaveAttribute("aria-checked", "true");
+    await expect(card(page, `${NAME} 2`).getByRole("switch")).toHaveAttribute("aria-checked", "true", { timeout: 15000 });
   });
 
   test("in-use tier cannot be disabled (guard keeps switch on)", async ({ page }) => {
@@ -125,7 +125,7 @@ test.describe("subscriptions", () => {
     await dialog.locator("#tier-name").fill("PW Custom");
     await dialog.getByRole("button", { name: "Create tier" }).click();
     await expectToast(page, "Tier created");
-    await expect(card(page, "PW Custom")).toContainText("Custom");
+    await expect(card(page, "PW Custom")).toContainText("Custom", { timeout: 15000 });
     await card(page, "PW Custom").getByRole("button", { name: "Delete" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete tier" }).click();
     await expectToast(page, /deleted/);

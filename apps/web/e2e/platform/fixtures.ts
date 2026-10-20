@@ -42,6 +42,10 @@ export async function provisionGym(page: Page, opts: ProvisionGymOpts): Promise<
 
 export async function deleteGymIfExists(page: Page, name: string): Promise<void> {
   await page.goto("/platform/gyms");
+  // Settle: the count header only renders after the list fetch resolves
+  // (Count renders a skeleton while loading), so waiting for it removes the
+  // early-return race where row.count() === 0 before data arrives.
+  await expect(page.getByText(/\d+ gyms on the platform/)).toBeVisible({ timeout: 20000 });
   const row = page.locator("tr", { hasText: name }).first();
   if ((await row.count()) === 0) return;
   if ((await row.getByRole("button", { name: "Delete" }).count()) === 0) return;

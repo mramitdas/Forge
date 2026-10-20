@@ -9,7 +9,11 @@ const OWNER_PASSWORD = "Pw-Provision-123!";
 
 test.describe("gyms — provision & edit", () => {
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(60000);
     const page = await (await browser.newContext()).newPage();
+    // Idempotent on retry: a prior attempt's afterAll may have raced the
+    // delete and left the throwaway gym behind → slug conflict on re-provision.
+    await deleteGymIfExists(page, GYM);
     await provisionGym(page, {
       name: GYM, slug: SLUG, ownerName: "PW Owner",
       ownerEmail: OWNER_EMAIL, ownerPassword: OWNER_PASSWORD,
@@ -174,6 +178,8 @@ test.describe("gyms — lifecycle", () => {
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(90000);
     const page = await (await browser.newContext()).newPage();
+    // Idempotent on retry: clear any leftover from a prior attempt first.
+    await deleteGymIfExists(page, GYM);
     await provisionGym(page, {
       name: GYM, slug: SLUG, ownerName: "PW Life",
       ownerEmail: OWNER_EMAIL, ownerPassword: "Pw-Provision-123!",

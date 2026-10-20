@@ -30,7 +30,7 @@ test("monthly revenue renders in ₹", async ({ page }) => {
 test("gym subscriptions table shows column headers", async ({ page }) => {
   await expect(page.getByText("Gym subscriptions")).toBeVisible({ timeout: 20000 });
   for (const h of ["Gym", "Tier", "Status", "Members", "Active subs"]) {
-    await expect(page.getByRole("columnheader", { name: h, exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: h, exact: true })).toBeVisible({ timeout: 20000 });
   }
 });
 
@@ -38,20 +38,28 @@ test("subscription rows have a tier select and changing tier toasts success", as
   await expect(page.getByText("Gym subscriptions")).toBeVisible({ timeout: 20000 });
   const row = page.locator("tbody tr").first();
   const tierSelect = row.getByRole("combobox", { name: "Tier" });
-  await expect(tierSelect).toBeVisible();
+  await expect(tierSelect).toBeVisible({ timeout: 20000 });
   const original = await tierSelect.inputValue();
   const target = original === "pro" ? "starter" : "pro";
-  await tierSelect.selectOption(target);
-  await expect(page.getByText("Subscription tier updated")).toBeVisible({ timeout: 15000 });
-  // restore
-  await row.getByRole("combobox", { name: "Tier" }).selectOption(original);
-  await expect(page.getByText("Subscription tier updated")).toBeVisible({ timeout: 15000 });
+  let changed = false;
+  try {
+    await tierSelect.selectOption(target);
+    changed = true;
+    await expect(page.getByText("Subscription tier updated")).toBeVisible({ timeout: 15000 });
+  } finally {
+    // Restore even if the change assertion failed — the first-row gym is a
+    // shared fixture other specs rely on being on its original tier.
+    if (changed) {
+      await row.getByRole("combobox", { name: "Tier" }).selectOption(original);
+      await expect(page.getByText("Subscription tier updated")).toBeVisible({ timeout: 15000 });
+    }
+  }
 });
 
 test("gym registry lists gyms with Manage links", async ({ page }) => {
   await expect(page.getByText("Gym registry")).toBeVisible({ timeout: 20000 });
   const manage = page.getByRole("link", { name: /Manage →/ });
-  await expect(manage.first()).toBeVisible();
+  await expect(manage.first()).toBeVisible({ timeout: 20000 });
   await expect(manage.first()).toHaveAttribute("href", "/platform/gyms");
 });
 

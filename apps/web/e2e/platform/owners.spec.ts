@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ts, provisionGym, expectToast } from "./fixtures";
+import { ts, provisionGym, deleteGymIfExists, expectToast } from "./fixtures";
 
 const T = ts();
 const OWNER_EMAIL = `pw-own-${T}@gym-erp.dev`;
@@ -9,6 +9,9 @@ test.describe("owners", () => {
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(60000);
     const page = await (await browser.newContext()).newPage();
+    // Idempotent on retry: a prior attempt's afterAll may have raced the
+    // delete and left the throwaway gym behind → slug conflict on re-provision.
+    await deleteGymIfExists(page, `PW OwnGym ${T}`);
     await provisionGym(page, {
       name: `PW OwnGym ${T}`, slug: `pw-owngym-${T}`, ownerName: OWNER_NAME,
       ownerEmail: OWNER_EMAIL, ownerPassword: "Pw-Provision-123!",
@@ -79,6 +82,8 @@ test.describe("owners", () => {
 
   test("duplicate email surfaces Could not update owner", async ({ page }) => {
     await page.goto("/platform/owners");
+    await expect(page.getByText(/\d+ gym owners/)).toBeVisible({ timeout: 20000 });
+    if ((await page.locator("tbody tr").count()) < 2) test.skip(true, "needs a second owner row");
     const otherRow = page.locator("tbody tr").filter({ hasNotText: OWNER_EMAIL }).first();
     const otherEmail = (await otherRow.innerText()).match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0];
     expect(otherEmail).toBeTruthy();

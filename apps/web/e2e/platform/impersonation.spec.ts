@@ -6,7 +6,10 @@ const OWNER_EMAIL = `pw-imp-${T}@gym-erp.dev`;
 
 test.describe("impersonation", () => {
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(60000);
     const page = await (await browser.newContext()).newPage();
+    // Idempotent on retry: clear any leftover from a prior attempt first.
+    await deleteGymIfExists(page, `PW ImpGym ${T}`);
     await provisionGym(page, {
       name: `PW ImpGym ${T}`, slug: `pw-imgym-${T}`, ownerName: "PW Imp",
       ownerEmail: OWNER_EMAIL, ownerPassword: "Pw-Provision-123!",
@@ -15,8 +18,13 @@ test.describe("impersonation", () => {
   });
 
   test.afterAll(async ({ browser }) => {
+    test.setTimeout(60000);
     const page = await (await browser.newContext()).newPage();
-    await deleteGymIfExists(page, `PW ImpGym ${T}`);
+    try {
+      await deleteGymIfExists(page, `PW ImpGym ${T}`);
+    } catch {
+      // gym already gone or delete unavailable — cleanup is best-effort
+    }
     await page.context().close();
   });
 
