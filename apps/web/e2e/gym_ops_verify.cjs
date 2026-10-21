@@ -206,8 +206,14 @@ async function main() {
     await page.goto(`${BASE}/settings`);
     await settle(page);
     await page.getByText("Profile", { exact: true }).waitFor({ timeout: 15000 });
-    await page.getByText("Granted permissions", { exact: true }).waitFor({ timeout: 15000 });
-    await must("settings: page renders profile / permissions / branch access", page.getByText("Branch access", { exact: true }).waitFor({ timeout: 15000 }));
+    await page.getByLabel("Granted permissions").waitFor({ timeout: 15000 });
+    await page.getByText("Role & permissions", { exact: true }).waitFor({ timeout: 15000 });
+    await must("settings: page renders profile / role pills / branch access", page.getByText("Branch access", { exact: true }).waitFor({ timeout: 15000 }));
+    // R/W/U/D pills render and are non-interactive (owner has members.view,
+    // so the members/read pill is always ON).
+    const readPill = page.locator('[aria-label="members read on"]').first();
+    await must("settings: permission pills render read=on for members", readPill.waitFor({ timeout: 15000 }));
+    await must("settings: permission pills are aria-disabled", (await readPill.getAttribute("aria-disabled")) === "true");
 
     const crossSwitch = page.getByRole("switch", { name: "Cross-branch access" });
     await crossSwitch.waitFor({ timeout: 15000 });
@@ -251,15 +257,23 @@ async function main() {
       .locator("div.glass", { has: page.getByText("Your account details across the organization") })
       .first();
     await profileCard.waitFor({ timeout: 15000 });
-    const nameInput = profileCard.locator("input").first();
-    const origName = await nameInput.inputValue();
-    await nameInput.fill(`${origName} E2E`);
+    await must("settings: email input is read-only", (await profileCard.locator("#settings-email").getAttribute("disabled")) !== null);
+    const firstNameInput = profileCard.locator("#settings-first-name");
+    const lastNameInput = profileCard.locator("#settings-last-name");
+    const origFirst = await firstNameInput.inputValue();
+    const origLast = await lastNameInput.inputValue();
+    // The sidebar renders me.user.full_name (single <p>), which the backend
+    // recomputes as `${first} ${last}` on a first/last PATCH — so the saved
+    // state reads `${origFirst} E2E ${origLast}`. Capture the original text so
+    // the restore can be asserted against it (never via a second toast wait).
+    const origSidebarName = await page.locator("aside div.min-w-0 p").first().innerText();
+    await firstNameInput.fill(`${origFirst} E2E`);
     await profileCard.getByRole("button", { name: "Save changes" }).click();
     await page.getByText("Profile updated", { exact: true }).waitFor({ timeout: 10000 });
-    await must("settings: profile name save persists (sidebar refreshes)", page.locator("aside").getByText(`${origName} E2E`, { exact: true }).waitFor({ timeout: 15000 }));
-    await nameInput.fill(origName);
+    await must("settings: profile name save persists (sidebar refreshes)", page.locator("aside").getByText(`${origFirst} E2E ${origLast}`, { exact: true }).waitFor({ timeout: 15000 }));
+    await firstNameInput.fill(origFirst);
     await profileCard.getByRole("button", { name: "Save changes" }).click();
-    await page.locator("aside").getByText(origName, { exact: true }).waitFor({ timeout: 15000 });
+    await page.locator("aside").getByText(origSidebarName, { exact: true }).waitFor({ timeout: 15000 });
 
     // ── Gym profile save persists (name + timezone) ──
     const gymCard = page.locator("div.glass", { hasText: "Gym profile" }).first();

@@ -1,35 +1,43 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PasswordChecklist } from "@/components/password-checklist";
+import { PermissionPills } from "@/components/permission-pills";
 import { Badge, Button, Card, Field, Input, SectionTitle, Select, Switch, Toast } from "@/components/ui";
 import { Async } from "@/components/skeleton";
 import { SettingsBranchSkeleton } from "@/components/skeletons";
-import { ApiError } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCan } from "@/lib/permissions";
 import { useGymSettings, useUpdateGymSettings, useUpdateMe } from "@/lib/hooks";
-import { TIMEZONES } from "@/lib/timezones";
-
-function prettifyPermission(p: string): string {
-  return p
-    .replace(/^members\./, "")
-    .replace(/\./g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
+import { allChecksPass, passwordChecks } from "@/lib/password";
+import { TIMEZONES, formatTimezone } from "@/lib/timezones";
+import type { TokenResponse } from "@/lib/types";
 
 export default function GymSettings() {
-  const { me, refreshMe } = useAuth();
+  const { me, refreshMe, completePasswordChange } = useAuth();
   const user = me?.user;
-  const [name, setName] = useState(user?.full_name ?? "");
-  const [email, setEmail] = useState(user?.email ?? "");
+  const fallbackName = (user?.full_name ?? "").trim().split(" ");
+  const [firstName, setFirstName] = useState(user?.first_name || fallbackName[0] || "");
+  const [lastName, setLastName] = useState(
+    user?.last_name || fallbackName.slice(1).join(" ") || "",
+  );
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   function notify(message: string, type: "success" | "error" = "success") {
     setToast({ message, type });
   }
   const updateMe = useUpdateMe();
   const [savingProfile, setSavingProfile] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [currentError, setCurrentError] = useState<string | null>(null);
+  const [changingPassword, setChangingPassword] = useState(false);
 
-  const permissions = me?.permissions ?? [];
+  const result = passwordChecks(next);
+  const canSubmitPassword =
+    allChecksPass(result) && next === confirm && next.length > 0 && current.length > 0;
+
   const scope = me?.tenant_name ?? "All branches";
   const can = useCan();
   const { settings: gymSettings, isLoading: settingsLoading, isError: settingsError } = useGymSettings();
@@ -50,23 +58,23 @@ export default function GymSettings() {
     setSavingProfile(true);
     try {
       const updated = await updateMe.mutateAsync({
-        full_name: name.trim(),
-        email: email.trim(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
       });
-      // The PATCH response is the full MeOut — feed it straight into the
-      // context so a flaky follow-up GET can't bounce the user to /login
-      // while the toast claims success.
+      // PATCH response is the full MeOut — feed it straight into the context
+      // (same pattern as PlatformSettings.saveProfile).
       await refreshMe(updated);
-      // Seed the inputs from the server response (it lowercases email) —
-      // re-seeding from local state would show casing the server rejected.
-      setName(updated.user.full_name);
-      setEmail(updated.user.email);
+      setFirstName(updated.user.first_name);
+      setLastName(updated.user.last_name);
       notify("Profile updated");
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        notify("That email is already taken", "error");
+      if (e instanceof ApiError && e.status === 403) {
+        notify("Email can't be changed", "error");
       } else if (e instanceof ApiError && e.status === 422) {
-        notify("Check the name and email format", "error");
+        notify(
+          (e.detail as { message?: string } | null)?.message ?? "Check the name format",
+          "error",
+        );
       } else {
         notify("Could not save profile — check your connection", "error");
       }
@@ -75,10 +83,52 @@ export default function GymSettings() {
     }
   }
 
-  async function toggleCrossBranch(next: boolean) {
+  async function savePassword() {
+    setCurrentError(null);
+    setChangingPassword(true);
     try {
-      await updateGymSettings.mutateAsync({ cross_branch_access: next });
-      notify(next ? "Members can now use any branch" : "Members restricted to their home branch");
+      const tokens = await apiFetch<TokenResponse>("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ current_password: current, new_password: next }),
+      });
+      await completePasswordChange(tokens);
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+      notify("Password updated");
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const detail = e.detail as {
+          code?: string;
+          message?: string;
+          details?: { failed?: string[] };
+        } | null;
+        if (detail?.code === "INVALID_CURRENT_PASSWORD") {
+          setCurrentError("Current password is incorrect");
+        } else if (detail?.code === "PASSWORD_TOO_WEAK") {
+          notify(
+            `Password too weak — missing: ${detail.details?.failed?.join(", ") ?? "requirements"}`,
+            "error",
+          );
+        } else {
+          notify(detail?.message ?? "Could not change password", "error");
+        }
+      } else {
+        notify("Could not reach the server", "error");
+      }
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  async function toggleCrossBranch(nextValue: boolean) {
+    try {
+      await updateGymSettings.mutateAsync({ cross_branch_access: nextValue });
+      notify(
+        nextValue
+          ? "Members can now use any branch"
+          : "Members restricted to their home branch",
+      );
     } catch {
       notify("Could not update branch access", "error");
     }
@@ -116,52 +166,100 @@ export default function GymSettings() {
       <Card className="p-6">
         <SectionTitle title="Profile" subtitle="Your account details across the organization" />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Full name">
-            <Input id="settings-full-name" name="settings-full-name" aria-label="Full name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Field label="First name">
+            <Input
+              id="settings-first-name"
+              name="settings-first-name"
+              aria-label="First name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+          </Field>
+          <Field label="Last name">
+            <Input
+              id="settings-last-name"
+              name="settings-last-name"
+              aria-label="Last name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
           </Field>
           <Field label="Email">
-            <Input type="email" id="settings-email" name="settings-email" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input
+              type="email"
+              id="settings-email"
+              name="settings-email"
+              aria-label="Email"
+              value={user?.email ?? ""}
+              readOnly
+              disabled
+              aria-readonly="true"
+            />
           </Field>
         </div>
+        <p className="mt-2 text-[12px] text-ink-faint">Email can&apos;t be changed.</p>
         <div className="mt-4 flex justify-end">
-          <Button onClick={saveProfile} disabled={savingProfile}>
+          <Button
+            onClick={saveProfile}
+            disabled={savingProfile || firstName.trim().length < 1}
+          >
             {savingProfile ? "Saving…" : "Save changes"}
           </Button>
         </div>
       </Card>
 
       <Card className="p-6">
-        <SectionTitle title="Your role & permissions" subtitle="Access is scoped by role and branch" />
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between rounded-xl border border-line px-4 py-3">
-            <div className="min-w-0">
-              <p className="text-[13px] font-medium">{user?.full_name ?? "Current user"}</p>
-              <p className="text-[12px] text-ink-faint">{user?.email}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Badge tone="blue">{scope}</Badge>
-              <span className="w-10 text-right text-[12px] text-ink-faint">{permissions.length}</span>
-            </div>
+        <SectionTitle title="Password" subtitle="Change your account password" />
+        <div className="space-y-4">
+          <Field label="Current password">
+            <Input
+              type="password"
+              id="settings-current-password"
+              name="settings-current-password"
+              aria-label="Current password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </Field>
+          {currentError && <p className="text-[13px] text-red">{currentError}</p>}
+          <div>
+            <Field label="New password">
+              <Input
+                type="password"
+                id="settings-new-password"
+                name="settings-new-password"
+                aria-label="New password"
+                autoComplete="new-password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+              />
+            </Field>
+            <PasswordChecklist checks={result.checks} />
+          </div>
+          <Field label="Confirm new password">
+            <Input
+              type="password"
+              id="settings-confirm-password"
+              name="settings-confirm-password"
+              aria-label="Confirm new password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
+          </Field>
+          {next.length > 0 && next !== confirm && (
+            <p className="text-[13px] text-red">Passwords do not match.</p>
+          )}
+          <div className="flex justify-end">
+            <Button
+              onClick={savePassword}
+              disabled={!canSubmitPassword || changingPassword}
+            >
+              {changingPassword ? "Saving…" : "Update password"}
+            </Button>
           </div>
         </div>
-      </Card>
-
-      <Card className="p-6">
-        <SectionTitle title="Granted permissions" subtitle={`${permissions.length} actions available to you`} />
-        {permissions.length === 0 ? (
-          <p className="text-[13px] text-ink-faint">No granular permissions assigned.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {permissions.map((p) => (
-              <span
-                key={p}
-                className="rounded-md bg-fill px-2.5 py-1 font-mono text-[11px] text-ink-soft"
-              >
-                {prettifyPermission(p)}
-              </span>
-            ))}
-          </div>
-        )}
       </Card>
 
       {can("tenancy.settings.manage") && (
@@ -170,66 +268,87 @@ export default function GymSettings() {
           error={settingsError}
           skeleton={<SettingsBranchSkeleton />}
         >
-          <div className="space-y-6">
-            <Card className="p-6">
-              <SectionTitle
-                title="Gym profile"
-                subtitle="Name and timezone shown across the workspace"
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Gym name">
-                  <Input
-                    id="settings-gym-name"
-                    name="settings-gym-name"
-                    aria-label="Gym name"
-                    value={gymName}
-                    maxLength={200}
-                    onChange={(e) => setGymName(e.target.value)}
-                  />
-                </Field>
-                <Field label="Timezone">
-                  <Select id="settings-timezone" name="settings-timezone" aria-label="Timezone" value={gymTimezone} onChange={(e) => setGymTimezone(e.target.value)}>
-                    {TIMEZONES.map((tz) => (
-                      <option key={tz} value={tz}>
-                        {tz}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <Button
-                  onClick={saveGymProfile}
-                  disabled={updateGymSettings.isPending || gymName.trim().length < 2}
-                >
-                  {updateGymSettings.isPending ? "Saving…" : "Save gym profile"}
-                </Button>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div className="flex items-start justify-between gap-6">
-                <div>
-                  <SectionTitle
-                    title="Branch access"
-                    subtitle="Let members with an active membership train at any of your branches"
-                  />
-                  <p className="mt-2 text-[13px] text-ink-soft">
-                    When off, memberships are scoped to the branch they were purchased at and
-                    check-ins at other branches are denied.
-                  </p>
-                </div>
-                <Switch
-                  checked={gymSettings?.cross_branch_access ?? false}
-                  onChange={toggleCrossBranch}
-                  disabled={updateGymSettings.isPending}
-                  label="Cross-branch access"
+          <Card className="p-6">
+            <SectionTitle
+              title="Gym profile & branch access"
+              subtitle="Name and timezone shown across the workspace"
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Gym name">
+                <Input
+                  id="settings-gym-name"
+                  name="settings-gym-name"
+                  aria-label="Gym name"
+                  value={gymName}
+                  maxLength={200}
+                  onChange={(e) => setGymName(e.target.value)}
                 />
+              </Field>
+              <Field label="Timezone">
+                <Select id="settings-timezone" name="settings-timezone" aria-label="Timezone" value={gymTimezone} onChange={(e) => setGymTimezone(e.target.value)}>
+                  {TIMEZONES.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {formatTimezone(tz)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button
+                onClick={saveGymProfile}
+                disabled={updateGymSettings.isPending || gymName.trim().length < 2}
+              >
+                {updateGymSettings.isPending ? "Saving…" : "Save gym profile"}
+              </Button>
+            </div>
+
+            <div className="mt-6 flex items-start justify-between gap-6 border-t border-line pt-5">
+              <div>
+                <SectionTitle
+                  title="Branch access"
+                  subtitle="Let members with an active membership train at any of your branches"
+                />
+                <p className="mt-2 text-[13px] text-ink-soft">
+                  When off, memberships are scoped to the branch they were purchased at and
+                  check-ins at other branches are denied.
+                </p>
               </div>
-            </Card>
-          </div>
+              <Switch
+                checked={gymSettings?.cross_branch_access ?? false}
+                onChange={toggleCrossBranch}
+                disabled={updateGymSettings.isPending}
+                label="Cross-branch access"
+              />
+            </div>
+            {me?.branches && me.branches.length > 0 && (
+              <div className="mt-4 space-y-1.5">
+                {me.branches.map((b) => (
+                  <div
+                    key={b.id}
+                    className="flex items-center gap-2 rounded-lg border border-line bg-fill px-3 py-2 text-[13px]"
+                  >
+                    <span className="font-medium text-ink-soft">{b.name}</span>
+                    {b.timezone && (
+                      <span className="text-[12px] text-ink-faint">{formatTimezone(b.timezone)}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </Async>
       )}
+
+      <Card className="p-6">
+        <SectionTitle title="Role & permissions" subtitle="Your role and what it can do" />
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] text-ink-faint">Role:</span>
+          <Badge tone="blue">{me?.role_name ?? "Member"}</Badge>
+          <Badge tone="gray">{scope}</Badge>
+        </div>
+        <PermissionPills permissions={me?.permissions ?? []} />
+      </Card>
 
       {can("roles.manage") && (
         <Card className="flex items-center justify-between p-6">

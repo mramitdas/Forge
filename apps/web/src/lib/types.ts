@@ -16,7 +16,8 @@ export interface MeOut {
   tenant_name: string | null;
   is_platform: boolean;
   permissions: string[];
-  branches: { id: string; name: string }[];
+  role_name?: string | null;
+  branches: { id: string; name: string; timezone?: string }[];
   must_change?: boolean;
 }
 
