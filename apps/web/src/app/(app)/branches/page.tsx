@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, SectionTitle, Select, Toast } from "@/components/ui";
-import { Async, Count, Skeleton } from "@/components/skeleton";
+import { ApiError } from "@/lib/api";
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Toast } from "@/components/ui";
+import { Async, Count } from "@/components/skeleton";
 import { BranchGridSkeleton } from "@/components/skeletons";
-import { useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch } from "@/lib/hooks";
+import { useBranches, useCreateBranch, useTenantTier, useUpdateBranch, useDeleteBranch } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
-import { TIMEZONES } from "@/lib/timezones";
+import { TIMEZONES, formatTimezone } from "@/lib/timezones";
 import { COUNTRY_CODES, dialFor } from "@/lib/countries";
 import type { Branch } from "@/lib/mock";
 
@@ -20,6 +21,83 @@ const emptyForm = {
   gst_number: "",
   timezone: "Asia/Kolkata",
 };
+
+type BranchErrors = Partial<Record<"code" | "phone" | "gst_number", string>>;
+
+const DUP_MSGS = {
+  code: "This code is already used by another branch",
+  phone: "This phone number is already used by another branch",
+  gst_number: "This GST number is already used by another branch",
+} as const;
+
+const CODE_TO_FIELD = {
+  CODE_TAKEN: "code",
+  PHONE_TAKEN: "phone",
+  GST_TAKEN: "gst_number",
+} as const;
+
+function normPhoneDigits(countryCode: string, phone: string): string {
+  const cc = countryCode.replace(/\D/g, "");
+  const ph = phone.replace(/\D/g, "");
+  if (!ph) return "";
+  if (cc && ph.startsWith(cc)) return ph;
+  return `${cc}${ph}`;
+}
+
+function validateBranchForm(
+  form: typeof emptyForm,
+  branches: Branch[],
+  excludeId?: string,
+): BranchErrors {
+  const errors: BranchErrors = {};
+  if (form.code.trim().length > 32) {
+    errors.code = "Code must be at most 32 characters";
+  }
+  const phone = form.phone.replace(/\s/g, "");
+  if (phone && !/^\+?\d{6,15}$/.test(phone)) {
+    errors.phone = "Enter a valid phone number — 6 to 15 digits";
+  }
+  const gst = form.gst_number.trim().toUpperCase();
+  if (gst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gst)) {
+    errors.gst_number = "Enter a valid 15-character GSTIN";
+  }
+  const code = form.code.trim().toLowerCase();
+  const phoneIdentity = normPhoneDigits(form.country_code, form.phone);
+  for (const b of branches) {
+    if (excludeId && b.id === excludeId) continue;
+    if (!errors.code && code && b.code && b.code !== "—" && b.code.trim().toLowerCase() === code) {
+      errors.code = DUP_MSGS.code;
+    }
+    if (
+      !errors.phone &&
+      phoneIdentity &&
+      b.phone &&
+      b.phone !== "—" &&
+      normPhoneDigits(b.country_code || "", b.phone) === phoneIdentity
+    ) {
+      errors.phone = DUP_MSGS.phone;
+    }
+    if (
+      !errors.gst_number &&
+      gst &&
+      b.gst_number &&
+      b.gst_number !== "—" &&
+      b.gst_number.trim().toUpperCase() === gst
+    ) {
+      errors.gst_number = DUP_MSGS.gst_number;
+    }
+    if (errors.code && errors.phone && errors.gst_number) break;
+  }
+  return errors;
+}
+
+function serverFieldError(e: unknown): BranchErrors | null {
+  if (e instanceof ApiError && e.status === 409) {
+    const field = e.code ? CODE_TO_FIELD[e.code as keyof typeof CODE_TO_FIELD] : undefined;
+    if (field) return { [field]: DUP_MSGS[field] };
+  }
+  return null;
+}
 
 function phoneParts(phone: string, fallbackDial: string): { dial: string; number: string } {
   const dials = COUNTRY_CODES.map((c) => c.dial).sort((a, b) => b.length - a.length);
@@ -59,6 +137,7 @@ export default function BranchesPage() {
   const createBranch = useCreateBranch();
   const updateBranch = useUpdateBranch();
   const deleteBranch = useDeleteBranch();
+  const { tier } = useTenantTier();
   const can = useCan();
   const addGuard = useInFlight();
   const saveGuard = useInFlight();
@@ -66,14 +145,19 @@ export default function BranchesPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [formErrors, setFormErrors] = useState<BranchErrors>({});
   const [editing, setEditing] = useState<Branch | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
+  const [editErrors, setEditErrors] = useState<BranchErrors>({});
   const [disableTarget, setDisableTarget] = useState<Branch | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   async function addBranch(e: React.FormEvent) {
     e.preventDefault();
+    const errors = validateBranchForm(form, branches);
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     await addGuard.run(async () => {
       try {
         await createBranch.mutateAsync({
@@ -87,8 +171,19 @@ export default function BranchesPage() {
         });
         setCreateOpen(false);
         setForm(emptyForm);
+        setFormErrors({});
         setToast({ type: "success", message: "Branch added" });
-      } catch {
+      } catch (err) {
+        const dup = serverFieldError(err);
+        if (dup) {
+          setFormErrors(dup);
+          return;
+        }
+        if (err instanceof ApiError && err.status === 422) {
+          const msg = (err.detail as { message?: string } | null)?.message;
+          setToast({ type: "error", message: msg ?? "Check the branch details" });
+          return;
+        }
         setToast({ type: "error", message: "Could not add branch" });
       }
     });
@@ -97,13 +192,14 @@ export default function BranchesPage() {
   function openEdit(b: Branch) {
     const parts = phoneParts(b.phone === "—" ? "" : b.phone, b.country_code || "+91");
     setEditing(b);
+    setEditErrors({});
     setEditForm({
       name: b.name,
-      code: b.code,
+      code: b.code === "—" ? "" : b.code,
       address: b.address === "—" ? "" : b.address,
       phone: parts.number,
       country_code: b.country_code || parts.dial,
-      gst_number: b.gst_number,
+      gst_number: b.gst_number === "—" ? "" : b.gst_number,
       timezone: b.timezone,
     });
   }
@@ -111,6 +207,9 @@ export default function BranchesPage() {
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
+    const errors = validateBranchForm(editForm, branches, editing.id);
+    setEditErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     await saveGuard.run(async () => {
       try {
         await updateBranch.mutateAsync({
@@ -127,7 +226,24 @@ export default function BranchesPage() {
         });
         setEditing(null);
         setToast({ type: "success", message: "Branch updated" });
-      } catch {
+      } catch (err) {
+        const dup = serverFieldError(err);
+        if (dup) {
+          setEditErrors(dup);
+          return;
+        }
+        if (err instanceof ApiError && err.code === "BRANCH_DISABLED") {
+          setToast({
+            type: "error",
+            message: "Enable the branch before editing its details",
+          });
+          return;
+        }
+        if (err instanceof ApiError && err.status === 422) {
+          const msg = (err.detail as { message?: string } | null)?.message;
+          setToast({ type: "error", message: msg ?? "Check the branch details" });
+          return;
+        }
         setToast({ type: "error", message: "Could not update branch" });
       }
     });
@@ -177,6 +293,12 @@ export default function BranchesPage() {
     }
   }
 
+  const tierPct =
+    tier?.max_members !== null && tier?.max_members
+      ? Math.min(100, Math.round(((tier.members_used || 0) / tier.max_members) * 100))
+      : 0;
+  const tierBarColor = tierPct >= 95 ? "bg-red" : tierPct >= 80 ? "bg-amber" : "bg-accent";
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -186,7 +308,13 @@ export default function BranchesPage() {
           </Count>
         </p>
         {can("tenancy.branches.create") && (
-          <Button variant="secondary" onClick={() => setCreateOpen(true)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setFormErrors({});
+              setCreateOpen(true);
+            }}
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
               <path d="M12 5v14M5 12h14" strokeLinecap="round" />
             </svg>
@@ -194,6 +322,30 @@ export default function BranchesPage() {
           </Button>
         )}
       </div>
+
+      {tier && (
+        <div className="rounded-xl border border-line px-4 py-3">
+          <div className="flex items-center justify-between text-[13px]">
+            <span className="text-ink-soft">
+              {tier.tier_name} plan · {tier.members_used}
+              {tier.max_members ? ` of ${tier.max_members} members` : " members · no cap"}
+            </span>
+            {tier.max_members !== null && (
+              <span className="text-ink-faint">
+                {tierPct}% · {Math.max(0, tier.max_members - tier.members_used)} spots left
+              </span>
+            )}
+          </div>
+          {tier.max_members !== null && (
+            <div className="mt-2 h-1.5 rounded-full bg-fill">
+              <div
+                className={`h-full rounded-full ${tierBarColor}`}
+                style={{ width: `${tierPct}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       <Async
         loading={isLoading}
@@ -244,7 +396,7 @@ export default function BranchesPage() {
                 )}
                 {(can("tenancy.branches.update") || can("tenancy.branches.delete")) && (
                   <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
-                    {can("tenancy.branches.update") && (
+                    {can("tenancy.branches.update") && b.is_active && (
                       <Button variant="ghost" size="sm" onClick={() => openEdit(b)}>
                         Edit
                       </Button>
@@ -272,26 +424,6 @@ export default function BranchesPage() {
         )}
       </Async>
 
-      <Card className="p-5">
-        <SectionTitle title="Timezone coverage" subtitle="All locations operate on shared availability rules" />
-        <Async
-          loading={isLoading}
-          error={isError}
-          skeleton={<Skeleton className="h-8 w-64 rounded-full" />}
-        >
-          <div className="flex flex-wrap gap-2">
-            {branches.map((b) => (
-              <span
-                key={b.id}
-                className="rounded-full bg-fill px-3 py-1.5 text-[12px] font-medium text-ink-soft"
-              >
-                {b.name} · {b.timezone}
-              </span>
-            ))}
-          </div>
-        </Async>
-      </Card>
-
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Add a branch" subtitle="A new location your members can train at">
         <form onSubmit={addBranch} className="space-y-4">
           <Field label="Branch name">
@@ -313,11 +445,12 @@ export default function BranchesPage() {
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
               />
+              {formErrors.code && <p className="text-[13px] text-red">{formErrors.code}</p>}
             </Field>
             <Field label="Timezone">
               <Select id="branch-timezone" aria-label="Timezone" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
                 {TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>{tz}</option>
+                  <option key={tz} value={tz}>{formatTimezone(tz)}</option>
                 ))}
               </Select>
             </Field>
@@ -343,6 +476,7 @@ export default function BranchesPage() {
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
+              {formErrors.phone && <p className="text-[13px] text-red">{formErrors.phone}</p>}
             </Field>
           </div>
           <Field label="GST number">
@@ -353,6 +487,7 @@ export default function BranchesPage() {
               value={form.gst_number}
               onChange={(e) => setForm({ ...form, gst_number: e.target.value })}
             />
+            {formErrors.gst_number && <p className="text-[13px] text-red">{formErrors.gst_number}</p>}
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -382,11 +517,12 @@ export default function BranchesPage() {
                 value={editForm.code}
                 onChange={(e) => setEditForm({ ...editForm, code: e.target.value })}
               />
+              {editErrors.code && <p className="text-[13px] text-red">{editErrors.code}</p>}
             </Field>
             <Field label="Timezone">
               <Select id="branch-edit-timezone" aria-label="Timezone" value={editForm.timezone} onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}>
                 {TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>{tz}</option>
+                  <option key={tz} value={tz}>{formatTimezone(tz)}</option>
                 ))}
               </Select>
             </Field>
@@ -410,6 +546,7 @@ export default function BranchesPage() {
                 value={editForm.phone}
                 onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
               />
+              {editErrors.phone && <p className="text-[13px] text-red">{editErrors.phone}</p>}
             </Field>
           </div>
           <Field label="GST number">
@@ -420,6 +557,7 @@ export default function BranchesPage() {
               value={editForm.gst_number}
               onChange={(e) => setEditForm({ ...editForm, gst_number: e.target.value })}
             />
+            {editErrors.gst_number && <p className="text-[13px] text-red">{editErrors.gst_number}</p>}
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
