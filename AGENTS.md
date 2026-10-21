@@ -49,14 +49,19 @@ user approval.
 (`me.is_platform`) get `PlatformSettings.tsx`, everyone else gets
 `GymSettings.tsx`.
 
-- `GymSettings.tsx` is a **verbatim** move of the pre-split settings page —
-  its selectors are a contract with `e2e/gym_ops_verify.cjs` (33/33). Any
-  selector/label/id change there breaks the gym gate.
-- `PlatformSettings.tsx` (platform only): split first/last name inputs (save
-  via `PATCH /auth/me` `{first_name, last_name}`), frozen email
-  (readOnly/disabled in UI; backend enforces 403 `EMAIL_FROZEN` for platform
-  actors), 3-field password change with live rule checklist. No role,
-  permissions, gym-profile, or danger-zone sections (spec §UX).
+- `GymSettings.tsx` (everyone else): five cards — Profile (split
+  first/last name save via `PATCH /auth/me` `{first_name, last_name}`,
+  frozen email readOnly), Password (3-field + live checklist, shared
+  `PasswordChecklist` component), Gym profile & branch access (owner-gated
+  gym name/tz + branch chips showing per-branch tz via `formatTimezone`),
+  Role & permissions (role badge from `me.role_name` + read-only R/W/U/D
+  `PermissionPills`), Danger zone (owner-gated). Selectors are a contract
+  with `e2e/gym_ops_verify.cjs` (36/36).
+- `PlatformSettings.tsx` (platform only): same Profile + Password cards
+  (shared `PasswordChecklist`), split first/last name inputs, frozen email
+  (readOnly/disabled in UI; backend enforces 403 `EMAIL_FROZEN` for ANY
+  user submitting a different email). No role, permissions, gym-profile,
+  or danger-zone sections (spec §UX).
 
 ## Password complexity — keep FE and BE in sync
 
