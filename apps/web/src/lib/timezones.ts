@@ -64,3 +64,16 @@ export const TIMEZONES: string[] = [
 export function normalizeTimezone(value: string): string {
   return TIMEZONES.includes(value) ? value : "UTC";
 }
+
+export function formatTimezone(tz: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      timeZoneName: "shortOffset",
+    }).formatToParts(new Date(0));
+    const offset = parts.find((p) => p.type === "timeZoneName")?.value;
+    return offset ? `${tz} (${offset})` : tz;
+  } catch {
+    return tz;
+  }
+}
