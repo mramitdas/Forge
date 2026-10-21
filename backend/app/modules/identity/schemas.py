@@ -69,6 +69,7 @@ class MeOut(BaseModel):
     user: UserOut
     tenant_id: uuid.UUID
     tenant_name: str | None = None
+    role_name: str | None = None
     is_platform: bool
     permissions: list[str]
     branches: list[dict] = []

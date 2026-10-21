@@ -11,7 +11,14 @@ from app.core.errors import ForbiddenError
 from app.db.session import get_platform_session
 from app.deps import Actor, get_actor_context, get_session_for_actor, require_permission
 from app.modules.identity import service as identity_svc
-from app.modules.identity.models import Credential, PermissionCatalog, Role, RolePermission, User
+from app.modules.identity.models import (
+    Credential,
+    PermissionCatalog,
+    Role,
+    RolePermission,
+    User,
+    UserRole,
+)
 from app.modules.identity.schemas import (
     AssignRoleRequest,
     ChangePasswordRequest,
@@ -84,12 +91,22 @@ async def _me_payload(session: AsyncSession, actor: Actor, user: User) -> MeOut:
                 Branch.gym_id == actor.tenant_id, Branch.deleted_at.is_(None)
             )
         )
-        branches = [{"id": str(b.id), "name": b.name} for b in branch_rows]
+        branches = [
+            {"id": str(b.id), "name": b.name, "timezone": b.timezone}
+            for b in branch_rows
+        ]
+    role_rows = await session.scalars(
+        select(Role.name)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(UserRole.user_id == user.id, Role.deleted_at.is_(None))
+    )
+    role_name = ", ".join(sorted({r for r in role_rows if r})) or None
     cred = await session.scalar(select(Credential).where(Credential.user_id == user.id))
     return MeOut(
         user=UserOut.model_validate(user),
         tenant_id=actor.tenant_id,
         tenant_name=tenant_name,
+        role_name=role_name,
         is_platform=actor.is_platform,
         permissions=sorted(perms.keys()),
         branches=branches,

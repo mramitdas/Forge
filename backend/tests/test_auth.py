@@ -28,6 +28,35 @@ async def test_login_and_me(client, gym_a):
     assert me["branches"] == []
 
 
+async def test_me_role_and_branch_timezones(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    branch = await client.post(
+        "/api/v1/branches",
+        headers=headers,
+        json={"name": "Me TZ Branch", "code": "MT", "timezone": "Europe/Berlin"},
+    )
+    assert branch.status_code == 201, branch.text
+
+    try:
+        response = await client.get("/api/v1/auth/me", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role_name"] == "Gym Owner"
+        assert len(data["branches"]) >= 1
+        mine = next(b for b in data["branches"] if b["id"] == branch.json()["id"])
+        assert set(mine) >= {"id", "name", "timezone"}
+        assert mine["timezone"] == "Europe/Berlin"
+    finally:
+        # test_branch_crud asserts gym_a's branch-name set EXACTLY — remove
+        # the branch we made.
+        deleted = await client.delete(
+            f"/api/v1/branches/{branch.json()['id']}", headers=headers
+        )
+        assert deleted.status_code == 204, deleted.text
+
+
 async def test_refresh_rotation_revokes_reuse(client, gym_a):
     tokens = await login(client, "owner-gyma@example.com", "owner-pass-123")
     first = tokens["refresh_token"]
