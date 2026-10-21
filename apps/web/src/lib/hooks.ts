@@ -599,6 +599,25 @@ export function useCreateExpense() {
   });
 }
 
+export function useUpdateExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      id: string;
+      body: {
+        category?: string;
+        description?: string | null;
+        amount_minor?: number;
+        method?: string;
+        paid_at?: string;
+      };
+    }) => apiFetch<ExpenseOut>(`/expenses/${args.id}`, { method: "PATCH", body: JSON.stringify(args.body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+    },
+  });
+}
+
 export function useDeleteExpense() {
   const qc = useQueryClient();
   return useMutation({

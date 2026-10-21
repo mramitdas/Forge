@@ -5,9 +5,10 @@ import { Badge, Button, Card, Input, Modal, Select, Textarea, Toast } from "@/co
 import { Async, Skeleton, SkeletonText } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
 import { inr } from "@/lib/mock";
-import { useCreateExpense, useDeleteExpense, useExpensesData, useExpensesPage } from "@/lib/hooks";
+import { useCreateExpense, useDeleteExpense, useExpensesData, useExpensesPage, useUpdateExpense } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
+import type { ExpenseOut } from "@/lib/types";
 
 const CATEGORIES = ["Rent", "Salary", "Electricity", "Water", "Internet", "Maintenance", "Marketing", "Other"];
 const METHODS = ["cash", "upi", "card", "netbanking", "wallet", "other"];
@@ -57,6 +58,7 @@ function SummaryCards() {
 
 export default function ExpensesPage() {
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<ExpenseOut | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [form, setForm] = useState({
     category: "Rent",
@@ -71,9 +73,11 @@ export default function ExpensesPage() {
   const { expenses, total, isLoading, isError } = useExpensesPage({ page, pageSize: PAGE_SIZE });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
   const can = useCan();
   const addGuard = useInFlight();
+  const editGuard = useInFlight();
   const deleteGuard = useInFlight();
 
   useEffect(() => {
@@ -84,6 +88,24 @@ export default function ExpensesPage() {
     () => [...expenses].sort((a, b) => (a.paid_at < b.paid_at ? 1 : -1)),
     [expenses],
   );
+
+  function openEdit(e: ExpenseOut) {
+    const d = new Date(e.paid_at);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setForm({
+      category: e.category,
+      description: e.description || "",
+      amount: String(e.amount_minor / 100),
+      method: e.method,
+      paidAt: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    });
+    setEditing(e);
+  }
+
+  function closeModal() {
+    setAdding(false);
+    setEditing(null);
+  }
 
   async function confirmAdd() {
     const amountMinor = Math.round(Number(form.amount) * 100);
@@ -105,6 +127,33 @@ export default function ExpensesPage() {
         setToast({ type: "success", message: `Expense recorded` });
       } catch {
         setToast({ type: "error", message: "Could not save the expense — please try again" });
+      }
+    });
+  }
+
+  async function confirmUpdate() {
+    if (!editing) return;
+    const amountMinor = Math.round(Number(form.amount) * 100);
+    if (!form.amount || Number.isNaN(amountMinor) || amountMinor <= 0) {
+      setToast({ type: "error", message: "Enter a valid amount" });
+      return;
+    }
+    await editGuard.run(async () => {
+      try {
+        await updateExpense.mutateAsync({
+          id: editing.id,
+          body: {
+            category: form.category,
+            description: form.description || null,
+            amount_minor: amountMinor,
+            method: form.method,
+            paid_at: new Date(form.paidAt).toISOString(),
+          },
+        });
+        setEditing(null);
+        setToast({ type: "success", message: `Expense updated` });
+      } catch {
+        setToast({ type: "error", message: "Could not update the expense — please try again" });
       }
     });
   }
@@ -166,14 +215,20 @@ export default function ExpensesPage() {
                   <td className="px-4 py-3 font-medium">{inr(e.amount_minor)}</td>
                   <td className="px-5 py-3 text-right">
                     {can("expenses.manage") && (
-                      <Button
-                        size="xs"
-                        variant="danger"
-                        disabled={deleteGuard.busy || deleteExpense.isPending}
-                        onClick={() => confirmDelete(e.id)}
-                      >
-                        Delete
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => openEdit(e)}>
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red hover:bg-red-soft"
+                          disabled={deleteGuard.busy || deleteExpense.isPending}
+                          onClick={() => confirmDelete(e.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -196,7 +251,12 @@ export default function ExpensesPage() {
         </Card>
       </Async>
 
-      <Modal open={adding} onClose={() => setAdding(false)} title="Add expense" subtitle="Rent, salaries, utilities…">
+      <Modal
+        open={adding || editing !== null}
+        onClose={closeModal}
+        title={editing ? "Edit expense" : "Add expense"}
+        subtitle="Rent, salaries, utilities…"
+      >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
@@ -259,11 +319,14 @@ export default function ExpensesPage() {
             />
           </label>
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="secondary" onClick={() => setAdding(false)}>
+            <Button type="button" variant="secondary" onClick={closeModal}>
               Cancel
             </Button>
-            <Button onClick={confirmAdd} disabled={addGuard.busy || createExpense.isPending}>
-              Save expense
+            <Button
+              onClick={editing ? confirmUpdate : confirmAdd}
+              disabled={editing ? editGuard.busy || updateExpense.isPending : addGuard.busy || createExpense.isPending}
+            >
+              {editing ? "Save changes" : "Save expense"}
             </Button>
           </div>
         </div>

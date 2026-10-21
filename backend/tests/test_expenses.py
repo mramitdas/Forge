@@ -82,3 +82,55 @@ async def test_owner_can_delete_expense(client, gym_a):
 
     listing = await client.get("/api/v1/expenses", headers=headers)
     assert all(i["id"] != expense_id for i in listing.json()["items"])
+
+
+async def test_owner_can_update_expense(client, gym_a):
+    headers = await _owner_headers(client)
+    created = await client.post(
+        "/api/v1/expenses",
+        headers=headers,
+        json={
+            "category": "Rent",
+            "description": "original note",
+            "amount_minor": 100000,
+            "method": "cash",
+        },
+    )
+    assert created.status_code == 201, created.text
+    expense_id = created.json()["id"]
+
+    updated = await client.patch(
+        f"/api/v1/expenses/{expense_id}",
+        headers=headers,
+        json={"category": "Utilities", "amount_minor": 150000, "method": "upi"},
+    )
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    assert body["category"] == "Utilities"
+    assert body["amount_minor"] == 150000
+    assert body["method"] == "upi"
+    # Unspecified fields stay untouched.
+    assert body["description"] == "original note"
+
+    bad_amount = await client.patch(
+        f"/api/v1/expenses/{expense_id}",
+        headers=headers,
+        json={"amount_minor": 0},
+    )
+    assert bad_amount.status_code == 422, bad_amount.text
+
+    # Tenant isolation: gym B cannot touch gym A's expense.
+    other = await _owner_headers(client, "gymb")
+    foreign = await client.patch(
+        f"/api/v1/expenses/{expense_id}",
+        headers=other,
+        json={"amount_minor": 1},
+    )
+    assert foreign.status_code == 404, foreign.text
+
+    missing = await client.patch(
+        "/api/v1/expenses/00000000-0000-0000-0000-000000000000",
+        headers=headers,
+        json={"amount_minor": 1},
+    )
+    assert missing.status_code == 404, missing.text

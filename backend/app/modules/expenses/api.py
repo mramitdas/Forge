@@ -12,9 +12,11 @@ from app.kernel.pagination import OffsetPagination
 from app.modules.expenses.service import (
     ExpenseCreate,
     ExpenseOut,
+    ExpenseUpdate,
     create_expense,
     delete_expense,
     list_expenses,
+    update_expense,
 )
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
@@ -66,6 +68,22 @@ async def list_expenses_route(
         "page": pagination.page,
         "page_size": pagination.page_size,
     }
+
+
+@router.patch("/{expense_id}", response_model=ExpenseOut)
+async def update_expense_route(
+    expense_id: uuid.UUID,
+    body: ExpenseUpdate,
+    actor: Annotated[Actor, Depends(require_permission("expenses.manage"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> ExpenseOut:
+    expense = await update_expense(
+        session,
+        tenant_id=actor.tenant_id,
+        expense_id=expense_id,
+        data=body.model_dump(exclude_unset=True),
+    )
+    return ExpenseOut.model_validate(expense)
 
 
 @router.delete("/{expense_id}", status_code=204)

@@ -1,4 +1,4 @@
-// Expenses page E2E: empty state, add, delete, validation, imported data.
+// Expenses page E2E: empty state, add, edit, delete, validation, imported data.
 //
 // Requires the backend + frontend dev servers and the imported dev DB.
 // demo-owner sees an empty demo gym; the evolve-gym owner sees the 58
@@ -54,6 +54,13 @@ async function main() {
     await page.goto(`${BASE}/expenses`);
     await must("expenses page renders", page.getByRole("heading", { name: "Expenses", exact: true }).first().waitFor({ timeout: 15000 }));
 
+    // The layout <h1> "Expenses" renders before data loads, and the loading
+    // skeleton has no <table> at all — wait for the real tbody (attached, it
+    // is height-0 when empty) before measuring row counts.
+    await must(
+      "expenses table settles",
+      page.waitForSelector("table tbody", { state: "attached", timeout: 15000 }),
+    );
     const startsAt = await rowCount(page);
     check("table present (empty or existing rows)", true, `start=${startsAt}`);
 
@@ -91,8 +98,20 @@ async function main() {
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.locator('input[type="number"]').waitFor({ state: "detached", timeout: 10000 });
 
-    // Delete the row we added (newest first by paid_at date)
+    // Edit the row we just added (amount 25000 → 26000 via the edit modal)
     await page.locator("table tbody tr", { hasText: "₹25,000" }).first()
+      .getByRole("button", { name: "Edit" }).click();
+    await page.locator('input[type="number"]').waitFor({ timeout: 10000 });
+    await page.locator('input[type="number"]').fill("26000");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await page.getByText("Expense updated").waitFor({ timeout: 10000 });
+    await must(
+      "expense edited via modal",
+      page.locator("table tbody tr", { hasText: "₹26,000" }).first().waitFor({ timeout: 15000 }),
+    );
+
+    // Delete the row we edited (newest first by paid_at date)
+    await page.locator("table tbody tr", { hasText: "₹26,000" }).first()
       .getByRole("button", { name: "Delete" }).click();
     await page.getByText("Expense deleted").waitFor({ timeout: 10000 });
     // Same race as create: the toast precedes the refetch that drops the row

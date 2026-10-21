@@ -21,6 +21,15 @@ class ExpenseCreate(BaseModel):
     paid_at: datetime | None = None
 
 
+class ExpenseUpdate(BaseModel):
+    category: str | None = None
+    description: str | None = None
+    amount_minor: int | None = None
+    method: str | None = None
+    branch_id: uuid.UUID | None = None
+    paid_at: datetime | None = None
+
+
 class ExpenseOut(BaseModel):
     id: uuid.UUID
     branch_id: uuid.UUID | None
@@ -95,6 +104,44 @@ async def list_expenses(
         )
     ).scalars().all()
     return list(rows), total or 0
+
+
+async def update_expense(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    expense_id: uuid.UUID,
+    data: dict,
+) -> Expense:
+    expense = await session.scalar(
+        select(Expense).where(
+            Expense.id == expense_id,
+            Expense.tenant_id == tenant_id,
+            Expense.deleted_at.is_(None),
+        )
+    )
+    if expense is None:
+        raise NotFoundError("Expense not found", code="NOT_FOUND")
+    if "category" in data and data["category"] is not None:
+        if not data["category"].strip():
+            raise ValidationError("Category is required", code="CATEGORY_REQUIRED")
+        expense.category = data["category"].strip()
+    if "amount_minor" in data and data["amount_minor"] is not None:
+        if data["amount_minor"] <= 0:
+            raise ValidationError("Amount must be positive", code="INVALID_AMOUNT")
+        expense.amount_minor = data["amount_minor"]
+    if "method" in data and data["method"] is not None:
+        if data["method"] not in EXPENSE_METHODS:
+            raise ValidationError("Invalid payment method", code="INVALID_METHOD")
+        expense.method = data["method"]
+    if "description" in data:
+        expense.description = data["description"]
+    if "branch_id" in data:
+        expense.branch_id = data["branch_id"]
+    if "paid_at" in data and data["paid_at"] is not None:
+        expense.paid_at = data["paid_at"]
+    await session.flush()
+    return expense
 
 
 async def delete_expense(
