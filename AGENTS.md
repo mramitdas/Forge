@@ -102,6 +102,10 @@ The super-admin gate is a proper `@playwright/test` suite under
   state only — the API path is pytest's job).
 - No `webServer` block in `playwright.config.ts` on purpose — the suite runs
   against the already-running `make dev` / `make web` servers.
+- CPU budget: the gate runs `workers: 2` + `trace: "off"` (default `cpus/2`
+  Chromiums freeze the machine via parallel Next dev compiles). `auth.setup.ts`
+  warms every platform route first so the parallel phase is compile-free.
+  Debug a failure with `--trace on-first-retry`.
 - The six remaining house-style scripts (`gym_ops`, `plans`,
   `member_account`, `role_visibility`, `frontdesk`, `expenses`) are unchanged
   and still run with
@@ -110,7 +114,10 @@ The super-admin gate is a proper `@playwright/test` suite under
 ## Dev servers
 
 - Backend: `make dev` → uvicorn `:8000` `--reload` (health probe:
-  `GET /api/v1/auth/me` should 401).
+  `GET /api/v1/auth/me` should 401; `POST /auth/login` with the admin fixture
+  should be 200 — a 500 with `UndefinedColumnError` means the DB was
+  downgraded/restored behind the code: run `backend/.venv/bin/alembic upgrade
+  head`).
 - Frontend: `make web` → Next dev `:3000`.
 - E2E scripts run against the RUNNING servers (`NODE_PATH="$(npm root -g)"`
   prefix for Playwright); never restart servers mid-session to "pick up
