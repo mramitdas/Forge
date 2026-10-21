@@ -25,13 +25,13 @@ function hasVerb(module: string, verb: Verb, perms: Set<string>): boolean {
 
 const ROW = "flex items-center gap-2";
 const MODULE_CELL = "w-28 shrink-0 truncate capitalize";
-const VERB_CELL = "flex w-12 shrink-0 justify-center";
+const VERB_CELL = "flex flex-1 justify-center";
 
 export function PermissionPills({ permissions }: { permissions: string[] }) {
   const perms = new Set(permissions);
   const rows = MODULES.filter((m) => [...perms].some((c) => c.startsWith(m + ".")));
   return (
-    <div className="mx-auto mt-4 w-fit" aria-label="Granted permissions">
+    <div className="mt-4" aria-label="Granted permissions">
       <div className={ROW} aria-hidden>
         <span className={cn(MODULE_CELL, "text-[11px] font-medium text-ink-faint")}>Module</span>
         {VERBS.map((v) => (
