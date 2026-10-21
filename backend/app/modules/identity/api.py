@@ -129,7 +129,7 @@ async def update_me_route(
     actor: Annotated[Actor, Depends(get_actor_context)],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> MeOut:
-    if actor.is_platform and body.email is not None and body.email.lower() != actor.email.lower():
+    if body.email is not None and body.email.lower() != actor.email.lower():
         raise ForbiddenError("Email can't be changed", code="EMAIL_FROZEN")
     user = await identity_svc.update_me(
         session,

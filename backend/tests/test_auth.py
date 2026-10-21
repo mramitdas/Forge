@@ -162,21 +162,12 @@ async def test_update_me_profile(client, gym_a):
     me = await client.get("/api/v1/auth/me", headers=headers)
     assert me.json()["user"]["full_name"] == "Renamed Owner"
 
-    # Email belonging to another user → 409.
-    emp = await client.post(
-        "/api/v1/employees",
-        headers=headers,
-        json={
-            "email": "taken-me-profile@example.com",
-            "full_name": "Temp Employee",
-            "password": "temp-pass-123",
-        },
+    # Email is frozen for non-platform users too.
+    frozen = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"email": "someone-else@example.com"}
     )
-    assert emp.status_code == 201, emp.text
-    conflict = await client.patch(
-        "/api/v1/auth/me", headers=headers, json={"email": "taken-me-profile@example.com"}
-    )
-    assert conflict.status_code == 409, conflict.text
+    assert frozen.status_code == 403, frozen.text
+    assert frozen.json()["error"]["code"] == "EMAIL_FROZEN"
 
     # Restoring the original name keeps the suite state clean for gym_a.
     restore = await client.patch(
@@ -189,49 +180,40 @@ async def test_update_me_email_conflict_other_tenant(client, gym_a, gym_b):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     headers = {"Authorization": f"Bearer {owner['access_token']}"}
 
-    before = await client.get("/api/v1/auth/me", headers=headers)
-    assert before.status_code == 200
-    original_email = before.json()["user"]["email"]
-
-    # owner-gymb@example.com belongs to a DIFFERENT tenant — the per-tenant
-    # unique index cannot catch it, and login matches email globally.
+    # Email is frozen for every user — the cross-tenant claim below is rejected
+    # with 403 EMAIL_FROZEN before any uniqueness probe runs.
     response = await client.patch(
         "/api/v1/auth/me", headers=headers, json={"email": "owner-gymb@example.com"}
     )
-    if response.status_code != 409:
-        # Regression guard: undo the cross-tenant email so the rest of the
-        # suite can still log in as owner-gyma@example.com.
-        await client.patch(
-            "/api/v1/auth/me", headers=headers, json={"email": original_email}
-        )
-    assert response.status_code == 409, response.text
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "EMAIL_FROZEN"
 
 
-async def test_update_me_email_change_lowercased(client, gym_a):
+async def test_update_me_email_frozen_non_platform(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     headers = {"Authorization": f"Bearer {owner['access_token']}"}
 
     before = await client.get("/api/v1/auth/me", headers=headers)
     assert before.status_code == 200
-    original_email = before.json()["user"]["email"]
+    current_email = before.json()["user"]["email"]
 
+    # Any different email → 403 EMAIL_FROZEN (case-insensitive comparison).
     response = await client.patch(
         "/api/v1/auth/me",
         headers=headers,
         json={"email": "Mixed.Case.Me@Test.COM"},
     )
-    assert response.status_code == 200, response.text
-    assert response.json()["user"]["email"] == "mixed.case.me@test.com"
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "EMAIL_FROZEN"
+
+    # Same email (no-op) is still allowed — passes the guard, returns 200.
+    noop = await client.patch(
+        "/api/v1/auth/me", headers=headers, json={"email": current_email}
+    )
+    assert noop.status_code == 200, noop.text
 
     me = await client.get("/api/v1/auth/me", headers=headers)
-    assert me.json()["user"]["email"] == "mixed.case.me@test.com"
-
-    restore = await client.patch(
-        "/api/v1/auth/me", headers=headers, json={"email": original_email}
-    )
-    assert restore.status_code == 200, restore.text
-    restored = await client.get("/api/v1/auth/me", headers=headers)
-    assert restored.json()["user"]["email"] == original_email
+    assert me.json()["user"]["email"] == current_email
 
 
 async def test_db_rejects_duplicate_active_email_across_tenants(gym_a, gym_b):
