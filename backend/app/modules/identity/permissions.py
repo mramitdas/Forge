@@ -92,6 +92,7 @@ PERMISSIONS: list[dict[str, str]] = [
     {"code": "billing.payments.capture", "module": "billing", "description": "Capture payments"},
     {"code": "billing.payments.refund", "module": "billing", "description": "Refund payments"},
     {"code": "billing.settings.view", "module": "billing", "description": "View billing settings"},
+    {"code": "billing.manage", "module": "billing", "description": "Manage billing settings"},
     # expenses
     {"code": "expenses.view", "module": "expenses", "description": "View expenses"},
     {"code": "expenses.manage", "module": "expenses", "description": "Record and delete expenses"},
@@ -102,11 +103,22 @@ PERMISSIONS: list[dict[str, str]] = [
         "description": "View attendance records",
     },
     {"code": "attendance.checkin", "module": "attendance", "description": "Record check-ins"},
+    {
+        "code": "attendance.manage",
+        "module": "attendance",
+        "description": "Manage attendance records",
+    },
     # notifications
     {"code": "notifications.view", "module": "notifications", "description": "View notifications"},
+    {
+        "code": "notifications.manage",
+        "module": "notifications",
+        "description": "Manage notifications",
+    },
     # reports
     {"code": "reports.view", "module": "reports", "description": "View reports and dashboards"},
     {"code": "reports.export", "module": "reports", "description": "Export reports"},
+    {"code": "reports.manage", "module": "reports", "description": "Manage report settings"},
     # identity
     {"code": "roles.manage", "module": "identity", "description": "Manage roles and permissions"},
     {"code": "users.manage", "module": "identity", "description": "Manage employees"},
