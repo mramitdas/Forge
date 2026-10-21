@@ -128,7 +128,7 @@ async def _seed_roles(session: AsyncSession, tenant_id: uuid.UUID) -> Role:
             description=template.get("description"),
             permission_codes=template_permission_codes(template),
             branch_scope="all",
-            is_system=template.get("is_system", True),
+            is_system=template.get("is_system", False),
             is_editable=template.get("is_editable", True),
         )
         if key == "gym_owner":

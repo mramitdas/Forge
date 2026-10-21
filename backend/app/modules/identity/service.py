@@ -468,7 +468,7 @@ async def seed_platform_roles(session: AsyncSession, platform_tenant_id: uuid.UU
         name=template["name"],
         description=template.get("description"),
         permission_codes=template_permission_codes(template),
-        is_system=template.get("is_system", True),
+        is_system=template.get("is_system", False),
         is_editable=template.get("is_editable", True),
     )
 

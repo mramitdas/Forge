@@ -160,12 +160,11 @@ export default function RolesPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-[13px] text-ink-faint">
-          Tune what each staff role can view, edit and delete. Disabled roles keep their staff assignments
-          but cannot sign in. The Gym Owner role is locked.
-        </p>
-        <Button size="sm" onClick={() => setCreating(true)}>
+      <div className="flex justify-end">
+        <Button onClick={() => setCreating(true)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+          </svg>
           New role
         </Button>
       </div>
@@ -190,7 +189,7 @@ export default function RolesPage() {
                         toggleExpanded(role.id);
                       }
                     }}
-                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch hover:bg-fill-strong"
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch"
                   >
                     <svg
                       width="14"
@@ -222,8 +221,8 @@ export default function RolesPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="text-[12px] text-ink-faint">{role.permission_codes.length} permissions</span>
-                    {role.is_editable && (
-                      <Button size="sm" variant="secondary" onClick={() => openEdit(role)}>
+                    {role.is_editable && role.is_active && (
+                      <Button size="sm" variant="ghost" onClick={() => openEdit(role)}>
                         Edit
                       </Button>
                     )}
