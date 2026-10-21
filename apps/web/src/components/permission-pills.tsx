@@ -21,40 +21,58 @@ function hasVerb(module: string, verb: Verb, perms: Set<string>): boolean {
   return false;
 }
 
+const GRID = "grid grid-cols-[minmax(0,1fr)_repeat(4,3.5rem)] gap-x-2";
+
 export function PermissionPills({ permissions }: { permissions: string[] }) {
   const perms = new Set(permissions);
   const rows = MODULES.filter((m) => [...perms].some((c) => c.startsWith(m + ".")));
   return (
-    <div className="mt-3 space-y-2" aria-label="Granted permissions">
-      <div className="flex items-center gap-3 text-[11px] font-medium text-ink-faint" aria-hidden>
-        <span className="w-24">Module</span>
+    <div className="mt-4" aria-label="Granted permissions">
+      <div className={cn(GRID, "text-[11px] font-medium text-ink-faint")} aria-hidden>
+        <span>Module</span>
         {VERBS.map((v) => (
-          <span key={v} className="w-10 text-center capitalize">{v}</span>
+          <span key={v} className="text-center capitalize">
+            {v}
+          </span>
         ))}
       </div>
-      {rows.map((m) => (
-        <div key={m} className="flex items-center gap-3 text-[13px]" data-module={m}>
-          <span className="w-24 capitalize text-ink-soft">{m}</span>
-          {VERBS.map((v) => (
-            <span
-              key={v}
-              aria-disabled="true"
-              aria-label={`${m} ${v} ${hasVerb(m, v, perms) ? "on" : "off"}`}
-              className={cn(
-                "mx-auto inline-flex h-5 w-10 items-center justify-center rounded-full text-[11px] font-medium",
-                hasVerb(m, v, perms)
-                  ? "bg-accent text-white"
-                  : "border border-line bg-fill text-ink-faint",
-              )}
+      <div className="mt-1 border-t border-line">
+        {rows.map((m) => {
+          return (
+            <div
+              key={m}
+              className={cn(GRID, "items-center border-b border-line py-1.5 text-[13px]")}
+              data-module={m}
             >
-              {hasVerb(m, v, perms) ? "✓" : "·"}
-            </span>
-          ))}
-        </div>
-      ))}
-      {rows.length === 0 && (
-        <p className="text-[13px] text-ink-faint">No modules granted.</p>
-      )}
+              <span className="truncate capitalize text-ink-soft">{m}</span>
+              {VERBS.map((v) => {
+                const on = hasVerb(m, v, perms);
+                return (
+                  <span
+                    key={v}
+                    aria-disabled="true"
+                    aria-label={`${m} ${v} ${on ? "on" : "off"}`}
+                    className={cn(
+                      "relative mx-auto inline-flex h-5 w-9 items-center rounded-full",
+                      on ? "bg-accent" : "border border-line-strong bg-fill-strong",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm",
+                        on ? "left-[18px]" : "left-0.5",
+                      )}
+                    />
+                  </span>
+                );
+              })}
+            </div>
+          );
+        })}
+        {rows.length === 0 && (
+          <p className="py-2 text-[13px] text-ink-faint">No modules granted.</p>
+        )}
+      </div>
     </div>
   );
 }

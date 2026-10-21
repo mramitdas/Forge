@@ -9,7 +9,7 @@ import { SettingsBranchSkeleton } from "@/components/skeletons";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCan } from "@/lib/permissions";
-import { useGymSettings, useUpdateGymSettings, useUpdateMe } from "@/lib/hooks";
+import { useGymSettings, useUpdateBranch, useUpdateGymSettings, useUpdateMe } from "@/lib/hooks";
 import { allChecksPass, passwordChecks } from "@/lib/password";
 import { TIMEZONES, formatTimezone } from "@/lib/timezones";
 import type { TokenResponse } from "@/lib/types";
@@ -38,7 +38,6 @@ export default function GymSettings() {
   const canSubmitPassword =
     allChecksPass(result) && next === confirm && next.length > 0 && current.length > 0;
 
-  const scope = me?.tenant_name ?? "All branches";
   const can = useCan();
   const { settings: gymSettings, isLoading: settingsLoading, isError: settingsError } = useGymSettings();
   const updateGymSettings = useUpdateGymSettings();
@@ -158,6 +157,32 @@ export default function GymSettings() {
       } else {
         notify("Could not save gym profile", "error");
       }
+    }
+  }
+
+  const updateBranch = useUpdateBranch();
+  const [tzOverrides, setTzOverrides] = useState<Record<string, string>>({});
+
+  function clearTzOverride(branchId: string) {
+    setTzOverrides((prev) => {
+      const next = { ...prev };
+      delete next[branchId];
+      return next;
+    });
+  }
+
+  async function setBranchTimezone(branchId: string, tz: string) {
+    // Optimistic local override so the select doesn't snap back while the
+    // PATCH + me refetch are in flight.
+    setTzOverrides((prev) => ({ ...prev, [branchId]: tz }));
+    try {
+      await updateBranch.mutateAsync({ branchId, body: { timezone: tz } });
+      await refreshMe();
+      clearTzOverride(branchId);
+      notify("Branch timezone updated");
+    } catch {
+      clearTzOverride(branchId);
+      notify("Could not update branch timezone", "error");
     }
   }
 
@@ -284,7 +309,7 @@ export default function GymSettings() {
                   onChange={(e) => setGymName(e.target.value)}
                 />
               </Field>
-              <Field label="Timezone">
+              <Field label="Default timezone">
                 <Select id="settings-timezone" name="settings-timezone" aria-label="Timezone" value={gymTimezone} onChange={(e) => setGymTimezone(e.target.value)}>
                   {TIMEZONES.map((tz) => (
                     <option key={tz} value={tz}>
@@ -303,16 +328,71 @@ export default function GymSettings() {
               </Button>
             </div>
 
+            <div className="mt-6 border-t border-line pt-5">
+              <SectionTitle
+                title="Branch timezones"
+                subtitle="Each branch can override the default"
+              />
+              {me?.branches && me.branches.length > 0 ? (
+                <div className="mt-3">
+                  <div
+                    className="grid grid-cols-[minmax(0,1fr)_16rem] gap-x-3 text-[11px] font-medium text-ink-faint"
+                    aria-hidden
+                  >
+                    <span>Branch</span>
+                    <span>Timezone</span>
+                  </div>
+                  <div className="mt-1 border-t border-line">
+                    {me.branches.map((b) => (
+                      <div
+                        key={b.id}
+                        className="grid grid-cols-[minmax(0,1fr)_16rem] items-center gap-x-3 border-b border-line py-2"
+                      >
+                        <span className="truncate text-[13px] text-ink-soft">{b.name}</span>
+                        <Select
+                          id="settings-branch-timezone"
+                          aria-label={`${b.name} timezone`}
+                          value={tzOverrides[b.id] ?? b.timezone ?? "Asia/Kolkata"}
+                          disabled={updateBranch.isPending}
+                          onChange={(e) => setBranchTimezone(b.id, e.target.value)}
+                        >
+                          {TIMEZONES.map((tz) => (
+                            <option key={tz} value={tz}>
+                              {formatTimezone(tz)}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-[13px] text-ink-faint">No branches yet</p>
+              )}
+            </div>
+
             <div className="mt-6 flex items-start justify-between gap-6 border-t border-line pt-5">
-              <div>
+              <div className="flex items-start gap-1.5">
                 <SectionTitle
                   title="Branch access"
                   subtitle="Let members with an active membership train at any of your branches"
                 />
-                <p className="mt-2 text-[13px] text-ink-soft">
-                  When off, memberships are scoped to the branch they were purchased at and
-                  check-ins at other branches are denied.
-                </p>
+                <span className="group/tip relative mt-1 shrink-0">
+                  <button
+                    type="button"
+                    aria-label="About cross-branch access"
+                    className="flex h-4 w-4 items-center justify-center rounded-full border border-line text-[10px] font-medium text-ink-faint transition-colors hover:text-ink"
+                  >
+                    i
+                  </button>
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute left-0 top-6 z-10 w-72 rounded-lg border border-line bg-panel-strong p-2 text-[12px] leading-relaxed text-ink-soft opacity-0 shadow-lg transition-opacity duration-100 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100"
+                  >
+                    When off, memberships are scoped to the branch they were purchased at
+                    and check-ins at other branches are denied.
+                  </span>
+                </span>
               </div>
               <Switch
                 checked={gymSettings?.cross_branch_access ?? false}
@@ -321,21 +401,6 @@ export default function GymSettings() {
                 label="Cross-branch access"
               />
             </div>
-            {me?.branches && me.branches.length > 0 && (
-              <div className="mt-4 space-y-1.5">
-                {me.branches.map((b) => (
-                  <div
-                    key={b.id}
-                    className="flex items-center gap-2 rounded-lg border border-line bg-fill px-3 py-2 text-[13px]"
-                  >
-                    <span className="font-medium text-ink-soft">{b.name}</span>
-                    {b.timezone && (
-                      <span className="text-[12px] text-ink-faint">{formatTimezone(b.timezone)}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </Card>
         </Async>
       )}
@@ -345,7 +410,6 @@ export default function GymSettings() {
         <div className="flex items-center gap-2">
           <span className="text-[12px] text-ink-faint">Role:</span>
           <Badge tone="blue">{me?.role_name ?? "Member"}</Badge>
-          <Badge tone="gray">{scope}</Badge>
         </div>
         <PermissionPills permissions={me?.permissions ?? []} />
       </Card>
