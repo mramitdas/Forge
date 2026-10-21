@@ -135,7 +135,7 @@ export default function MemberDetailPage() {
       phone: member.phone,
       country_code: member.countryCode || "+91",
       gender: member.gender === "—" ? "Male" : member.gender,
-      status: member.status,
+      status: member.rawStatus,
     });
     setEditing(true);
   }

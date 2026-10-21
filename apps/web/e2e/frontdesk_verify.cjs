@@ -148,10 +148,11 @@ async function main() {
 
     await must("member A row shows Active status badge", memberRow.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 }));
 
-    await memberRow.first().hover();
-    await memberRow.first().getByRole("link", { name: "View" }).click();
+    // Row click opens the detail page (View link removed; action buttons
+    // live in the row's last cell and stopPropagation).
+    await memberRow.first().click();
     await page.waitForURL(new RegExp(`/members/${memberA.body.id}`), { timeout: 10000 });
-    await must("member detail opens from list View link", page.getByRole("heading", { name: MEMBER_A }).waitFor({ timeout: 15000 }), page.url());
+    await must("member detail opens from row click", page.getByRole("heading", { name: MEMBER_A }).waitFor({ timeout: 15000 }), page.url());
 
     await page.locator('main a[href="/members"]').click();
     await page.waitForURL(/\/members$/, { timeout: 10000 });

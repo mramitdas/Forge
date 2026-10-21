@@ -29,6 +29,7 @@ export interface Member {
   gender: string;
   age: number;
   status: MemberStatus;
+  rawStatus: string;
   isActive: boolean;
   avatarPath: string | null;
   branchId: string;

@@ -170,6 +170,7 @@ export function toUiMember(m: MemberOut, ctx: MemberCtx): Member {
     gender: m.gender ?? "—",
     age: 0,
     status: mapMemberStatus(m.status),
+    rawStatus: m.status,
     isActive: m.is_active,
     avatarPath: m.avatar_path ?? null,
     branchId: m.branch_id,

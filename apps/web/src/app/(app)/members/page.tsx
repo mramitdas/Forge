@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   Avatar,
@@ -18,7 +18,17 @@ import {
 import { Async, Count } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
 import { type Member } from "@/lib/mock";
-import { byId, useBranches, useCreateMember, useMembersPage, usePlans, useSubscribe, useActivateSubscription } from "@/lib/hooks";
+import {
+  byId,
+  useBranches,
+  useCreateMember,
+  useDeleteMember,
+  useMembersPage,
+  usePlans,
+  useSubscribe,
+  useActivateSubscription,
+  useUpdateMember,
+} from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { COUNTRY_CODES } from "@/lib/countries";
 import { useInFlight } from "@/lib/inflight";
@@ -53,11 +63,14 @@ const statusParam: Record<(typeof filters)[number], string | undefined> = {
 const PAGE_SIZE = 10;
 
 export default function MembersPage() {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<(typeof filters)[number]>("All");
   const [branch, setBranch] = useState("all");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Member | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   const { branches } = useBranches();
@@ -71,6 +84,8 @@ export default function MembersPage() {
   });
 
   const createMember = useCreateMember();
+  const updateMember = useUpdateMember();
+  const deleteMember = useDeleteMember();
   const subscribe = useSubscribe();
   const activate = useActivateSubscription();
   const can = useCan();
@@ -87,6 +102,16 @@ export default function MembersPage() {
     gender: "Male",
     branchId: "",
     planId: "",
+  });
+
+  const [editForm, setEditForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    country_code: "+91",
+    gender: "Male",
+    status: "lead",
   });
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -122,6 +147,62 @@ export default function MembersPage() {
         setToast({ type: "error", message: "Failed to add member" });
       }
     });
+  }
+
+  function openEdit(m: Member) {
+    setEditForm({
+      first_name: m.name.split(" ")[0] ?? "",
+      last_name: m.name.split(" ").slice(1).join(" "),
+      email: m.email,
+      phone: m.phone,
+      country_code: m.countryCode || "+91",
+      gender: m.gender === "—" ? "Male" : m.gender,
+      status: m.rawStatus,
+    });
+    setEditing(m);
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    try {
+      await updateMember.mutateAsync({
+        memberId: editing.id,
+        body: {
+          first_name: editForm.first_name,
+          last_name: editForm.last_name || undefined,
+          email: editForm.email || undefined,
+          phone: editForm.phone || undefined,
+          country_code: editForm.country_code,
+          gender: editForm.gender,
+          status: editForm.status,
+        },
+      });
+      setEditing(null);
+      setToast({ type: "success", message: "Member updated" });
+    } catch {
+      setToast({ type: "error", message: "Could not update member" });
+    }
+  }
+
+  async function toggleActive(m: Member, next: boolean) {
+    try {
+      await updateMember.mutateAsync({ memberId: m.id, body: { is_active: next } });
+      setToast({ type: "success", message: next ? `${m.name} enabled` : `${m.name} disabled` });
+    } catch {
+      setToast({ type: "error", message: "Could not update member" });
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    try {
+      await deleteMember.mutateAsync(deleteTarget.id);
+      setToast({ type: "success", message: `${deleteTarget.name} deleted` });
+      setDeleteTarget(null);
+    } catch {
+      setToast({ type: "error", message: "Could not delete member" });
+    }
   }
 
   return (
@@ -211,7 +292,12 @@ export default function MembersPage() {
                 return (
                   <tr
                     key={m.id}
-                    className="group border-b border-line last:border-0 hover:bg-accent-soft/40 transition-colors"
+                    tabIndex={0}
+                    onClick={() => router.push(`/members/${m.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") router.push(`/members/${m.id}`);
+                    }}
+                    className="group cursor-pointer border-b border-line last:border-0 hover:bg-accent-soft/40 transition-colors"
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -246,16 +332,38 @@ export default function MembersPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      <Link
-                        href={`/members/${m.id}`}
-                        className="inline-flex items-center gap-1 text-[12px] font-medium text-accent opacity-0 transition-opacity group-hover:opacity-100"
-                      >
-                        View
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </Link>
+                    <td
+                      className="px-5 py-3 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        {can("members.update") && (
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(m)}>
+                            Edit
+                          </Button>
+                        )}
+                        {can("members.update") && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={updateMember.isPending}
+                            onClick={() => toggleActive(m, !m.isActive)}
+                          >
+                            {m.isActive ? "Disable" : "Enable"}
+                          </Button>
+                        )}
+                        {can("members.delete") && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red hover:bg-red-soft"
+                            onClick={() => setDeleteTarget(m)}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -363,6 +471,123 @@ export default function MembersPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit member"
+        subtitle={editing?.name ?? ""}
+      >
+        <form onSubmit={saveEdit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="First name">
+              <Input
+                required
+                id="member-edit-first-name"
+                name="member-edit-first-name"
+                aria-label="First name"
+                value={editForm.first_name}
+                onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+              />
+            </Field>
+            <Field label="Last name">
+              <Input
+                id="member-edit-last-name"
+                name="member-edit-last-name"
+                aria-label="Last name"
+                value={editForm.last_name}
+                onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+              />
+            </Field>
+          </div>
+          <Field label="Email">
+            <Input
+              type="email"
+              id="member-edit-email"
+              name="member-edit-email"
+              aria-label="Email"
+              value={editForm.email}
+              onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Country code">
+              <CountryCodeSelect
+                value={editForm.country_code}
+                onChange={(v) => setEditForm({ ...editForm, country_code: v })}
+              />
+            </Field>
+            <Field label="Phone number">
+              <Input
+                id="member-edit-phone"
+                name="member-edit-phone"
+                aria-label="Phone number"
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Gender">
+              <Select
+                id="member-edit-gender"
+                name="member-edit-gender"
+                aria-label="Gender"
+                value={editForm.gender}
+                onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select
+                id="member-edit-status"
+                name="member-edit-status"
+                aria-label="Status"
+                value={editForm.status}
+                onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+              >
+                <option value="lead">Lead</option>
+                <option value="prospect">Prospect</option>
+                <option value="active">Active</option>
+                <option value="frozen">Frozen</option>
+                <option value="lapsed">Lapsed</option>
+                <option value="cancelled">Cancelled</option>
+              </Select>
+            </Field>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={updateMember.isPending}>
+              {updateMember.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title={`Delete ${deleteTarget?.name ?? ""}?`}
+        subtitle="This member and their records will be removed"
+      >
+        <p className="text-[13px] text-ink-soft">
+          Deleting {deleteTarget?.name ?? "this member"} removes them from the roster permanently. This cannot be
+          undone.
+        </p>
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)}>
+            Cancel
+          </Button>
+          <Button type="button" variant="danger" disabled={deleteMember.isPending} onClick={confirmDelete}>
+            Delete member
+          </Button>
+        </div>
       </Modal>
 
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
