@@ -96,7 +96,12 @@ export function Select({
 }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={cn(inputBase, "cursor-pointer appearance-none bg-panel-strong", className)}
+      className={cn(
+        inputBase,
+        "cursor-pointer appearance-none bg-panel-strong pr-8",
+        "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22none%22 viewBox=%220 0 20 20%22><path stroke=%22%239ca3af%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 stroke-width=%221.5%22 d=%22m6 8 4 4 4-4%22/></svg>')] bg-[right_0.55rem_center] bg-no-repeat",
+        className,
+      )}
       {...rest}
     />
   );
