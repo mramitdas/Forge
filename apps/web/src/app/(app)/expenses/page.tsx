@@ -168,7 +168,7 @@ export default function ExpensesPage() {
                     {can("expenses.manage") && (
                       <Button
                         size="xs"
-                        variant="ghost"
+                        variant="danger"
                         disabled={deleteGuard.busy || deleteExpense.isPending}
                         onClick={() => confirmDelete(e.id)}
                       >
