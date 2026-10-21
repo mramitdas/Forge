@@ -1169,7 +1169,12 @@ export function useUpdateRole() {
   return useMutation({
     mutationFn: (args: {
       roleId: string;
-      body: { permission_codes: string[]; description?: string };
+      body: {
+        permission_codes: string[];
+        description?: string;
+        name?: string;
+        is_active?: boolean;
+      };
     }) =>
       apiFetch<RoleOut>(`/permissions/roles/${args.roleId}`, {
         method: "PATCH",

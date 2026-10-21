@@ -1,108 +1,57 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Card, EmptyState, Input, Modal, Switch, Toast } from "@/components/ui";
+import { useMemo, useState } from "react";
+import { Badge, Button, Card, Input, Modal, Toast } from "@/components/ui";
 import { Async } from "@/components/skeleton";
 import { RoleCardSkeleton } from "@/components/skeletons";
+import { PermissionPills } from "@/components/permission-pills";
+import { RolePermissionPills } from "@/components/role-permission-pills";
+import { ApiError } from "@/lib/api";
 import { useCreateRole, useDeleteRole, usePermissionCatalog, useRoles, useUpdateRole } from "@/lib/hooks";
 import { useInFlight } from "@/lib/inflight";
+import type { PermissionOut } from "@/lib/types";
 
-const MODULE_LABELS: Record<string, string> = {
-  members: "Members",
-  membership: "Memberships & plans",
-  billing: "Billing",
-  attendance: "Check-ins & attendance",
-  notifications: "Notifications",
-  reports: "Reports",
-  tenancy: "Branches & settings",
-  identity: "Roles & staff",
-};
+function errMsg(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    const d = err.detail as { message?: string; error?: { message?: string } } | null;
+    return d?.error?.message ?? d?.message ?? fallback;
+  }
+  return fallback;
+}
 
 export default function RolesPage() {
   const { roles, isLoading: rolesLoading, isError: rolesError } = useRoles();
   const { permissions, isLoading: permsLoading, isError: permsError } = usePermissionCatalog();
   const updateRole = useUpdateRole();
   const createRole = useCreateRole();
-  const [draft, setDraft] = useState<Record<string, Set<string>>>({});
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const initializedRef = useRef(false);
-  const [saving, setSaving] = useState<string | null>(null);
+  const deleteRole = useDeleteRole();
+  const addGuard = useInFlight();
+  const saveGuard = useInFlight();
+  const toggleGuard = useInFlight();
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newPerms, setNewPerms] = useState<Set<string>>(new Set());
-  const addGuard = useInFlight();
-  const deleteRole = useDeleteRole();
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<{
+    id: string;
+    name: string;
+    description: string;
+    perms: Set<string>;
+  } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const saveGuard = useInFlight();
-
-  useEffect(() => {
-    if (!initializedRef.current && roles.length > 0) {
-      initializedRef.current = true;
-      setCollapsed(new Set(roles.map((r) => r.id)));
-    }
-  }, [roles]);
-
-  function toggleCollapsed(roleId: string) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(roleId)) next.delete(roleId);
-      else next.add(roleId);
-      return next;
-    });
-  }
 
   const isLoading = rolesLoading || permsLoading;
   const isError = rolesError || permsError;
 
-  const byModule = useMemo(() => {
-    const map: Record<string, typeof permissions> = {};
-    for (const p of permissions) {
-      if (p.module === "platform") continue;
-      (map[p.module] ??= []).push(p);
-    }
-    return map;
-  }, [permissions]);
+  const catalog: PermissionOut[] = useMemo(() => permissions.filter((p) => p.module !== "platform"), [permissions]);
 
-  function toggle(roleId: string, code: string, base: string[]) {
-    setDraft((d) => {
-      const next = new Set(d[roleId] ?? base);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return { ...d, [roleId]: next };
-    });
-  }
-
-  function isDirty(roleId: string, base: string[]) {
-    const cur = draft[roleId];
-    if (!cur) return false;
-    if (cur.size !== base.length) return true;
-    for (const c of base) if (!cur.has(c)) return true;
-    return false;
-  }
-
-  async function save(roleId: string, name: string) {
-    const codes = draft[roleId] ? [...draft[roleId]] : [];
-    await saveGuard.run(async () => {
-      setSaving(roleId);
-      try {
-        await updateRole.mutateAsync({ roleId, body: { permission_codes: codes } });
-        setDraft((d) => ({ ...d, [roleId]: new Set(codes) }));
-        setToast({ type: "success", message: `Saved ${name} permissions` });
-      } catch {
-        setToast({ type: "error", message: "Could not save role — it may be locked" });
-      } finally {
-        setSaving(null);
-      }
-    });
-  }
-
-  function toggleNewPerm(code: string) {
-    setNewPerms((prev) => {
+  function toggleExpanded(roleId: string) {
+    setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
       return next;
     });
   }
@@ -134,8 +83,66 @@ export default function RolesPage() {
         });
         closeCreateModal();
         setToast({ type: "success", message: `Created ${newName.trim()}` });
-      } catch {
-        setToast({ type: "error", message: "Could not create role" });
+      } catch (err) {
+        setToast({ type: "error", message: errMsg(err, "Could not create role") });
+      }
+    });
+  }
+
+  function openEdit(role: { id: string; name: string; description: string | null; permission_codes: string[] }) {
+    setEditing({
+      id: role.id,
+      name: role.name,
+      description: role.description ?? "",
+      perms: new Set(role.permission_codes),
+    });
+  }
+
+  async function submitEdit() {
+    if (!editing || updateRole.isPending) return;
+    if (editing.name.trim().length < 2) {
+      setToast({ type: "error", message: "Could not save role — name must be at least 2 characters" });
+      return;
+    }
+    const dupe = roles.some(
+      (r) => r.id !== editing.id && r.name.trim().toLowerCase() === editing.name.trim().toLowerCase(),
+    );
+    if (dupe) {
+      setToast({ type: "error", message: `Could not save role — a role named ${editing.name.trim()} already exists` });
+      return;
+    }
+    await saveGuard.run(async () => {
+      try {
+        await updateRole.mutateAsync({
+          roleId: editing.id,
+          body: {
+            name: editing.name.trim(),
+            description: editing.description.trim() || undefined,
+            permission_codes: [...editing.perms],
+          },
+        });
+        setToast({ type: "success", message: `Saved ${editing.name.trim()}` });
+        setEditing(null);
+      } catch (err) {
+        setToast({ type: "error", message: errMsg(err, "Could not save role — it may be locked") });
+      }
+    });
+  }
+
+  async function toggleActive(role: { id: string; name: string; is_active: boolean; permission_codes: string[] }) {
+    const next = !role.is_active;
+    await toggleGuard.run(async () => {
+      try {
+        await updateRole.mutateAsync({
+          roleId: role.id,
+          body: { name: role.name, permission_codes: role.permission_codes, is_active: next },
+        });
+        setToast({
+          type: "success",
+          message: next ? `${role.name} enabled — staff can sign in again` : `${role.name} disabled — staff can no longer sign in`,
+        });
+      } catch (err) {
+        setToast({ type: "error", message: errMsg(err, `Could not ${next ? "enable" : "disable"} role`) });
       }
     });
   }
@@ -147,11 +154,7 @@ export default function RolesPage() {
       setToast({ type: "success", message: `${deleteTarget.name} deleted` });
       setDeleteTarget(null);
     } catch (err) {
-      const d = (err as { detail?: { message?: string; error?: { message?: string } } })?.detail;
-      setToast({
-        type: "error",
-        message: d?.error?.message ?? d?.message ?? "Could not delete role",
-      });
+      setToast({ type: "error", message: errMsg(err, "Could not delete role") });
     }
   }
 
@@ -159,7 +162,8 @@ export default function RolesPage() {
     <div className="mx-auto max-w-4xl space-y-5">
       <div className="flex items-center justify-between gap-4">
         <p className="text-[13px] text-ink-faint">
-          Tune what each staff role can view, edit and delete. The Gym Owner role is locked.
+          Tune what each staff role can view, edit and delete. Disabled roles keep their staff assignments
+          but cannot sign in. The Gym Owner role is locked.
         </p>
         <Button size="sm" onClick={() => setCreating(true)}>
           New role
@@ -168,128 +172,96 @@ export default function RolesPage() {
 
       <Async loading={isLoading} error={isError} skeleton={<RoleCardSkeleton count={3} />}>
         <div className="space-y-4">
-        {roles.map((role) => {
-        const base = role.permission_codes;
-        const dirty = isDirty(role.id, base);
-        const current = draft[role.id] ?? new Set(base);
-        return (
-          <Card key={role.id} className="overflow-hidden">
-            <div className="flex w-full items-center justify-between gap-3 border-b border-line bg-fill px-5 py-4 text-left">
-              <div
-                role="button"
-                tabIndex={0}
-                aria-expanded={!collapsed.has(role.id)}
-                onClick={() => toggleCollapsed(role.id)}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.repeat) return;
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    toggleCollapsed(role.id);
-                  }
-                }}
-                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch transition-colors hover:bg-fill-strong"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  className={`shrink-0 text-ink-faint transition-transform duration-200 ${
-                    collapsed.has(role.id) ? "-rotate-90" : ""
-                  }`}
-                >
-                  <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-[15px] font-semibold tracking-tight">{role.name}</h3>
-                    {!role.is_editable && (
-                      <Badge tone="gray">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                          <rect x="5" y="11" width="14" height="9" rx="2" />
-                          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                        </svg>
-                        Locked
-                      </Badge>
-                    )}
-                  </div>
-                  {role.description && <p className="text-[12px] text-ink-faint">{role.description}</p>}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {role.is_editable && dirty && (
-                  <Button size="sm" disabled={saving === role.id || saveGuard.busy} onClick={() => save(role.id, role.name)}>
-                    {saving === role.id ? "Saving…" : `Save (${current.size} perms)`}
-                  </Button>
-                )}
-                {role.is_editable && !dirty && (
-                  <span className="text-[12px] text-ink-faint">{current.size} permissions</span>
-                )}
-                {role.is_editable && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-red hover:bg-red-soft"
-                    onClick={() => setDeleteTarget({ id: role.id, name: role.name })}
+          {roles.map((role) => {
+            const open = expanded.has(role.id);
+            return (
+              <Card key={role.id} className="overflow-hidden">
+                <div className="flex w-full items-center justify-between gap-3 border-b border-line bg-fill px-5 py-4 text-left">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={open}
+                    onClick={() => toggleExpanded(role.id)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.repeat) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleExpanded(role.id);
+                      }
+                    }}
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch hover:bg-fill-strong"
                   >
-                    Delete
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {!collapsed.has(role.id) && (role.is_editable ? (
-              <div className="divide-y divide-line">
-                {Object.entries(byModule).map(([module, perms]) => (
-                  <div key={module} className="px-5 py-4">
-                    <p className="kicker mb-2">{MODULE_LABELS[module] ?? module}</p>
-                    <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
-                      {perms.map((p) => {
-                        const on = current.has(p.code);
-                        return (
-                          <div
-                            key={p.code}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => toggle(role.id, p.code, base)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                toggle(role.id, p.code, base);
-                              }
-                            }}
-                            className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-fill"
-                          >
-                            <span className="min-w-0">
-                              <span className={`block text-[13px] ${on ? "text-ink" : "text-ink-faint"}`}>
-                                {p.description}
-                              </span>
-                              <span className="block font-mono text-[10px] text-ink-faint">{p.code}</span>
-                            </span>
-                            <span onClick={(e) => e.stopPropagation()}>
-                              <Switch checked={on} onChange={() => toggle(role.id, p.code, base)} label={p.code} />
-                            </span>
-                          </div>
-                        );
-                      })}
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      className={`shrink-0 text-ink-faint ${open ? "" : "-rotate-90"}`}
+                    >
+                      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[15px] font-semibold tracking-tight">{role.name}</h3>
+                        {!role.is_active && <Badge tone="red">Disabled</Badge>}
+                        {!role.is_editable && (
+                          <Badge tone="gray">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <rect x="5" y="11" width="14" height="9" rx="2" />
+                              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                            </svg>
+                            Locked
+                          </Badge>
+                        )}
+                      </div>
+                      {role.description && <p className="text-[12px] text-ink-faint">{role.description}</p>}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="px-5 py-4">
-                <EmptyState
-                  title="Locked system role"
-                  hint="This role is fixed and cannot be overridden."
-                />
-              </div>
-            ))}
-          </Card>
-        );
-      })}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-[12px] text-ink-faint">{role.permission_codes.length} permissions</span>
+                    {role.is_editable && (
+                      <Button size="sm" variant="secondary" onClick={() => openEdit(role)}>
+                        Edit
+                      </Button>
+                    )}
+                    {role.is_editable && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={toggleGuard.busy}
+                        onClick={() => toggleActive(role)}
+                      >
+                        {role.is_active ? "Disable" : "Enable"}
+                      </Button>
+                    )}
+                    {role.is_editable && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red hover:bg-red-soft"
+                        onClick={() => setDeleteTarget({ id: role.id, name: role.name })}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {open && (
+                  <div className="px-5 py-4">
+                    {role.permission_codes.length > 0 ? (
+                      <PermissionPills permissions={role.permission_codes} />
+                    ) : (
+                      <p className="text-[13px] text-ink-faint">No permissions granted.</p>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       </Async>
 
@@ -320,40 +292,8 @@ export default function RolesPage() {
               />
             </label>
           </div>
-          <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1">
-            {Object.entries(byModule).map(([module, perms]) => (
-              <div key={module}>
-                <p className="kicker mb-1.5">{MODULE_LABELS[module] ?? module}</p>
-                <div className="grid gap-x-5 gap-y-1 sm:grid-cols-2">
-                  {perms.map((p) => (
-                    <div
-                      key={p.code}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => toggleNewPerm(p.code)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          toggleNewPerm(p.code);
-                        }
-                      }}
-                      className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-fill"
-                    >
-                      <span className={`block text-[13px] ${newPerms.has(p.code) ? "text-ink" : "text-ink-faint"}`}>
-                        {p.description}
-                      </span>
-                      <span onClick={(e) => e.stopPropagation()}>
-                        <Switch
-                          checked={newPerms.has(p.code)}
-                          onChange={() => toggleNewPerm(p.code)}
-                          label={p.code}
-                        />
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+          <div className="max-h-[45vh] overflow-y-auto pr-1">
+            <RolePermissionPills catalog={catalog} value={newPerms} onChange={setNewPerms} />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={closeCreateModal}>
@@ -364,6 +304,49 @@ export default function RolesPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title="Edit role"
+        subtitle={editing?.name}
+        width="max-w-2xl"
+      >
+        {editing && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Name</span>
+                <Input
+                  value={editing.name}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  placeholder="Front Desk Lead"
+                  maxLength={100}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">Description</span>
+                <Input
+                  value={editing.description}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+            <div className="max-h-[45vh] overflow-y-auto pr-1">
+              <RolePermissionPills catalog={catalog} value={editing.perms} onChange={(next) => setEditing({ ...editing, perms: next })} />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                Cancel
+              </Button>
+              <Button onClick={submitEdit} disabled={saveGuard.busy || updateRole.isPending}>
+                {updateRole.isPending ? "Saving…" : `Save changes (${editing.perms.size} perms)`}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal

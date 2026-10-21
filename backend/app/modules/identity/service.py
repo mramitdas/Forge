@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.errors import (
     ConflictError,
+    ForbiddenError,
     NotFoundError,
     UnauthenticatedError,
     ValidationError,
@@ -97,6 +98,35 @@ async def issue_tokens(
     return await _issue_for_user(session, user, ip=ip, user_agent=user_agent)
 
 
+async def _ensure_role_active(session: AsyncSession, user_id: uuid.UUID) -> None:
+    """Block login/refresh while every assigned role is disabled.
+
+    Users with no roles keep the existing powerless-but-logged-in behavior;
+    only "has roles, none enabled" is rejected.
+    """
+    assigned = list(
+        await session.scalars(
+            select(Role.id)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .where(UserRole.user_id == user_id, Role.deleted_at.is_(None))
+        )
+    )
+    if not assigned:
+        return
+    enabled = await session.scalar(
+        select(Role.id).where(
+            Role.id.in_(assigned),
+            Role.is_active.is_(True),
+            Role.deleted_at.is_(None),
+        )
+    )
+    if enabled is None:
+        raise ForbiddenError(
+            "All your roles are disabled — contact your gym owner",
+            code="ROLE_DISABLED",
+        )
+
+
 async def authenticate(
     session: AsyncSession,
     *,
@@ -113,6 +143,7 @@ async def authenticate(
         raise UnauthenticatedError("Account is disabled", code="ACCOUNT_DISABLED")
     if not verify_password(password, credential.password_hash):
         raise UnauthenticatedError("Invalid credentials", code="INVALID_CREDENTIALS")
+    await _ensure_role_active(session, user.id)
     return await _issue_for_user(
         session, user, must_change=credential.must_change, ip=ip, user_agent=user_agent
     )
@@ -210,6 +241,7 @@ async def refresh_tokens(
     user = await session.get(User, record.user_id)
     if user is None or not user.is_active:
         raise UnauthenticatedError("Account is disabled", code="ACCOUNT_DISABLED")
+    await _ensure_role_active(session, user.id)
     credential = await session.scalar(
         select(Credential).where(Credential.user_id == user.id)
     )
@@ -288,7 +320,11 @@ async def get_effective_permissions(
         select(RolePermission)
         .join(UserRole, UserRole.role_id == RolePermission.role_id)
         .join(Role, Role.id == RolePermission.role_id)
-        .where(UserRole.user_id == user_id, Role.deleted_at.is_(None))
+        .where(
+            UserRole.user_id == user_id,
+            Role.deleted_at.is_(None),
+            Role.is_active.is_(True),
+        )
     )
     perms: dict[str, set[uuid.UUID] | None] = {}
     for rp in result.scalars():
@@ -348,9 +384,11 @@ async def update_role(
     role_id: uuid.UUID,
     tenant_id: uuid.UUID,
     permission_codes: list[str],
+    name: str | None = None,
     description: str | None = None,
+    is_active: bool | None = None,
 ) -> Role:
-    """Replace a role's permission set. Refuses to touch locked roles."""
+    """Update a role's name/description/permission set. Refuses locked roles."""
     role = await session.get(Role, role_id)
     if role is None or role.tenant_id != tenant_id:
         raise NotFoundError("Role not found", code="NOT_FOUND")
@@ -358,14 +396,22 @@ async def update_role(
         raise ValidationError(
             "This role is locked and cannot be edited", code="ROLE_LOCKED"
         )
+    if is_active is False and role.is_system:
+        raise ForbiddenError(
+            "System roles cannot be disabled", code="ROLE_LOCKED"
+        )
     catalog_codes = set(await session.scalars(select(PermissionCatalog.code)))
     unknown = set(permission_codes) - catalog_codes
     if unknown:
         raise ValidationError(
             "Unknown permission codes", code="UNKNOWN_PERMISSIONS", details=list(unknown)
         )
+    if name is not None:
+        role.name = name
     if description is not None:
         role.description = description
+    if is_active is not None:
+        role.is_active = is_active
     existing = await session.scalars(
         select(RolePermission).where(RolePermission.role_id == role_id)
     )

@@ -118,51 +118,25 @@ async function main() {
       .first();
     await ownerCard.getByText("Locked", { exact: true }).waitFor({ timeout: 10000 });
     await page.getByRole("heading", { name: "Gym Owner", exact: true }).click();
-    await must("roles: Gym Owner shows Locked badge + locked empty state", ownerCard.getByText("Locked system role").waitFor({ timeout: 10000 }));
+    await must("roles: Gym Owner expands to read-only permission pills", ownerCard.locator('[aria-label="members read on"]').waitFor({ timeout: 10000 }));
 
-    // The header's Save button only renders when a card has unsaved edits —
-    // make Receptionist dirty so Save exists for the nested-button and
-    // keyboard-save checks below.
-    const recvCard = page
-      .locator("div.glass", { has: page.getByRole("heading", { name: "Receptionist", exact: true }) })
+    // Card headers stay button-free (actions live outside the role=button
+    // header region) — regression check for nested-button issues.
+    const headerRegion = ownerCard
+      .locator('[role="button"]', { has: page.getByRole("heading", { name: "Gym Owner", exact: true }) })
       .first();
-    await page.getByRole("heading", { name: "Receptionist", exact: true }).click();
-    await recvCard.getByRole("switch", { name: "reports.view" }).click();
-    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ timeout: 10000 });
+    const nestedInHeader = await headerRegion.locator("button").count();
+    check("roles: card header region has no nested buttons", nestedInHeader === 0, `count=${nestedInHeader}`);
     const nestedButtons = await page.locator("button button").count();
     check("roles: no nested <button> elements", nestedButtons === 0, `count=${nestedButtons}`);
-    const headerRegion = recvCard
-      .locator('[role="button"]', { has: page.getByRole("heading", { name: "Receptionist", exact: true }) })
-      .first();
-    const nestedInRoleButton = await headerRegion.locator("button").count();
-    check(
-      "roles: Save is outside the header role=button region",
-      nestedInRoleButton === 0,
-      `count=${nestedInRoleButton}`,
-    );
 
-    // Keyboard path: Enter on the focused Save must SAVE via native button
-    // activation — Save now lives outside the header's role=button region,
-    // so a header keydown can never intercept it. The detached wait is the
-    // RED signal; the switch-visibility wait is belt-and-braces.
-    await recvCard.getByRole("button", { name: /^Save \(/ }).focus();
-    await page.keyboard.press("Enter");
-    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 15000 });
-    await must("roles: Enter on Save saves (header does not swallow keys)", recvCard.getByRole("switch", { name: "reports.view" }).waitFor({ timeout: 5000 }));
-
-    // Restore Receptionist's original permissions: toggle reports.view back off and save.
-    await recvCard.getByRole("switch", { name: "reports.view" }).click();
-    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ timeout: 10000 });
-    await recvCard.getByRole("button", { name: /^Save \(/ }).click();
-    await recvCard.getByRole("button", { name: /^Save \(/ }).waitFor({ state: "detached", timeout: 15000 });
-
-    // Create the custom role through the UI form.
+    // Create the custom role through the UI form (read pills add 1 code each).
     await page.getByRole("button", { name: /new role/i }).click();
     const roleModal = page.locator("div.fixed.inset-0"); // Modal root, unique while open
     await roleModal.getByPlaceholder("Front Desk Lead").fill(ROLE_NAME);
     await roleModal.getByPlaceholder("Optional").fill("E2E custom role");
-    await roleModal.getByRole("switch", { name: "members.view" }).click();
-    await roleModal.getByRole("switch", { name: "notifications.view" }).click();
+    await roleModal.getByRole("button", { name: "members read off" }).click();
+    await roleModal.getByRole("button", { name: "notifications read off" }).click();
     await roleModal.getByRole("button", { name: /^Create role \(/ }).click();
     await must("roles: custom role created via UI form", page.getByText(`Created ${ROLE_NAME}`).waitFor({ timeout: 15000 }));
 
@@ -193,14 +167,21 @@ async function main() {
     await must("roles: duplicate role name blocked", page.getByText("Could not create role").waitFor({ timeout: 10000 }));
     await modal3.getByRole("button", { name: "Cancel" }).click();
 
-    await page.getByRole("heading", { name: ROLE_NAME, exact: true }).click();
-    await roleCard.getByRole("switch", { name: "reports.view" }).waitFor({ timeout: 10000 });
-    await roleCard.getByRole("switch", { name: "reports.view" }).click();
-    // Save sits outside the header's role=button region; match the button
-    // exactly by its own label to avoid any ambiguity.
-    await roleCard.getByRole("button", { name: "Save (3 perms)", exact: true }).click();
-    await page.getByText(`Saved ${ROLE_NAME} permissions`).waitFor({ timeout: 10000 });
-    await must("roles: custom role permission edit saves via UI", roleCard.getByText("3 permissions", { exact: true }).waitFor({ timeout: 10000 }));
+    // Permission edit goes through the Edit modal (pills + per-module details).
+    await roleCard.getByRole("button", { name: "Edit", exact: true }).click();
+    const editModal = page.locator("div.fixed.inset-0");
+    await editModal.locator('[data-module="reports"]').getByRole("button", { name: "Details" }).click();
+    await editModal.getByRole("switch", { name: "reports.view" }).click();
+    await editModal.getByRole("button", { name: /^Save changes \(/ }).click();
+    await must("roles: custom role permission edit saves via UI", roleCard.getByText("3 permissions", { exact: true }).waitFor({ timeout: 15000 }));
+
+    // Restore: remove reports.view through the same Edit modal.
+    await roleCard.getByRole("button", { name: "Edit", exact: true }).click();
+    const restoreModal = page.locator("div.fixed.inset-0");
+    await restoreModal.locator('[data-module="reports"]').getByRole("button", { name: "Details" }).click();
+    await restoreModal.getByRole("switch", { name: "reports.view" }).click();
+    await restoreModal.getByRole("button", { name: /^Save changes \(/ }).click();
+    await must("roles: permission edit restores", roleCard.getByText("2 permissions", { exact: true }).waitFor({ timeout: 15000 }));
 
     // ── Settings ──
     await page.goto(`${BASE}/settings`);

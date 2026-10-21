@@ -295,6 +295,7 @@ export interface RoleOut {
   description: string | null;
   is_system: boolean;
   is_editable: boolean;
+  is_active: boolean;
   permission_codes: string[];
 }
 

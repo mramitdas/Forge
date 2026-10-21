@@ -130,6 +130,7 @@ class Role(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_editable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     permissions: Mapped[list[RolePermission]] = relationship(
         back_populates="role", cascade="all, delete-orphan"

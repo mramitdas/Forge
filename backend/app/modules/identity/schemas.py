@@ -52,6 +52,7 @@ class RoleOut(BaseModel):
     description: str | None
     is_system: bool
     is_editable: bool
+    is_active: bool = True
     permission_codes: list[str] = []
 
     model_config = {"from_attributes": True}
@@ -126,5 +127,7 @@ class AssignRoleRequest(BaseModel):
 
 
 class UpdateRoleRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=100)
     description: str | None = None
     permission_codes: list[str] = Field(default_factory=list)
+    is_active: bool | None = None

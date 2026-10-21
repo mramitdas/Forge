@@ -207,7 +207,9 @@ async def update_role(
         role_id=role_id,
         tenant_id=actor.tenant_id,
         permission_codes=body.permission_codes,
+        name=body.name,
         description=body.description,
+        is_active=body.is_active,
     )
     await session.flush()
     rps = await session.scalars(
