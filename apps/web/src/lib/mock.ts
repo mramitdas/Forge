@@ -43,6 +43,7 @@ export interface Member {
 export interface Plan {
   id: string;
   name: string;
+  slug: string;
   period: PlanPeriod;
   price: number;
   entryFee: number;

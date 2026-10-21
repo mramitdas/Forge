@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ApiError } from "@/lib/api";
 import {
   Badge,
   Button,
@@ -28,16 +29,17 @@ import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
 import type { Plan } from "@/lib/mock";
 
-const periodLabel: Record<string, string> = {
-  monthly: "per month",
-  quarterly: "per quarter",
-  yearly: "per year",
+const periodFallback: Record<string, string> = {
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  semiannual: "Semiannual",
+  annual: "Yearly",
 };
 
 const DURATIONS = [
   { months: 1, period: "monthly", label: "1 month" },
   { months: 3, period: "quarterly", label: "3 months" },
-  { months: 6, period: "quarterly", label: "6 months" },
+  { months: 6, period: "semiannual", label: "6 months" },
   { months: 12, period: "annual", label: "12 months" },
 ];
 
@@ -52,6 +54,25 @@ const emptyForm = {
   taxPercent: "18",
   autoRenew: true,
 };
+
+function durationCaption(p: Pick<Plan, "durationMonths" | "period">): string {
+  if (p.durationMonths) {
+    return p.durationMonths === 1 ? "1 month" : `${p.durationMonths} months`;
+  }
+  return periodFallback[p.period] ?? "Monthly";
+}
+
+function priceSuffix(p: Pick<Plan, "durationMonths" | "period">): string {
+  if (p.durationMonths === 1) return "/ month";
+  if (p.durationMonths) return `/ ${p.durationMonths} months`;
+  const per: Record<string, string> = {
+    monthly: "/ month",
+    quarterly: "/ quarter",
+    semiannual: "/ 6 months",
+    yearly: "/ year",
+  };
+  return per[p.period] ?? "/ month";
+}
 
 function slugify(s: string): string {
   return s
@@ -168,7 +189,7 @@ export default function PlansPage() {
     setEditing(p);
     setEditForm({
       name: p.name,
-      slug: "",
+      slug: p.slug,
       branchId: p.branchId ?? "",
       description: p.description,
       durationMonths: p.durationMonths ? String(p.durationMonths) : "1",
@@ -202,6 +223,13 @@ export default function PlansPage() {
         setEditing(null);
         setToast({ type: "success", message: "Plan updated" });
       } catch (err) {
+        if (err instanceof ApiError && err.code === "PLAN_DISABLED") {
+          setToast({
+            type: "error",
+            message: "Enable the plan before editing its details",
+          });
+          return;
+        }
         setToast({ type: "error", message: planError(err, "update") });
       }
     });
@@ -334,7 +362,7 @@ export default function PlansPage() {
                     <p className="mt-0.5 text-[12px] text-ink-faint">{p.description}</p>
                   </div>
                   {p.isActive ? (
-                    <Badge tone="green">{periodLabel[p.period]}</Badge>
+                    <Badge tone="green">{durationCaption(p)}</Badge>
                   ) : (
                     <Badge tone="red">Disabled</Badge>
                   )}
@@ -344,7 +372,7 @@ export default function PlansPage() {
                 </p>
                 <div className="mt-4 flex items-baseline gap-1">
                   <span className="text-[26px] font-semibold tracking-tight">{inr(p.price)}</span>
-                  <span className="text-[12px] text-ink-faint">/ {periodLabel[p.period].replace("per ", "")}</span>
+                  <span className="text-[12px] text-ink-faint">{priceSuffix(p)}</span>
                 </div>
                 {p.entryFee > 0 && (
                   <p className="mt-1 text-[12px] text-ink-faint">+ {inr(p.entryFee)} one-time entry fee</p>
@@ -373,7 +401,7 @@ export default function PlansPage() {
                 )}
                 {(can("membership.plans.update") || can("membership.plans.delete")) && (
                   <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
-                    {can("membership.plans.update") && (
+                    {can("membership.plans.update") && p.isActive && (
                       <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
                         Edit
                       </Button>
@@ -405,7 +433,7 @@ export default function PlansPage() {
         open={subscribeTo !== null}
         onClose={() => setSubscribeTo(null)}
         title={`Subscribe to ${selected?.name ?? ""}`}
-        subtitle={selected ? `${inr(selected.price)} · ${periodLabel[selected.period]}` : undefined}
+        subtitle={selected ? `${inr(selected.price)} · ${durationCaption(selected)}` : undefined}
       >
         <form onSubmit={subscribePlan} className="space-y-4">
           <Field label="Member">
@@ -570,18 +598,15 @@ export default function PlansPage() {
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
               />
             </Field>
-            <Field label="Duration">
-              <Select
-                id="plan-edit-duration"
-                name="plan-edit-duration"
-                aria-label="Duration"
-                value={editForm.durationMonths}
-                onChange={(e) => setEditForm({ ...editForm, durationMonths: e.target.value })}
-              >
-                {DURATIONS.map((d) => (
-                  <option key={d.months} value={String(d.months)}>{d.label}</option>
-                ))}
-              </Select>
+            <Field label="Slug">
+              <Input
+                id="plan-edit-slug"
+                name="plan-edit-slug"
+                aria-label="Slug"
+                disabled
+                value={editForm.slug}
+                onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
+              />
             </Field>
           </div>
           <Field label="Availability">
@@ -599,15 +624,28 @@ export default function PlansPage() {
             </Select>
           </Field>
           <Field label="Description">
-              <Input
-                id="plan-edit-description"
-                name="plan-edit-description"
-                aria-label="Description"
-                value={editForm.description}
-                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-              />
+            <Input
+              id="plan-edit-description"
+              name="plan-edit-description"
+              aria-label="Description"
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+            />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Duration">
+              <Select
+                id="plan-edit-duration"
+                name="plan-edit-duration"
+                aria-label="Duration"
+                value={editForm.durationMonths}
+                onChange={(e) => setEditForm({ ...editForm, durationMonths: e.target.value })}
+              >
+                {DURATIONS.map((d) => (
+                  <option key={d.months} value={String(d.months)}>{d.label}</option>
+                ))}
+              </Select>
+            </Field>
             <Field label="Price (₹, paise)">
               <Input
                 type="number"
@@ -620,6 +658,8 @@ export default function PlansPage() {
                 onChange={(e) => setEditForm({ ...editForm, amountMinor: e.target.value })}
               />
             </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Entry fee (₹, paise)">
               <Input
                 type="number"
@@ -631,8 +671,7 @@ export default function PlansPage() {
                 onChange={(e) => setEditForm({ ...editForm, entryFeeMinor: e.target.value })}
               />
             </Field>
-          </div>
-          <Field label="Tax (%)">
+            <Field label="Tax (%)">
               <Input
                 type="number"
                 min="0"
@@ -643,7 +682,8 @@ export default function PlansPage() {
                 value={editForm.taxPercent}
                 onChange={(e) => setEditForm({ ...editForm, taxPercent: e.target.value })}
               />
-          </Field>
+            </Field>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
             <Button type="submit" disabled={editGuard.busy || updatePlan.isPending}>

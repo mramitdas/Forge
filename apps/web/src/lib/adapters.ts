@@ -83,6 +83,7 @@ export function toUiPlan(p: PlanOut): Plan {
   return {
     id: p.id,
     name: p.name,
+    slug: p.slug,
     period: PERIOD[p.billing_period] ?? "monthly",
     price: p.amount_minor,
     entryFee: p.entry_fee_minor,

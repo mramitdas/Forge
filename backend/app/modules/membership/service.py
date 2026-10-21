@@ -15,7 +15,21 @@ from app.modules.membership.models import (
 )
 from app.modules.tenancy.models import Branch
 
-BILLING_PERIOD_MONTHS = {"monthly": 1, "quarterly": 3, "annual": 12}
+BILLING_PERIOD_MONTHS = {"monthly": 1, "quarterly": 3, "semiannual": 6, "annual": 12}
+
+# Fields that alter a plan's terms; rejected while the plan is disabled
+# (is_active toggles stay exempt so a plan can always be re-enabled).
+_PLAN_DETAIL_FIELDS = (
+    "name",
+    "branch_id",
+    "description",
+    "billing_period",
+    "amount_minor",
+    "entry_fee_minor",
+    "tax_rate_bp",
+    "duration_months",
+    "auto_renew",
+)
 
 
 async def _validate_branch(
@@ -114,6 +128,10 @@ async def update_plan(
     plan = await session.get(MembershipPlan, plan_id)
     if plan is None or plan.deleted_at is not None or plan.tenant_id != tenant_id:
         raise NotFoundError("Plan not found", code="NOT_FOUND")
+    if not plan.is_active and any(f in data for f in _PLAN_DETAIL_FIELDS):
+        raise ConflictError(
+            "Enable the plan before editing its details", code="PLAN_DISABLED"
+        )
     if "branch_id" in data and data["branch_id"] is not None:
         await _validate_branch(session, tenant_id=tenant_id, branch_id=data["branch_id"])
     if data.get("billing_period") not in (None, *BILLING_PERIOD_MONTHS.keys()):

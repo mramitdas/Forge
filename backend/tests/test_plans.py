@@ -192,3 +192,75 @@ async def test_plan_is_tenant_scoped(client, gym_a, gym_b):
         headers=_headers(owner_b["access_token"]),
     )
     assert delete.status_code == 404
+
+
+async def test_plan_duration_periods_roundtrip(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    token = owner["access_token"]
+
+    six = await _create_plan(
+        client,
+        token,
+        "dur-six",
+        name="Six Month Plan",
+        billing_period="semiannual",
+        duration_months=6,
+    )
+    assert six["billing_period"] == "semiannual"
+    assert six["duration_months"] == 6
+
+    twelve = await _create_plan(
+        client,
+        token,
+        "dur-twelve",
+        name="Twelve Month Plan",
+        billing_period="annual",
+        duration_months=12,
+    )
+    assert twelve["billing_period"] == "annual"
+    assert twelve["duration_months"] == 12
+
+
+async def test_disabled_plan_rejects_detail_updates(client, gym_a):
+    owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    plan = await _create_plan(client, token, "dis-guard", name="Guard Plan")
+
+    disabled = await client.patch(
+        f"/api/v1/plans/{plan['id']}",
+        headers=_headers(token),
+        json={"is_active": False},
+    )
+    assert disabled.status_code == 200, disabled.text
+    assert disabled.json()["is_active"] is False
+
+    rename = await client.patch(
+        f"/api/v1/plans/{plan['id']}",
+        headers=_headers(token),
+        json={"name": "Sneaky Rename"},
+    )
+    assert rename.status_code == 409, rename.text
+    body = rename.json()
+    assert (body.get("error") or body.get("detail") or {}).get("code") == "PLAN_DISABLED"
+
+    repriced = await client.patch(
+        f"/api/v1/plans/{plan['id']}",
+        headers=_headers(token),
+        json={"amount_minor": 99900},
+    )
+    assert repriced.status_code == 409, repriced.text
+
+    enabled = await client.patch(
+        f"/api/v1/plans/{plan['id']}",
+        headers=_headers(token),
+        json={"is_active": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+
+    renamed = await client.patch(
+        f"/api/v1/plans/{plan['id']}",
+        headers=_headers(token),
+        json={"name": "Now Editable"},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "Now Editable"
