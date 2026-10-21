@@ -47,6 +47,7 @@ from app.modules.tenancy.service import (
     delete_branch,
     delete_gym,
     delete_tier,
+    ensure_branch_fields_free,
     impersonate_owner,
     list_subscription_events,
     platform_revenue,
@@ -445,6 +446,14 @@ async def create_branch(
     actor: Annotated[Actor, Depends(require_permission("tenancy.branches.create"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> BranchOut:
+    await ensure_branch_fields_free(
+        session,
+        gym_id=actor.tenant_id,
+        code=body.code,
+        phone=body.phone,
+        country_code=body.country_code,
+        gst_number=body.gst_number,
+    )
     branch = Branch(
         gym_id=actor.tenant_id,
         name=body.name,

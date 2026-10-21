@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     String,
     Text,
     Uuid,
@@ -48,6 +49,15 @@ class Gym(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, Base):
 
 class Branch(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, Base):
     __tablename__ = "branches"
+    __table_args__ = (
+        Index(
+            "uq_branches_gym_code",
+            "gym_id",
+            text("lower(code)"),
+            unique=True,
+            postgresql_where=text("code IS NOT NULL AND deleted_at IS NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     gym_id: Mapped[uuid.UUID] = mapped_column(

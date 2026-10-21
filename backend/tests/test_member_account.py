@@ -16,13 +16,19 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+_branch_counter = 0
+
+
 async def _create_branch(client, token: str, name: str = "Main") -> dict:
+    # Unique per call: the account gym is session-scoped and codes are unique per gym.
+    global _branch_counter
+    _branch_counter += 1
     response = await client.post(
         "/api/v1/branches",
         headers=_headers(token),
         json={
             "name": name,
-            "code": name[:2].upper() or "MA",
+            "code": f"{name[:2].upper() or 'MA'}{_branch_counter}",
             "timezone": "Asia/Kolkata",
             "country_code": "+91",
         },
@@ -537,7 +543,7 @@ async def test_branch_gst_number_roundtrip(client, gym_acct):
     updated = await client.patch(
         f"/api/v1/branches/{created.json()['id']}",
         headers=_headers(token),
-        json={"gst_number": "29XYZW9999K2A8"},
+        json={"gst_number": "29XYZWA9999K1Z8"},
     )
     assert updated.status_code == 200
-    assert updated.json()["gst_number"] == "29XYZW9999K2A8"
+    assert updated.json()["gst_number"] == "29XYZWA9999K1Z8"

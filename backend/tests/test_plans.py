@@ -9,13 +9,19 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+_branch_counter = 0
+
+
 async def _create_branch(client, token: str, name: str = "Annex") -> dict:
+    # Unique per call: gym_a is session-scoped and codes are unique per gym.
+    global _branch_counter
+    _branch_counter += 1
     response = await client.post(
         "/api/v1/branches",
         headers=_headers(token),
         json={
             "name": name,
-            "code": "AX",
+            "code": f"AX{_branch_counter}",
             "timezone": "Asia/Kolkata",
             "country_code": "+91",
         },

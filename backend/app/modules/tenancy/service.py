@@ -330,6 +330,71 @@ async def _get_branch(
     return branch
 
 
+_BRANCH_DETAIL_FIELDS = (
+    "name",
+    "code",
+    "address",
+    "phone",
+    "country_code",
+    "gst_number",
+    "timezone",
+)
+
+
+def _full_phone_digits(country_code: str | None, phone: str | None) -> str:
+    """Canonical per-gym phone identity.
+
+    Uses the phone field alone when it already carries the country dial
+    code (e.g. "+91 98765 43210", or "919876543210" with cc "+91");
+    otherwise prefixes the dial digits to the local number.
+    """
+    cc = "".join(ch for ch in (country_code or "") if ch.isdigit())
+    ph = "".join(ch for ch in (phone or "") if ch.isdigit())
+    if not ph:
+        return ""
+    if cc and ph.startswith(cc):
+        return ph
+    return f"{cc}{ph}"
+
+
+async def ensure_branch_fields_free(
+    session: AsyncSession,
+    *,
+    gym_id: uuid.UUID,
+    code: str | None = None,
+    phone: str | None = None,
+    country_code: str | None = None,
+    gst_number: str | None = None,
+    exclude_branch_id: uuid.UUID | None = None,
+) -> None:
+    """Raise 409 if another live branch in this gym already uses code/phone/GST."""
+    new_code = (code or "").strip().lower() or None
+    new_gst = (gst_number or "").strip().upper() or None
+    new_phone = _full_phone_digits(country_code, phone) or None
+    if new_code is None and new_gst is None and new_phone is None:
+        return
+    others = await session.scalars(
+        select(Branch).where(Branch.gym_id == gym_id, Branch.deleted_at.is_(None))
+    )
+    for other in others:
+        if exclude_branch_id is not None and other.id == exclude_branch_id:
+            continue
+        if new_code and other.code and other.code.strip().lower() == new_code:
+            raise ConflictError("Branch code already in use", code="CODE_TAKEN")
+        if (
+            new_phone
+            and other.phone
+            and _full_phone_digits(other.country_code, other.phone) == new_phone
+        ):
+            raise ConflictError("Phone number already in use", code="PHONE_TAKEN")
+        if (
+            new_gst
+            and other.gst_number
+            and other.gst_number.strip().upper() == new_gst
+        ):
+            raise ConflictError("GST number already in use", code="GST_TAKEN")
+
+
 async def update_branch(
     session: AsyncSession,
     *,
@@ -339,7 +404,21 @@ async def update_branch(
     actor_id: uuid.UUID | None = None,
 ) -> Branch:
     branch = await _get_branch(session, gym_id=gym_id, branch_id=branch_id)
-    for field in ("name", "code", "address", "phone", "country_code", "gst_number", "timezone"):
+    if not branch.is_active and any(f in data for f in _BRANCH_DETAIL_FIELDS):
+        raise ConflictError(
+            "Enable the branch before editing its details", code="BRANCH_DISABLED"
+        )
+    if any(f in data for f in ("code", "phone", "country_code", "gst_number")):
+        await ensure_branch_fields_free(
+            session,
+            gym_id=gym_id,
+            code=data.get("code", branch.code),
+            phone=data.get("phone", branch.phone),
+            country_code=data.get("country_code", branch.country_code),
+            gst_number=data.get("gst_number", branch.gst_number),
+            exclude_branch_id=branch_id,
+        )
+    for field in _BRANCH_DETAIL_FIELDS:
         if field in data:
             setattr(branch, field, data[field])
     if data.get("is_active") is not None and data["is_active"] != branch.is_active:

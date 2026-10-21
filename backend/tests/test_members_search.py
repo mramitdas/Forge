@@ -2,12 +2,21 @@ from __future__ import annotations
 
 from tests.helpers import login
 
+_branch_counter = 0
+
 
 async def _branch_id(client, token) -> str:
+    # Unique per call: gym_a is session-scoped and codes are unique per gym.
+    global _branch_counter
+    _branch_counter += 1
     response = await client.post(
         "/api/v1/branches",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Search Branch", "code": "SB", "timezone": "Asia/Kolkata"},
+        json={
+            "name": "Search Branch",
+            "code": f"SRCH{_branch_counter}",
+            "timezone": "Asia/Kolkata",
+        },
     )
     assert response.status_code == 201, response.text
     return response.json()["id"]

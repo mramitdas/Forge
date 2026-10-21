@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+# Phone: digits only, optional leading +, 6-15 digits after stripping spaces.
+_BRANCH_PHONE_RE = re.compile(r"^\+?\d{6,15}$")
+# GSTIN: 2-digit state + 5 letters + 4 digits + entity letter + entity num + Z + checksum.
+_BRANCH_GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
 
 
 class ProvisionGymRequest(BaseModel):
@@ -189,9 +195,58 @@ class GymSubscriptionOut(BaseModel):
     active_subscriptions: int
 
 
-class BranchCreate(BaseModel):
+class _BranchFieldValidators(BaseModel):
+    """Shared strip/normalise/format checks for branch code, phone, and GST."""
+
+    @field_validator("code", mode="before", check_fields=False)
+    @classmethod
+    def _strip_code(cls, v: object) -> object:
+        if isinstance(v, str):
+            v = v.strip()
+            return v or None
+        return v
+
+    @field_validator("code", check_fields=False)
+    @classmethod
+    def _code_length(cls, v: str | None) -> str | None:
+        if v is not None and len(v) > 32:
+            raise ValueError("must be at most 32 characters")
+        return v
+
+    @field_validator("phone", mode="before", check_fields=False)
+    @classmethod
+    def _strip_phone(cls, v: object) -> object:
+        if isinstance(v, str):
+            v = v.strip().replace(" ", "")
+            return v or None
+        return v
+
+    @field_validator("phone", check_fields=False)
+    @classmethod
+    def _phone_format(cls, v: str | None) -> str | None:
+        if v is not None and not _BRANCH_PHONE_RE.match(v):
+            raise ValueError("must be 6-15 digits with an optional leading +")
+        return v
+
+    @field_validator("gst_number", mode="before", check_fields=False)
+    @classmethod
+    def _norm_gst(cls, v: object) -> object:
+        if isinstance(v, str):
+            v = v.strip().upper()
+            return v or None
+        return v
+
+    @field_validator("gst_number", check_fields=False)
+    @classmethod
+    def _gst_format(cls, v: str | None) -> str | None:
+        if v is not None and not _BRANCH_GSTIN_RE.match(v):
+            raise ValueError("must be a valid 15-character GSTIN")
+        return v
+
+
+class BranchCreate(_BranchFieldValidators):
     name: str = Field(min_length=1, max_length=200)
-    code: str | None = None
+    code: str | None = Field(default=None, max_length=32)
     address: str | None = None
     phone: str | None = None
     country_code: str | None = None
@@ -199,9 +254,9 @@ class BranchCreate(BaseModel):
     timezone: str = "Asia/Kolkata"
 
 
-class BranchUpdate(BaseModel):
+class BranchUpdate(_BranchFieldValidators):
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    code: str | None = None
+    code: str | None = Field(default=None, max_length=32)
     address: str | None = None
     phone: str | None = None
     country_code: str | None = None
