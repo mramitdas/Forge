@@ -34,12 +34,14 @@ user approval.
    `(app)/layout.tsx`), run:
 
    ```bash
-   cd apps/web && npx playwright test e2e/platform
+   make e2e
    ```
 
-   100% pass required. If a legitimate UI change breaks a test, **update the
+   (repo root; runs `npx playwright test e2e/platform --workers=1`) — 100%
+   pass required. If a legitimate UI change breaks a test, **update the
    test in the same commit**. (`platform_admin_verify.cjs` retired; the other
-   six e2e scripts remain house-style gates for their own domains.)
+   six e2e scripts remain house-style gates for their own domains, run via
+   `make e2e-gym` etc.)
 
 ## Settings page is role-split
 
@@ -102,14 +104,19 @@ The super-admin gate is a proper `@playwright/test` suite under
   state only — the API path is pytest's job).
 - No `webServer` block in `playwright.config.ts` on purpose — the suite runs
   against the already-running `make dev` / `make web` servers.
-- CPU budget: the gate runs `workers: 2` + `trace: "off"` (default `cpus/2`
-  Chromiums freeze the machine via parallel Next dev compiles). `auth.setup.ts`
-  warms every platform route first so the parallel phase is compile-free.
-  Debug a failure with `--trace on-first-retry`.
-- The six remaining house-style scripts (`gym_ops`, `plans`,
-  `member_account`, `role_visibility`, `frontdesk`, `expenses`) are unchanged
-  and still run with
-  `NODE_PATH="$(npm root -g)" node e2e/<name>_verify.cjs`.
+- **Workers rule: Playwright runs with `workers: 1` ONLY.** Config default
+  is `workers: 1` and `make e2e` hardcodes `--workers=1`; never pass a higher
+  `--workers` on the CLI. (Default `cpus/2` Chromiums freeze the machine via
+  parallel Next dev compiles + bcrypt.) `trace: "off"`; `auth.setup.ts` warms
+  every platform route first so the serial phase is compile-free. Debug a
+  failure with `--trace on-first-retry`.
+- Canonical entry points (repo root): `make e2e` (platform suite),
+  `make e2e-ui` (UI mode), `make e2e-all` (platform + six house scripts,
+  sequential). The six house-style scripts (`gym_ops`, `plans`,
+  `member_account`, `role_visibility`, `frontdesk`, `expenses`) are
+  single-process and run via `make e2e-<name>` (raw form:
+  `NODE_PATH="$(npm root -g)" node e2e/<name>_verify.cjs`) — always
+  sequentially, never in parallel (shared dev DB).
 
 ## Dev servers
 

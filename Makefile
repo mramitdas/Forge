@@ -2,7 +2,7 @@ PY := .venv/bin/python
 RUFF := .venv/bin/ruff
 ALEMBIC := .venv/bin/alembic
 
-.PHONY: db-up db-init db-psql migrate migrate-downgrade seed reset test test-backend test-web lint fmt dev web help
+.PHONY: db-up db-init db-psql migrate migrate-downgrade seed reset test test-backend test-web lint fmt dev web help e2e e2e-ui e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses e2e-all
 
 help:
 	@echo "Targets:"
@@ -19,6 +19,15 @@ help:
 	@echo "  fmt          run ruff format + check --fix"
 	@echo "  dev          run backend dev server on :8000"
 	@echo "  web          run frontend dev server on :3000"
+	@echo "  e2e          run platform Playwright suite (workers=1)"
+	@echo "  e2e-ui       run platform suite in Playwright UI mode"
+	@echo "  e2e-gym      run gym_ops house e2e script"
+	@echo "  e2e-plans    run plans house e2e script"
+	@echo "  e2e-member   run member_account house e2e script"
+	@echo "  e2e-roles    run role_visibility house e2e script"
+	@echo "  e2e-frontdesk run frontdesk house e2e script"
+	@echo "  e2e-expenses run expenses house e2e script"
+	@echo "  e2e-all      platform suite + all six house scripts, sequential"
 
 # Starts a local Postgres cluster however this machine happens to manage it.
 # Debian/Ubuntu ship pg_ctlcluster; macOS via Homebrew uses brew services.
@@ -75,3 +84,35 @@ dev:
 
 web:
 	cd apps/web && npm run dev
+
+# ── E2E ──
+# RULE: Playwright only ever runs with 1 worker (`--workers=1` hardcoded here
+# AND `workers: 1` in playwright.config.ts — never pass a higher --workers).
+# Runs against the RUNNING dev servers (make dev + make web).
+e2e:
+	cd apps/web && npx playwright test e2e/platform --workers=1
+
+e2e-ui:
+	cd apps/web && npx playwright test e2e/platform --workers=1 --ui
+
+# House-style scripts are single-process (inherently 1 worker) and share one
+# dev DB — always run them sequentially, never in parallel.
+e2e-gym:
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/gym_ops_verify.cjs
+
+e2e-plans:
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/plans_verify.cjs
+
+e2e-member:
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/member_account_verify.cjs
+
+e2e-roles:
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/role_visibility_verify.cjs
+
+e2e-frontdesk:
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/frontdesk_verify.cjs
+
+e2e-expenses:
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/expenses_verify.cjs
+
+e2e-all: e2e e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses

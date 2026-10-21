@@ -11,8 +11,8 @@
 **Ground rules:**
 - Dev servers RUNNING on :3000/:8000 — do not restart (if dead: `make dev` / `make web` from repo root).
 - **Gates after EVERY task:** from `backend/`: `.venv/bin/python -m pytest -q` (baseline **105 passed**), `.venv/bin/ruff check app tests scripts alembic` (clean); from `apps/web`: `npx tsc --noEmit` (clean), `npm test` (baseline **17 pass**; glob `src/lib/*.test.ts`, runner `node --test`).
-- **Shared-file rule:** after ANY change to `ui.tsx`, `hooks.ts`, `types.ts`, `auth.ts`, `(app)/layout.tsx`, or settings pages: run `cd apps/web && npx playwright test e2e/platform` — must be **59 pass / 1 skip (100%)**. The platform Playwright suite is the frozen-surface gate (AGENTS.md Rule 3).
-- **CPU budget:** workers=2, trace off; debug failures with `--trace on-first-retry`. Never raise workers.
+- **Shared-file rule:** after ANY change to `ui.tsx`, `hooks.ts`, `types.ts`, `auth.ts`, `(app)/layout.tsx`, or settings pages: run `make e2e` (repo root) — must be **59 pass / 1 skip (100%)**. The platform Playwright suite is the frozen-surface gate (AGENTS.md Rule 3).
+- **Workers rule:** Playwright runs with `workers: 1` ONLY — config default is 1, `make e2e` hardcodes `--workers=1`; never pass a higher `--workers`. `trace: "off"`; debug failures with `--trace on-first-retry`.
 - **E2E scripts self-provision and share one dev DB — run SEQUENTIALLY.** `gym_ops` baseline **33/33**; after this round still **33/33** (settings block L205–293 retargeted in the same commit as the UI change it covers).
 - Never `git add -A`; stage only task files. Commit directly to `main` after each task.
 - Fixtures: admin `admin@gym-erp.dev`/`admin-pass-123` (full_name "Platform Admin" — e2e must not rename it); owner `demo-owner@gym-erp.dev`/`owner-pass-123`; other gym roles `branch-manager`/`receptionist`/`trainer@gym-erp.dev`. Never submit a real password change in e2e (fixtures must survive for other suites) — password paths are pytest-covered.
@@ -172,7 +172,7 @@ export function formatTimezone(tz: string): string {
 
 4.2 In `PlatformSettings.tsx`: delete the local block, add `import { PasswordChecklist } from "@/components/password-checklist";`. Everything else byte-identical (behavior + markup unchanged — the platform suite asserts the `ul[aria-label="Password strength"]` checklist states).
 
-4.3 Gates: tsc clean, `npm test` clean, **`cd apps/web && npx playwright test e2e/platform` → 59 pass / 1 skip**. Commit: `refactor(web): extract shared PasswordChecklist component`.
+4.3 Gates: tsc clean, `npm test` clean, **`make e2e` → 59 pass / 1 skip**. Commit: `refactor(web): extract shared PasswordChecklist component`.
 
 ---
 
@@ -394,7 +394,7 @@ Run from repo root, sequentially:
 ```bash
 cd backend && .venv/bin/python -m pytest -q && .venv/bin/ruff check app tests scripts alembic
 cd ../apps/web && npx tsc --noEmit && npm test
-cd apps/web && npx playwright test e2e/platform          # 59 pass / 1 skip
+make e2e                                                 # 59 pass / 1 skip (repo root)
 cd apps/web && NODE_PATH="$(npm root -g)" node e2e/gym_ops_verify.cjs        # 33+
 cd apps/web && NODE_PATH="$(npm root -g)" node e2e/plans_verify.cjs          # 9
 cd apps/web && NODE_PATH="$(npm root -g)" node e2e/member_account_verify.cjs # 15
@@ -404,6 +404,8 @@ cd apps/web && NODE_PATH="$(npm root -g)" node e2e/expenses_verify.cjs       # 1
 ```
 
 Also verify live-DB hygiene: admin full_name still "Platform Admin"; `SELECT name FROM gyms WHERE name LIKE 'PW %' AND deleted_at IS NULL` → offer purge to user if rows remain (do not auto-delete).
+
+(Equivalent make targets for the house scripts: `make e2e-gym`, `make e2e-plans`, `make e2e-member`, `make e2e-roles`, `make e2e-frontdesk`, `make e2e-expenses` — or all sequential in one shot via `make e2e-all`.)
 
 Report: final pytest count, each gate result, any retargets made, working tree clean. If ALL green, this round is done — no merge/PR (direct-to-main convention).
 

@@ -8,11 +8,11 @@ export default defineConfig({
   testMatch: /e2e\/platform\/.*\.(spec|setup)\.ts/,
   timeout: 60_000,
   retries: 1,
-  // CPU budget: default cpus/2 (4 Chromiums) freezes the machine via parallel
-  // Next dev compiles + bcrypt. 2 workers keeps peak under ~50% CPU; speed is
-  // recovered by the auth-setup route warmup below. Debug failures with
-  // `--trace on-first-retry`.
-  workers: 2,
+  // RULE: Playwright runs with 1 worker only — default cpus/2 freezes the
+  // machine via parallel Next dev compiles + bcrypt. Speed is recovered by
+  // the auth-setup route warmup below. Never pass `--workers` > 1; run the
+  // suite via `make e2e`. Debug failures with `--trace on-first-retry`.
+  workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: "http://localhost:3000",
