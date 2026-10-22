@@ -108,7 +108,6 @@ function initialsOf(m: MemberOut): string {
 
 function memberTags(m: MemberOut, ctx: MemberCtx): string[] {
   const tags: string[] = [];
-  if (m.status === "lead") tags.push("LEAD");
   const now = Date.now();
   const joined = m.joined_at ? new Date(m.joined_at).getTime() : 0;
   if (joined && now - joined < 30 * DAY) tags.push("NEW");
@@ -185,18 +184,11 @@ export function toUiMember(m: MemberOut, ctx: MemberCtx): Member {
 
 function mapMemberStatus(s: string): Member["status"] {
   switch (s) {
-    case "active":
-    case "prospect":
-      return "active";
+    case "inactive":
     case "frozen":
-      return "paused";
-    case "lapsed":
-    case "cancelled":
-      return "expired";
-    case "lead":
-      return "lead";
+      return s;
     default:
-      return "lead";
+      return "active";
   }
 }
 

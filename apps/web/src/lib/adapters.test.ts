@@ -108,3 +108,12 @@ test("denied-only member shows zero visits and no last check-in", () => {
   assert.equal(ui.streak, 0);
   assert.equal(ui.lastCheckIn, null);
 });
+
+test("member status uses the 3-value vocabulary with active fallback", () => {
+  const ctx = { subscriptions: [], invoices: [], checkins: [] };
+  assert.equal(toUiMember(member({ status: "inactive" }), ctx).status, "inactive");
+  assert.equal(toUiMember(member({ status: "frozen" }), ctx).status, "frozen");
+  assert.equal(toUiMember(member({ status: "active" }), ctx).status, "active");
+  assert.equal(toUiMember(member({ status: "prospect" }), ctx).status, "active");
+  assert.equal(toUiMember(member({ status: "lead" }), ctx).tags.includes("LEAD"), false);
+});

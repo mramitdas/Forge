@@ -204,12 +204,14 @@ export function statusTone(status: string): keyof typeof badgeTone {
     case "paused":
     case "pending":
     case "open":
+    case "frozen":
       return "amber";
     case "expired":
     case "overdue":
     case "denied":
     case "cancelled":
     case "void":
+    case "inactive":
       return "red";
     case "lead":
       return "blue";

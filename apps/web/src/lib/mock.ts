@@ -1,4 +1,4 @@
-export type MemberStatus = "active" | "paused" | "expired" | "lead";
+export type MemberStatus = "active" | "inactive" | "frozen";
 export type PlanPeriod = "day" | "monthly" | "quarterly" | "yearly" | "pt";
 export type SubStatus = "pending" | "active" | "paused" | "expired" | "cancelled";
 export type InvoiceStatus = "open" | "paid" | "overdue" | "void";
