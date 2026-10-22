@@ -41,6 +41,7 @@ async function main() {
   let memberBId = null;
   let planAId = null;
   let planBId = null;
+  let uiMemberId = null;
 
   try {
     await page.goto(`${BASE}/login`);
@@ -62,26 +63,6 @@ async function main() {
     const branches = await (await api.get(`${BASE}/api/v1/branches`, { headers: auth })).json();
     const branchId = branches[0].id;
 
-    const memberA = await post("/members", {
-      first_name: MEMBER_A,
-      last_name: "Roster",
-      email: `fd-alpha-${ts}@example.com`,
-      phone: "9000000001",
-      country_code: "+91",
-      gender: "Male",
-      branch_id: branchId,
-      status: "active",
-    });
-    const memberB = await post("/members", {
-      first_name: MEMBER_B,
-      last_name: "Roster",
-      email: `fd-beta-${ts}@example.com`,
-      phone: "9000000002",
-      country_code: "+91",
-      gender: "Female",
-      branch_id: branchId,
-      status: "active",
-    });
     const planA = await post("/plans", {
       name: PLAN_A,
       slug: `fd-plan-a-${ts}`,
@@ -94,15 +75,31 @@ async function main() {
       billing_period: "monthly",
       amount_minor: 90000,
     });
-    const subA = await post("/plans/subscribe", {
-      member_id: memberA.body.id,
-      plan_id: planA.body.id,
+    const memberA = await post("/members", {
+      first_name: MEMBER_A,
+      last_name: "Roster",
+      email: `fd-alpha-${ts}@example.com`,
+      phone: "9000000001",
+      country_code: "+91",
+      gender: "Male",
       branch_id: branchId,
+      plan_id: planA.body.id,
     });
-    const actA = await post(`/plans/subscriptions/${subA.body.id}/activate`, {});
-    const subB = await post("/plans/subscribe", {
-      member_id: memberB.body.id,
+    const memberB = await post("/members", {
+      first_name: MEMBER_B,
+      last_name: "Roster",
+      email: `fd-beta-${ts}@example.com`,
+      phone: "9000000002",
+      country_code: "+91",
+      gender: "Female",
+      branch_id: branchId,
       plan_id: planB.body.id,
+    });
+    // Queued continuation: member B's active term stays; this pending sub is
+    // the Activate-button fixture below.
+    const pendingSubB = await post("/plans/subscribe", {
+      member_id: memberB.body.id,
+      plan_id: planA.body.id,
       branch_id: branchId,
     });
     const invA = await (
@@ -122,15 +119,13 @@ async function main() {
       memberB.status === 201 &&
       planA.status === 201 &&
       planB.status === 201 &&
-      subA.status === 201 &&
-      subB.status === 201 &&
-      actA.status === 200 &&
+      pendingSubB.status === 201 &&
       !!invAOpen &&
       !!invBOpen;
     check(
       "API fixtures ready (2 members, 2 plans, activated + pending subs, open invoices)",
       fixturesOk,
-      `subs ${subA.status}/${actA.status}/${subB.status} inv ${invAOpen?.number}/${invBOpen?.number}`,
+      `members ${memberA.status}/${memberB.status} pendingSub ${pendingSubB.status} inv ${invAOpen?.number}/${invBOpen?.number}`,
     );
     if (!invAOpen || !invBOpen) throw new Error("fixture invoices missing");
 
@@ -139,6 +134,23 @@ async function main() {
     await page.locator('input[placeholder="Search name, email, phone"]').waitFor({ timeout: 20000 });
     await page.getByText(/\d+ members/).waitFor({ timeout: 20000 });
     await must("members page renders with total count + Add member", page.getByRole("button", { name: "Add member" }).waitFor({ timeout: 10000 }));
+
+    // Add-member modal cannot submit without a plan.
+    await page.getByRole("button", { name: "Add member" }).click();
+    const addModal = page.locator("form").last();
+    await addModal.locator("input").first().fill(`FD UI ${ts}`);
+    check(
+      "add-member submit disabled without a plan",
+      await addModal.getByRole("button", { name: "Add member" }).isDisabled(),
+    );
+    await addModal.locator('select[aria-label="Plan"]').selectOption(planB.body.id);
+    await addModal.getByRole("button", { name: "Add member" }).click();
+    await page.getByText(`FD UI ${ts} added`).waitFor({ timeout: 15000 });
+    check("add-member with plan succeeds (toast + auto subscription)", true);
+    const uiCreated = await (
+      await api.get(`${BASE}/api/v1/members?search=FD%20UI%20${ts}`, { headers: auth })
+    ).json();
+    uiMemberId = uiCreated.items[0]?.id ?? null;
 
     const searchInput = page.locator('input[placeholder="Search name, email, phone"]');
     await searchInput.fill(MEMBER_A);
@@ -261,12 +273,19 @@ async function main() {
     await subRowA.first().getByText(PLAN_A, { exact: true }).waitFor({ timeout: 10000 });
     await must("member A subscription shows Active badge + plan name", subRowA.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 }));
 
-    const subRowB = page.locator("tbody tr", { hasText: MEMBER_B });
+    const subRowB = page
+      .locator("tbody tr", { hasText: MEMBER_B })
+      .filter({ hasText: "Pending" });
     await subRowB.first().waitFor({ timeout: 15000 });
-    await subRowB.first().getByText("Pending", { exact: true }).waitFor({ timeout: 10000 });
     await subRowB.first().getByRole("button", { name: "Activate" }).click();
     await page.getByText("subscription activated").waitFor({ timeout: 15000 });
-    await must("member B pending subscription activated via UI", subRowB.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 }));
+    const subRowBActive = page
+      .locator("tbody tr", { hasText: MEMBER_B })
+      .filter({ hasText: "Active" });
+    await must(
+      "member B pending subscription activated via UI",
+      subRowBActive.first().getByText("Active", { exact: true }).waitFor({ timeout: 10000 }),
+    );
   } catch (err) {
     if (!(err && typeof err === "object" && err.named)) {
       check("unexpected failure", false, String(err).slice(0, 300));
@@ -277,6 +296,7 @@ async function main() {
       for (const [kind, id, label] of [
         ["members", memberAId, "member A"],
         ["members", memberBId, "member B"],
+        ["members", uiMemberId, "UI-created member"],
         ["plans", planAId, "plan A"],
         ["plans", planBId, "plan B"],
       ]) {

@@ -295,21 +295,6 @@ async function main() {
     let openInv = invoices.items.find((i) => i.status === "open" || i.status === "overdue");
     if (!openInv) {
       const branches = await (await api.get(`${BASE}/api/v1/branches`, { headers: auth })).json();
-      const member = await (
-        await api.post(`${BASE}/api/v1/members`, {
-          headers: auth,
-          data: {
-            first_name: "E2E",
-            last_name: `Ops ${ts}`,
-            email: `e2e-ops-${ts}@example.com`,
-            phone: "9000000000",
-            country_code: "+91",
-            gender: "Male",
-            branch_id: branches[0].id,
-            status: "active",
-          },
-        })
-      ).json();
       const plan = await (
         await api.post(`${BASE}/api/v1/plans`, {
           headers: auth,
@@ -321,15 +306,23 @@ async function main() {
           },
         })
       ).json();
-      const sub = await (
-        await api.post(`${BASE}/api/v1/plans/subscribe`, {
+      const member = await (
+        await api.post(`${BASE}/api/v1/members`, {
           headers: auth,
-          data: { member_id: member.id, plan_id: plan.id, branch_id: branches[0].id },
+          data: {
+            first_name: "E2E",
+            last_name: `Ops ${ts}`,
+            email: `e2e-ops-${ts}@example.com`,
+            phone: "9000000000",
+            country_code: "+91",
+            gender: "Male",
+            branch_id: branches[0].id,
+            plan_id: plan.id,
+          },
         })
       ).json();
       condMemberId = member.id;
       condPlanId = plan.id;
-      await api.post(`${BASE}/api/v1/plans/subscriptions/${sub.id}/activate`, { headers: auth });
       invoices = await (await api.get(`${BASE}/api/v1/invoices?page_size=100`, { headers: auth })).json();
       openInv = invoices.items.find((i) => i.status === "open" || i.status === "overdue");
     }

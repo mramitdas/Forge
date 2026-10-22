@@ -53,23 +53,7 @@ async function main() {
     auth = { Authorization: `Bearer ${access_token}` };
     const branches = await (await api.get(`${BASE}/api/v1/branches`, { headers: auth })).json();
     const branchId = branches[0].id;
-    const created = await api.post(`${BASE}/api/v1/members`, {
-      headers: auth,
-      data: {
-        first_name: "E2E",
-        last_name: `Acct ${ts}`,
-        email: `e2e-acct-${ts}@example.com`,
-        phone: "9000000000",
-        country_code: "+91",
-        gender: "Male",
-        branch_id: branchId,
-        status: "active",
-      },
-    });
-    const member = await created.json();
-    check("member created via API", created.status() === 201, member.id);
-
-    // Create a plan + subscription via API so the Renew/Upgrade UI can be tested.
+    // Create a plan first; member creation now requires and auto-activates it.
     const planRes = await api.post(`${BASE}/api/v1/plans`, {
       headers: auth,
       data: {
@@ -82,13 +66,22 @@ async function main() {
     });
     const plan = await planRes.json();
     renewPlanId = plan.id;
-    const subRes = await api.post(`${BASE}/api/v1/plans/subscribe`, {
+    const created = await api.post(`${BASE}/api/v1/members`, {
       headers: auth,
-      data: { member_id: member.id, plan_id: plan.id, branch_id: branchId },
+      data: {
+        first_name: "E2E",
+        last_name: `Acct ${ts}`,
+        email: `e2e-acct-${ts}@example.com`,
+        phone: "9000000000",
+        country_code: "+91",
+        gender: "Male",
+        branch_id: branchId,
+        plan_id: plan.id,
+      },
     });
-    const sub = await subRes.json();
-    await api.post(`${BASE}/api/v1/plans/subscriptions/${sub.id}/activate`, { headers: auth });
-    check("plan + subscription created", subRes.status() === 201, plan.slug);
+    const member = await created.json();
+    check("member created via API with plan", created.status() === 201, member.id);
+    check("plan created", planRes.status() === 201, plan.slug);
 
     const upgradePlan = await (
       await api.post(`${BASE}/api/v1/plans`, {
