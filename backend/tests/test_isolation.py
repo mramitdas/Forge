@@ -46,7 +46,6 @@ async def _create_member(
             "phone": "+919900000001",
             "branch_id": branch_id,
             "plan_id": plan_id,
-            "status": "inactive",
         },
     )
     assert response.status_code == 201, response.text

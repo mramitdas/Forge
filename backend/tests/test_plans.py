@@ -91,9 +91,6 @@ async def test_plan_crud_with_branch_scope(client, gym_a):
     by_slug = {p["slug"]: p for p in listed.json()}
     assert by_slug["flex-monthly"]["is_active"] is False
 
-    # gym_a is session-scoped and shared with other test files, so the
-    # listing also contains their global plans. Assert the branch filter's
-    # real contract: global + this-branch plans in, other-branch plans out.
     other_branch = await _create_branch(client, token, "Other")
     other_scoped = await _create_plan(
         client, token, "other-branch-plan", branch_id=other_branch["id"]

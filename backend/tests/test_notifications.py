@@ -51,9 +51,7 @@ async def test_payment_notification_uses_invoice_number(
     assert paid.status_code == 200, paid.text
 
     # Payments are announced through the transactional outbox; pump the
-    # dispatcher so the notification handler actually runs. Earlier suite
-    # tests leave a large unpublished backlog and run_once caps at 100
-    # events, so drain until idle to guarantee our payment is included.
+    # dispatcher so the notification handler actually runs.
     for _ in range(50):
         if await dispatcher.run_once() == 0:
             break

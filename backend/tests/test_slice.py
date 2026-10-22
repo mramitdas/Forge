@@ -167,7 +167,6 @@ async def test_checkin_denied_without_membership(client, gym_a):
     plan = await _create_plan(client, token, "monthly-arj")
     member = await _create_member(client, token, branch_id, plan["id"], "Arjun")
 
-    # Member create always subscribes; expire the term so no membership is live.
     maker = get_sessionmaker()
     token_ctx = set_tenant_context(TenantContext(tenant_id=uuid.UUID(str(gym_a["id"]))))
     try:
@@ -213,8 +212,6 @@ async def test_outbox_dispatches_payment_notification(client, dispatcher, gym_a)
     )
     assert unread.json()["count"] == 0
 
-    # run_once caps at 100 events and earlier suite tests leave a backlog;
-    # drain until idle so this payment is guaranteed to be delivered.
     delivered = 0
     for _ in range(50):
         n = await dispatcher.run_once()
