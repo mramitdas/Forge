@@ -122,9 +122,7 @@ export default function PlansPage() {
   const editGuard = useInFlight();
 
   const selected = subscribeTo ? plans.find((p) => p.id === subscribeTo) : null;
-  const memberOptions = rawMembers
-    .filter((m) => m.status !== "lead")
-    .map((m) => ({ id: m.id, name: m.full_name || m.first_name }));
+  const memberOptions = rawMembers.map((m) => ({ id: m.id, name: m.full_name || m.first_name }));
 
   const visiblePlans = plans.filter((p) => {
     if (branchFilter === "all") return true;

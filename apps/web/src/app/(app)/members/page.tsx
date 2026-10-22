@@ -51,13 +51,12 @@ function CountryCodeSelect({
   );
 }
 
-const filters = ["All", "active", "paused", "expired", "lead"] as const;
+const filters = ["All", "active", "inactive", "frozen"] as const;
 const statusParam: Record<(typeof filters)[number], string | undefined> = {
   All: undefined,
   active: "active",
-  paused: "frozen",
-  expired: "lapsed",
-  lead: "lead",
+  inactive: "inactive",
+  frozen: "frozen",
 };
 
 const PAGE_SIZE = 10;
@@ -111,7 +110,7 @@ export default function MembersPage() {
     phone: "",
     country_code: "+91",
     gender: "Male",
-    status: "lead",
+    status: "active",
   });
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -130,7 +129,6 @@ export default function MembersPage() {
           country_code: form.countryCode || undefined,
           gender: form.gender,
           branch_id: form.branchId,
-          status: "lead",
         });
         if (form.planId) {
           const sub = await subscribe.mutateAsync({
@@ -141,7 +139,7 @@ export default function MembersPage() {
           await activate.mutateAsync(sub.id);
         }
         setOpen(false);
-        setToast({ type: "success", message: `${form.name.trim()} added as lead` });
+        setToast({ type: "success", message: `${form.name.trim()} added` });
         setForm({ name: "", email: "", countryCode: "+91", phone: "", gender: "Male", branchId: form.branchId, planId: "" });
       } catch {
         setToast({ type: "error", message: "Failed to add member" });
@@ -391,7 +389,7 @@ export default function MembersPage() {
         </Card>
       </Async>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Add member" subtitle="New members start as leads until they subscribe.">
+      <Modal open={open} onClose={() => setOpen(false)} title="Add member" subtitle="Members can subscribe to a plan later.">
         <form onSubmit={addMember} className="space-y-4">
           <Field label="Full name">
             <Input
@@ -550,12 +548,9 @@ export default function MembersPage() {
                 value={editForm.status}
                 onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
               >
-                <option value="lead">Lead</option>
-                <option value="prospect">Prospect</option>
                 <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
                 <option value="frozen">Frozen</option>
-                <option value="lapsed">Lapsed</option>
-                <option value="cancelled">Cancelled</option>
               </Select>
             </Field>
           </div>

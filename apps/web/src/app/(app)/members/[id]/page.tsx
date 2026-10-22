@@ -408,7 +408,7 @@ export default function MemberDetailPage() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="p-5">
-          <SectionTitle title="Subscription" action={plan ? <Badge tone={statusTone(sub?.status ?? "lead")}>{sub?.status}</Badge> : undefined} />
+          <SectionTitle title="Subscription" action={plan ? <Badge tone={statusTone(sub?.status ?? "pending")}>{sub?.status}</Badge> : undefined} />
           <Async loading={subsLoading} error={subsError} skeleton={<MemberPanelSkeleton />}>
             {sub ? (
               <div className="space-y-4">
@@ -573,12 +573,9 @@ export default function MemberDetailPage() {
                 value={editForm.status}
                 onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
               >
-                <option value="lead">Lead</option>
-                <option value="prospect">Prospect</option>
                 <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
                 <option value="frozen">Frozen</option>
-                <option value="lapsed">Lapsed</option>
-                <option value="cancelled">Cancelled</option>
               </Select>
             </Field>
           </div>
