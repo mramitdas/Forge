@@ -17,7 +17,7 @@ import {
 } from "@/components/ui";
 import { Async, Count } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
-import { type Member, inr } from "@/lib/mock";
+import { type Member } from "@/lib/mock";
 import {
   byId,
   useBranches,
@@ -451,7 +451,7 @@ export default function MembersPage() {
                 )}
                 {visiblePlans.length > 0 && <option value="" disabled>Select a plan…</option>}
                 {visiblePlans.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} · {inr(p.price)}</option>
+                  <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </Select>
             </Field>
