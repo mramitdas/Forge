@@ -42,7 +42,7 @@ async def test_members_pagination_stable_for_tied_created_at(client, platform_to
                 "last_name": "Maker",
                 "email": f"tie{i}-memtie@example.com",
                 "gender": "Male",
-                "status": "lead",
+                "status": "inactive",
                 "branch_id": branch.json()["id"],
             },
         )

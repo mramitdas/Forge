@@ -408,7 +408,7 @@ async def test_avatar_query_token_not_blocked_by_gate(client, gym_a):
             "email": "avatar-gate@example.com",
             "phone": "+919900000013",
             "branch_id": branch.json()["id"],
-            "status": "prospect",
+            "status": "inactive",
         },
     )
     assert created.status_code == 201, created.text

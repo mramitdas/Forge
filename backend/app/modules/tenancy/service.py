@@ -478,7 +478,7 @@ async def _disable_branch_members(
         )
     )
     for member in members:
-        if member.status not in {"frozen", "lapsed", "cancelled"}:
+        if member.status == "active":
             custom = dict(member.custom_data or {})
             custom["branch_frozen_prev"] = member.status
             member.custom_data = custom

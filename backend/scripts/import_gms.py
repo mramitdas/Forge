@@ -209,7 +209,7 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
                         phone=u["phone_number"] or None,
                         country_code="+91" if u["phone_number"] else None,
                         gender=GENDER_MAP.get(u["gender"]),
-                        status="active" if u["is_active"] else "cancelled",
+                        status="active" if u["is_active"] else "inactive",
                         is_active=bool(u["is_active"]),
                         joined_at=_dt(c["date_joined"], _dt(u["created_at"])),
                         custom_data={

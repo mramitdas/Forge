@@ -52,7 +52,7 @@ async def _create_member(client, token: str, branch_id: str, first_name: str) ->
             "email": f"{first_name.lower()}@example.com",
             "phone": "+919876543210",
             "branch_id": branch_id,
-            "status": "prospect",
+            "status": "inactive",
         },
     )
     assert response.status_code == 201, response.text
@@ -66,7 +66,7 @@ async def test_full_slice_member_to_checkin(client, gym_a):
 
     # Member lifecycle.
     member = await _create_member(client, token, branch_id, "Riya")
-    assert member["status"] == "prospect"
+    assert member["status"] == "inactive"
 
     detail = await client.get(f"/api/v1/members/{member['id']}", headers=_headers(token))
     assert detail.status_code == 200

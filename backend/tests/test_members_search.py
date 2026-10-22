@@ -35,7 +35,7 @@ async def test_search_matches_full_name(client, gym_a):
             "email": "dblclick-qa@example.com",
             "phone": "+919900000011",
             "branch_id": branch,
-            "status": "prospect",
+            "status": "inactive",
         },
     )
     assert created.status_code == 201, created.text
@@ -50,7 +50,7 @@ async def test_search_matches_full_name(client, gym_a):
             "email": "sole-name@example.com",
             "phone": "+919900000012",
             "branch_id": branch,
-            "status": "prospect",
+            "status": "inactive",
         },
     )
     assert other.status_code == 201, other.text

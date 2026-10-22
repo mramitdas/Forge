@@ -40,7 +40,7 @@ async def test_owner_sees_tier_with_usage(client, platform_token):
             "last_name": "Member",
             "email": "tier-member-tiersee@example.com",
             "gender": "Male",
-            "status": "lead",
+            "status": "inactive",
             "branch_id": branch.json()["id"],
         },
     )

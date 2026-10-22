@@ -65,6 +65,13 @@ async def test_member_create_defaults_is_active(client, gym_acct):
     member = await _create_member(client, token, branch["id"])
     assert member["is_active"] is True
     assert member["avatar_path"] is None
+    raw = await client.post(
+        "/api/v1/members",
+        headers=_headers(token),
+        json={"first_name": "Default", "last_name": "Status", "branch_id": branch["id"]},
+    )
+    assert raw.status_code == 201, raw.text
+    assert raw.json()["status"] == "active"
 
 
 async def test_member_enable_disable_toggles_checkin(client, gym_acct):
@@ -547,3 +554,17 @@ async def test_branch_gst_number_roundtrip(client, gym_acct):
     )
     assert updated.status_code == 200
     assert updated.json()["gst_number"] == "29XYZWA9999K1Z8"
+
+
+async def test_member_update_rejects_unknown_status(client, gym_acct):
+    owner = await login(client, "owner-acct@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch = await _create_branch(client, token)
+    member = await _create_member(client, token, branch["id"])
+    response = await client.patch(
+        f"/api/v1/members/{member['id']}",
+        headers=_headers(token),
+        json={"status": "lead"},
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "INVALID_STATUS"

@@ -28,7 +28,7 @@ async def _create_member(client, token, branch_id: str, first_name: str) -> dict
             "email": f"{first_name.lower()}@example.com",
             "phone": "+919900000001",
             "branch_id": branch_id,
-            "status": "prospect",
+            "status": "inactive",
         },
     )
     assert response.status_code == 201, response.text

@@ -15,7 +15,7 @@ from app.db.base import (
     uuid7,
 )
 
-MEMBER_STATUSES = ("lead", "prospect", "active", "frozen", "lapsed", "cancelled")
+MEMBER_STATUSES = ("active", "inactive", "frozen")
 
 
 class Member(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, Base):
@@ -31,7 +31,7 @@ class Member(TenantRowMixin, AuditMixin, SoftDeleteMixin, VersionMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
     gender: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    status: Mapped[str] = mapped_column(String(20), default="lead", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     avatar_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
