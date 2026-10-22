@@ -399,6 +399,17 @@ async def test_avatar_query_token_not_blocked_by_gate(client, gym_a):
         json={"name": "Avatar Branch", "code": "AV", "timezone": "Asia/Kolkata"},
     )
     assert branch.status_code == 201, branch.text
+    plan = await client.post(
+        "/api/v1/plans",
+        headers=auth_headers,
+        json={
+            "name": "Avatar Monthly",
+            "slug": "avatar-gate-plan",
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert plan.status_code == 201, plan.text
     created = await client.post(
         "/api/v1/members",
         headers=auth_headers,
@@ -409,6 +420,7 @@ async def test_avatar_query_token_not_blocked_by_gate(client, gym_a):
             "phone": "+919900000013",
             "branch_id": branch.json()["id"],
             "status": "inactive",
+            "plan_id": plan.json()["id"],
         },
     )
     assert created.status_code == 201, created.text

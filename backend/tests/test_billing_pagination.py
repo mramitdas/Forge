@@ -46,19 +46,10 @@ async def _seed_gym_with_invoices(client, platform_token, slug: str):
                 "gender": "Male",
                 "status": "active",
                 "branch_id": branch_id,
+                "plan_id": plan.json()["id"],
             },
         )
         assert member.status_code == 201, member.text
-        sub = await client.post(
-            "/api/v1/plans/subscribe",
-            headers=headers,
-            json={
-                "member_id": member.json()["id"],
-                "plan_id": plan.json()["id"],
-                "branch_id": branch_id,
-            },
-        )
-        assert sub.status_code == 201, sub.text
         inv = await client.get(
             "/api/v1/invoices",
             headers=headers,

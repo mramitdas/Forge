@@ -37,7 +37,9 @@ async def _create_branch(client, token: str, name: str = "Main") -> dict:
     return response.json()
 
 
-async def _create_member(client, token: str, branch_id: str, **overrides) -> dict:
+async def _create_member(
+    client, token: str, branch_id: str, plan_id: str, **overrides
+) -> dict:
     global _counter
     _counter += 1
     payload = {
@@ -48,7 +50,7 @@ async def _create_member(client, token: str, branch_id: str, **overrides) -> dic
         "country_code": "+91",
         "gender": "Female",
         "branch_id": branch_id,
-        "status": "active",
+        "plan_id": plan_id,
     }
     payload.update(overrides)
     response = await client.post(
@@ -58,17 +60,52 @@ async def _create_member(client, token: str, branch_id: str, **overrides) -> dic
     return response.json()
 
 
+async def _create_plan(client, token: str, slug: str, **overrides) -> dict:
+    payload = {
+        "name": "Acct Monthly",
+        "slug": slug,
+        "billing_period": "monthly",
+        "amount_minor": 100000,
+        "entry_fee_minor": 0,
+        "tax_rate_bp": 1800,
+        "duration_months": 1,
+        "auto_renew": True,
+    }
+    payload.update(overrides)
+    response = await client.post(
+        "/api/v1/plans", headers=_headers(token), json=payload
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def _active_sub(client, token: str, member_id: str) -> dict:
+    response = await client.get(
+        "/api/v1/plans/subscriptions",
+        headers=_headers(token),
+        params={"member_id": member_id},
+    )
+    assert response.status_code == 200, response.text
+    return next(s for s in response.json() if s["status"] == "active")
+
+
 async def test_member_create_defaults_is_active(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
+    plan = await _create_plan(client, token, "defaults-plan")
+    member = await _create_member(client, token, branch["id"], plan["id"])
     assert member["is_active"] is True
     assert member["avatar_path"] is None
     raw = await client.post(
         "/api/v1/members",
         headers=_headers(token),
-        json={"first_name": "Default", "last_name": "Status", "branch_id": branch["id"]},
+        json={
+            "first_name": "Default",
+            "last_name": "Status",
+            "branch_id": branch["id"],
+            "plan_id": plan["id"],
+        },
     )
     assert raw.status_code == 201, raw.text
     assert raw.json()["status"] == "active"
@@ -78,32 +115,9 @@ async def test_member_enable_disable_toggles_checkin(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
+    plan = await _create_plan(client, token, "acct-monthly")
+    member = await _create_member(client, token, branch["id"], plan["id"])
 
-    plan = await client.post(
-        "/api/v1/plans",
-        headers=_headers(token),
-        json={
-            "name": "Monthly",
-            "slug": "acct-monthly",
-            "billing_period": "monthly",
-            "amount_minor": 100000,
-            "auto_renew": False,
-            "branch_id": branch["id"],
-        },
-    )
-    assert plan.status_code == 201, plan.text
-    sub = await client.post(
-        "/api/v1/plans/subscribe",
-        headers=_headers(token),
-        json={"member_id": member["id"], "plan_id": plan.json()["id"], "branch_id": branch["id"]},
-    )
-    assert sub.status_code == 201, sub.text
-    act = await client.post(
-        f"/api/v1/plans/subscriptions/{sub.json()['id']}/activate",
-        headers=_headers(token),
-    )
-    assert act.status_code == 200, act.text
     me = await client.get(f"/api/v1/members/{member['id']}", headers=_headers(token))
     assert me.json()["is_active"] is True
 
@@ -146,7 +160,8 @@ async def test_member_soft_delete(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
+    plan = await _create_plan(client, token, "softdel-plan")
+    member = await _create_member(client, token, branch["id"], plan["id"])
 
     deleted = await client.delete(
         f"/api/v1/members/{member['id']}", headers=_headers(token)
@@ -165,7 +180,10 @@ async def test_member_delete_tenant_scoped(client, gym_acct, gym_b):
     owner_a = await login(client, "owner-acct@example.com", "owner-pass-123")
     owner_b = await login(client, "owner-gymb@example.com", "owner-pass-123")
     branch_a = await _create_branch(client, owner_a["access_token"])
-    member = await _create_member(client, owner_a["access_token"], branch_a["id"])
+    plan = await _create_plan(client, owner_a["access_token"], "tenant-scoped-plan")
+    member = await _create_member(
+        client, owner_a["access_token"], branch_a["id"], plan["id"]
+    )
 
     other = await client.delete(
         f"/api/v1/members/{member['id']}",
@@ -179,23 +197,8 @@ async def test_member_delete_cascades_to_children(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
-
-    plan = await client.post(
-        "/api/v1/plans",
-        headers=_headers(token),
-        json={
-            "name": "Cascade Plan",
-            "slug": "cascade-plan",
-            "billing_period": "monthly",
-            "amount_minor": 100000,
-        },
-    )
-    assert plan.status_code == 201, plan.text
-    sub = await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
-    await client.post(
-        f"/api/v1/plans/subscriptions/{sub['id']}/activate", headers=_headers(token)
-    )
+    plan = await _create_plan(client, token, "cascade-plan")
+    member = await _create_member(client, token, branch["id"], plan["id"])
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
     invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
@@ -252,7 +255,6 @@ async def test_subscription_renew_extends_term_and_enables_member(client, gym_ac
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
 
     plan = await client.post(
         "/api/v1/plans",
@@ -265,10 +267,8 @@ async def test_subscription_renew_extends_term_and_enables_member(client, gym_ac
             "auto_renew": False,
         },
     )
-    sub = await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
-    await client.post(
-        f"/api/v1/plans/subscriptions/{sub['id']}/activate", headers=_headers(token)
-    )
+    member = await _create_member(client, token, branch["id"], plan.json()["id"])
+    sub = await _active_sub(client, token, member["id"])
 
     await client.patch(
         f"/api/v1/members/{member['id']}",
@@ -296,7 +296,6 @@ async def test_subscription_upgrade_changes_plan(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
 
     basic = await client.post(
         "/api/v1/plans",
@@ -318,10 +317,8 @@ async def test_subscription_upgrade_changes_plan(client, gym_acct):
             "amount_minor": 300000,
         },
     )
-    sub = await _subscribe(client, token, member["id"], branch["id"], basic.json()["id"])
-    await client.post(
-        f"/api/v1/plans/subscriptions/{sub['id']}/activate", headers=_headers(token)
-    )
+    member = await _create_member(client, token, branch["id"], basic.json()["id"])
+    sub = await _active_sub(client, token, member["id"])
 
     upgraded = await client.post(
         f"/api/v1/plans/subscriptions/{sub['id']}/upgrade",
@@ -338,7 +335,6 @@ async def test_upgrade_rejects_plan_from_other_branch(client, gym_acct):
     token = owner["access_token"]
     branch_a = await _create_branch(client, token, "A")
     branch_b = await _create_branch(client, token, "B")
-    member = await _create_member(client, token, branch_a["id"])
 
     scoped = await client.post(
         "/api/v1/plans",
@@ -361,10 +357,8 @@ async def test_upgrade_rejects_plan_from_other_branch(client, gym_acct):
             "amount_minor": 100000,
         },
     )
-    sub = await _subscribe(client, token, member["id"], branch_a["id"], common.json()["id"])
-    await client.post(
-        f"/api/v1/plans/subscriptions/{sub['id']}/activate", headers=_headers(token)
-    )
+    member = await _create_member(client, token, branch_a["id"], common.json()["id"])
+    sub = await _active_sub(client, token, member["id"])
 
     rejected = await client.post(
         f"/api/v1/plans/subscriptions/{sub['id']}/upgrade",
@@ -378,7 +372,6 @@ async def test_second_subscription_queues_after_active_one(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
 
     plan = await client.post(
         "/api/v1/plans",
@@ -390,17 +383,9 @@ async def test_second_subscription_queues_after_active_one(client, gym_acct):
             "amount_minor": 100000,
         },
     )
-    first = await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
-    await client.post(
-        f"/api/v1/plans/subscriptions/{first['id']}/activate", headers=_headers(token)
-    )
-    subs = await client.get(
-        "/api/v1/plans/subscriptions",
-        headers=_headers(token),
-        params={"member_id": member["id"]},
-    )
-    assert subs.status_code == 200
-    first_end = next(s for s in subs.json() if s["id"] == first["id"])["end_at"]
+    member = await _create_member(client, token, branch["id"], plan.json()["id"])
+    first = await _active_sub(client, token, member["id"])
+    first_end = first["end_at"]
 
     second = await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
     assert second["status"] == "pending"
@@ -411,7 +396,6 @@ async def test_renew_with_explicit_start_date(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
 
     plan = await client.post(
         "/api/v1/plans",
@@ -424,10 +408,8 @@ async def test_renew_with_explicit_start_date(client, gym_acct):
             "auto_renew": False,
         },
     )
-    sub = await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
-    await client.post(
-        f"/api/v1/plans/subscriptions/{sub['id']}/activate", headers=_headers(token)
-    )
+    member = await _create_member(client, token, branch["id"], plan.json()["id"])
+    sub = await _active_sub(client, token, member["id"])
 
     renewed = await client.post(
         f"/api/v1/plans/subscriptions/{sub['id']}/renew",
@@ -442,7 +424,6 @@ async def test_invoice_void_for_unpaid(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
 
     plan = await client.post(
         "/api/v1/plans",
@@ -454,7 +435,7 @@ async def test_invoice_void_for_unpaid(client, gym_acct):
             "amount_minor": 100000,
         },
     )
-    await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
+    member = await _create_member(client, token, branch["id"], plan.json()["id"])
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
     invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
@@ -474,7 +455,6 @@ async def test_paid_invoice_cannot_be_voided(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
 
     plan = await client.post(
         "/api/v1/plans",
@@ -486,7 +466,7 @@ async def test_paid_invoice_cannot_be_voided(client, gym_acct):
             "amount_minor": 100000,
         },
     )
-    await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
+    member = await _create_member(client, token, branch["id"], plan.json()["id"])
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
     invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
@@ -507,7 +487,6 @@ async def test_invoice_applies_plan_gst(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
 
     plan = await client.post(
         "/api/v1/plans",
@@ -520,7 +499,7 @@ async def test_invoice_applies_plan_gst(client, gym_acct):
             "tax_rate_bp": 1800,
         },
     )
-    await _subscribe(client, token, member["id"], branch["id"], plan.json()["id"])
+    member = await _create_member(client, token, branch["id"], plan.json()["id"])
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
     invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
@@ -560,7 +539,8 @@ async def test_member_update_rejects_unknown_status(client, gym_acct):
     owner = await login(client, "owner-acct@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
+    plan = await _create_plan(client, token, "invalid-status-plan")
+    member = await _create_member(client, token, branch["id"], plan["id"])
     response = await client.patch(
         f"/api/v1/members/{member['id']}",
         headers=_headers(token),
@@ -568,3 +548,112 @@ async def test_member_update_rejects_unknown_status(client, gym_acct):
     )
     assert response.status_code == 409, response.text
     assert response.json()["error"]["code"] == "INVALID_STATUS"
+
+
+async def test_member_create_requires_plan(client, gym_acct):
+    owner = await login(client, "owner-acct@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch = await _create_branch(client, token)
+    response = await client.post(
+        "/api/v1/members",
+        headers=_headers(token),
+        json={"first_name": "No", "last_name": "Plan", "branch_id": branch["id"]},
+    )
+    assert response.status_code == 422, response.text
+
+
+async def test_member_create_with_plan_activates_subscription(client, gym_acct):
+    owner = await login(client, "owner-acct@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch = await _create_branch(client, token)
+    plan = await _create_plan(client, token, "req-plan-a")
+    member = await client.post(
+        "/api/v1/members",
+        headers=_headers(token),
+        json={
+            "first_name": "Sub",
+            "last_name": "Bee",
+            "branch_id": branch["id"],
+            "plan_id": plan["id"],
+        },
+    )
+    assert member.status_code == 201, member.text
+    assert member.json()["status"] == "active"
+    subs = await client.get(
+        "/api/v1/plans/subscriptions",
+        headers=_headers(token),
+        params={"member_id": member.json()["id"]},
+    )
+    assert subs.status_code == 200, subs.text
+    body = subs.json()
+    assert len(body) == 1, body
+    assert body[0]["status"] == "active", body
+    assert body[0]["plan_id"] == plan["id"], body
+
+
+async def test_member_create_rejects_disabled_plan(client, gym_acct):
+    owner = await login(client, "owner-acct@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch = await _create_branch(client, token)
+    plan = await _create_plan(client, token, "req-plan-disabled")
+    patched = await client.patch(
+        f"/api/v1/plans/{plan['id']}",
+        headers=_headers(token),
+        json={"is_active": False},
+    )
+    assert patched.status_code == 200, patched.text
+    response = await client.post(
+        "/api/v1/members",
+        headers=_headers(token),
+        json={
+            "first_name": "Dis",
+            "last_name": "Abled",
+            "branch_id": branch["id"],
+            "plan_id": plan["id"],
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "PLAN_DISABLED"
+
+
+async def test_member_create_rejects_wrong_branch_plan(client, gym_acct):
+    owner = await login(client, "owner-acct@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch_a = await _create_branch(client, token, "WA")
+    branch_b = await _create_branch(client, token, "WB")
+    plan = await _create_plan(client, token, "req-plan-scope", branch_id=branch_a["id"])
+    response = await client.post(
+        "/api/v1/members",
+        headers=_headers(token),
+        json={
+            "first_name": "Wrong",
+            "last_name": "Branch",
+            "branch_id": branch_b["id"],
+            "plan_id": plan["id"],
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "PLAN_BRANCH_MISMATCH"
+
+
+async def test_member_create_rejects_foreign_plan(client, gym_acct, platform_token):
+    owner = await login(client, "owner-acct@example.com", "owner-pass-123")
+    token = owner["access_token"]
+    branch = await _create_branch(client, token)
+    await provision_gym(client, platform_token, "foreignplan")
+    foreign_owner = await login(client, "owner-foreignplan@example.com", "owner-pass-123")
+    foreign_plan = await _create_plan(
+        client, foreign_owner["access_token"], "foreign-only-plan"
+    )
+    response = await client.post(
+        "/api/v1/members",
+        headers=_headers(token),
+        json={
+            "first_name": "For",
+            "last_name": "Eign",
+            "branch_id": branch["id"],
+            "plan_id": foreign_plan["id"],
+        },
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "NOT_FOUND"

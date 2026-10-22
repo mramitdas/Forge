@@ -26,7 +26,6 @@ async def test_payment_notification_uses_invoice_number(
     headers = {"Authorization": f"Bearer {token}"}
 
     branch = await _create_branch(client, token, name="Notify")
-    member = await _create_member(client, token, branch["id"])
     plan = await client.post(
         "/api/v1/plans",
         headers=headers,
@@ -38,16 +37,7 @@ async def test_payment_notification_uses_invoice_number(
         },
     )
     assert plan.status_code == 201, plan.text
-    sub = await client.post(
-        "/api/v1/plans/subscribe",
-        headers=headers,
-        json={
-            "member_id": member["id"],
-            "plan_id": plan.json()["id"],
-            "branch_id": branch["id"],
-        },
-    )
-    assert sub.status_code == 201, sub.text
+    member = await _create_member(client, token, branch["id"], plan.json()["id"])
 
     invoices = await client.get("/api/v1/invoices", headers=headers)
     invoice = next(i for i in invoices.json()["items"] if i["member_id"] == member["id"])
@@ -61,8 +51,12 @@ async def test_payment_notification_uses_invoice_number(
     assert paid.status_code == 200, paid.text
 
     # Payments are announced through the transactional outbox; pump the
-    # dispatcher so the notification handler actually runs.
-    await dispatcher.run_once()
+    # dispatcher so the notification handler actually runs. Earlier suite
+    # tests leave a large unpublished backlog and run_once caps at 100
+    # events, so drain until idle to guarantee our payment is included.
+    for _ in range(50):
+        if await dispatcher.run_once() == 0:
+            break
 
     notifications = await client.get("/api/v1/notifications", headers=headers)
     assert notifications.status_code == 200, notifications.text

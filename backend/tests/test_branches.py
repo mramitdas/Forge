@@ -31,7 +31,22 @@ async def _create_branch(client, token: str, name: str = "Main St", **overrides)
     return response.json()
 
 
-async def _create_member(client, token: str, branch_id: str) -> dict:
+async def _create_plan(client, token: str, slug: str) -> dict:
+    response = await client.post(
+        "/api/v1/plans",
+        headers=_headers(token),
+        json={
+            "name": "Branch Monthly",
+            "slug": slug,
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def _create_member(client, token: str, branch_id: str, plan_id: str) -> dict:
     global _counter
     _counter += 1
     response = await client.post(
@@ -43,6 +58,7 @@ async def _create_member(client, token: str, branch_id: str) -> dict:
             "email": f"ada-branch-{_counter}@example.com",
             "phone": f"+9199000000{_counter:02d}",
             "branch_id": branch_id,
+            "plan_id": plan_id,
             "status": "active",
         },
     )
@@ -76,7 +92,8 @@ async def test_disable_branch_freezes_members(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
+    plan = await _create_plan(client, token, "br-freeze-plan")
+    member = await _create_member(client, token, branch["id"], plan["id"])
 
     response = await client.patch(
         f"/api/v1/branches/{branch['id']}",
@@ -103,7 +120,8 @@ async def test_enable_branch_restores_frozen_members(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
+    plan = await _create_plan(client, token, "br-restore-plan")
+    member = await _create_member(client, token, branch["id"], plan["id"])
     assert member["status"] == "active"
 
     await client.patch(
@@ -131,15 +149,15 @@ async def test_enable_branch_restores_frozen_members(client, gym_a):
         json={"member_id": member["id"], "branch_id": branch["id"], "source": "manual"},
     )
     assert checkin.status_code == 201
-    assert checkin.json()["result"] == "denied"
-    assert checkin.json()["reason"] == "no active membership"
+    assert checkin.json()["result"] == "allowed"
 
 
 async def test_enable_branch_keeps_individually_frozen_members(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
+    plan = await _create_plan(client, token, "br-keep-plan")
+    member = await _create_member(client, token, branch["id"], plan["id"])
 
     frozen = await client.patch(
         f"/api/v1/members/{member['id']}",
@@ -168,7 +186,8 @@ async def test_delete_branch_soft_deletes_members(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _create_branch(client, token)
-    member = await _create_member(client, token, branch["id"])
+    plan = await _create_plan(client, token, "br-del-plan")
+    member = await _create_member(client, token, branch["id"], plan["id"])
 
     response = await client.delete(
         f"/api/v1/branches/{branch['id']}", headers=_headers(token)

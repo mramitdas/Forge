@@ -15,6 +15,7 @@ class MemberCreate(BaseModel):
     gender: str | None = None
     dob: date | None = None
     branch_id: uuid.UUID
+    plan_id: uuid.UUID
     status: str = "active"
     is_active: bool = True
     notes: str | None = None

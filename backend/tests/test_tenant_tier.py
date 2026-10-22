@@ -32,6 +32,17 @@ async def test_owner_sees_tier_with_usage(client, platform_token):
     )
     assert branch.status_code == 201, branch.text
 
+    plan = await client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "name": "Tier Monthly",
+            "slug": "tier-monthly",
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert plan.status_code == 201, plan.text
     created = await client.post(
         "/api/v1/members",
         headers=headers,
@@ -42,6 +53,7 @@ async def test_owner_sees_tier_with_usage(client, platform_token):
             "gender": "Male",
             "status": "inactive",
             "branch_id": branch.json()["id"],
+            "plan_id": plan.json()["id"],
         },
     )
     assert created.status_code == 201, created.text

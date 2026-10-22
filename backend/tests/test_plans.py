@@ -91,11 +91,21 @@ async def test_plan_crud_with_branch_scope(client, gym_a):
     by_slug = {p["slug"]: p for p in listed.json()}
     assert by_slug["flex-monthly"]["is_active"] is False
 
+    # gym_a is session-scoped and shared with other test files, so the
+    # listing also contains their global plans. Assert the branch filter's
+    # real contract: global + this-branch plans in, other-branch plans out.
+    other_branch = await _create_branch(client, token, "Other")
+    other_scoped = await _create_plan(
+        client, token, "other-branch-plan", branch_id=other_branch["id"]
+    )
+
     filtered = await client.get(
         f"/api/v1/plans?branch_id={branch['id']}", headers=_headers(token)
     )
     assert filtered.status_code == 200
-    assert {p["slug"] for p in filtered.json()} == {"flex-monthly", "annex-monthly"}
+    filtered_slugs = {p["slug"] for p in filtered.json()}
+    assert {"flex-monthly", "annex-monthly"} <= filtered_slugs
+    assert other_scoped["slug"] not in filtered_slugs
 
     deleted = await client.delete(
         f"/api/v1/plans/{scoped['id']}", headers=_headers(token)
@@ -103,7 +113,9 @@ async def test_plan_crud_with_branch_scope(client, gym_a):
     assert deleted.status_code == 204, deleted.text
 
     listed = await client.get("/api/v1/plans", headers=_headers(token))
-    assert {p["slug"] for p in listed.json()} == {"flex-monthly"}
+    listed_slugs = {p["slug"] for p in listed.json()}
+    assert "flex-monthly" in listed_slugs
+    assert "annex-monthly" not in listed_slugs
 
 
 async def test_plan_slug_duplicate_rejected(client, gym_a):
@@ -130,6 +142,7 @@ async def test_subscription_rejects_disabled_or_foreign_branch_plan(client, gym_
     branch_a = await _create_branch(client, token, "A")
     branch_b = await _create_branch(client, token, "B")
 
+    base = await _create_plan(client, token, "grace-base")
     member = await client.post(
         "/api/v1/members",
         headers=_headers(token),
@@ -140,6 +153,7 @@ async def test_subscription_rejects_disabled_or_foreign_branch_plan(client, gym_
             "phone": "+919800000001",
             "branch_id": branch_a["id"],
             "status": "active",
+            "plan_id": base["id"],
         },
     )
     assert member.status_code == 201, member.text

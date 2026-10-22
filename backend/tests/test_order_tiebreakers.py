@@ -32,6 +32,17 @@ async def test_members_pagination_stable_for_tied_created_at(client, platform_to
         "/api/v1/branches", headers=headers, json={"name": "Tie Branch"}
     )
     assert branch.status_code == 201, branch.text
+    plan = await client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "name": "Tie Monthly",
+            "slug": "tie-monthly",
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert plan.status_code == 201, plan.text
     ids = []
     for i in range(3):
         res = await client.post(
@@ -44,6 +55,7 @@ async def test_members_pagination_stable_for_tied_created_at(client, platform_to
                 "gender": "Male",
                 "status": "inactive",
                 "branch_id": branch.json()["id"],
+                "plan_id": plan.json()["id"],
             },
         )
         assert res.status_code == 201, res.text
@@ -70,6 +82,17 @@ async def test_checkins_pagination_stable_for_tied_recorded_at(client, platform_
         "/api/v1/branches", headers=headers, json={"name": "Check Branch"}
     )
     assert branch.status_code == 201, branch.text
+    plan = await client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "name": "Check Monthly",
+            "slug": "check-monthly",
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert plan.status_code == 201, plan.text
     member = await client.post(
         "/api/v1/members",
         headers=headers,
@@ -80,6 +103,7 @@ async def test_checkins_pagination_stable_for_tied_recorded_at(client, platform_
             "gender": "Male",
             "status": "active",
             "branch_id": branch.json()["id"],
+            "plan_id": plan.json()["id"],
         },
     )
     assert member.status_code == 201, member.text

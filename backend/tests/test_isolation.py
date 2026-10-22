@@ -18,7 +18,24 @@ async def _branch_id(client, token) -> str:
     return response.json()["id"]
 
 
-async def _create_member(client, token, branch_id: str, first_name: str) -> dict:
+async def _create_plan(client, token: str, slug: str) -> dict:
+    response = await client.post(
+        "/api/v1/plans",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Iso Monthly",
+            "slug": slug,
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def _create_member(
+    client, token, branch_id: str, plan_id: str, first_name: str
+) -> dict:
     response = await client.post(
         "/api/v1/members",
         headers={"Authorization": f"Bearer {token}"},
@@ -28,6 +45,7 @@ async def _create_member(client, token, branch_id: str, first_name: str) -> dict
             "email": f"{first_name.lower()}@example.com",
             "phone": "+919900000001",
             "branch_id": branch_id,
+            "plan_id": plan_id,
             "status": "inactive",
         },
     )
@@ -39,7 +57,10 @@ async def test_tenant_cannot_read_other_tenant_member(client, gym_a, gym_b):
     owner_a = await login(client, "owner-gyma@example.com", "owner-pass-123")
     owner_b = await login(client, "owner-gymb@example.com", "owner-pass-123")
     branch_a = await _branch_id(client, owner_a["access_token"])
-    member = await _create_member(client, owner_a["access_token"], branch_a, "Alice")
+    plan_a = await _create_plan(client, owner_a["access_token"], "iso-plan-a")
+    member = await _create_member(
+        client, owner_a["access_token"], branch_a, plan_a["id"], "Alice"
+    )
 
     # Owner B tries to fetch Alice's member record (belongs to tenant A).
     response = await client.get(
@@ -68,7 +89,10 @@ async def test_owner_b_cannot_touch_tenant_a_member(client, gym_a, gym_b):
     owner_a = await login(client, "owner-gyma@example.com", "owner-pass-123")
     owner_b = await login(client, "owner-gymb@example.com", "owner-pass-123")
     branch_a = await _branch_id(client, owner_a["access_token"])
-    member = await _create_member(client, owner_a["access_token"], branch_a, "Bob")
+    plan_a = await _create_plan(client, owner_a["access_token"], "iso-plan-b")
+    member = await _create_member(
+        client, owner_a["access_token"], branch_a, plan_a["id"], "Bob"
+    )
 
     response = await client.patch(
         f"/api/v1/members/{member['id']}",

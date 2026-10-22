@@ -11,6 +11,21 @@ async def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+async def _create_plan(client, token: str, slug: str) -> dict:
+    response = await client.post(
+        "/api/v1/plans",
+        headers=await _headers(token),
+        json={
+            "name": "Platform Monthly",
+            "slug": slug,
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 async def _owner_id(client, token, email: str) -> str:
     response = await client.get(
         "/api/v1/platform/owners", headers=await _headers(token)
@@ -416,6 +431,7 @@ async def test_gym_subscription_counts_exclude_soft_deleted(client, platform_tok
         },
     )
     assert branch.status_code == 201, branch.text
+    plan = await _create_plan(client, owner["access_token"], "count-monthly")
     member = await client.post(
         "/api/v1/members",
         headers=owner_headers,
@@ -427,35 +443,10 @@ async def test_gym_subscription_counts_exclude_soft_deleted(client, platform_tok
             "country_code": "+91",
             "branch_id": branch.json()["id"],
             "status": "active",
+            "plan_id": plan["id"],
         },
     )
     assert member.status_code == 201, member.text
-    plan = await client.post(
-        "/api/v1/plans",
-        headers=owner_headers,
-        json={
-            "name": "Count Monthly",
-            "slug": "count-monthly",
-            "billing_period": "monthly",
-            "amount_minor": 100000,
-        },
-    )
-    assert plan.status_code == 201, plan.text
-    sub = await client.post(
-        "/api/v1/plans/subscribe",
-        headers=owner_headers,
-        json={
-            "member_id": member.json()["id"],
-            "plan_id": plan.json()["id"],
-            "branch_id": branch.json()["id"],
-        },
-    )
-    assert sub.status_code == 201, sub.text
-    activated = await client.post(
-        f"/api/v1/plans/subscriptions/{sub.json()['id']}/activate",
-        headers=owner_headers,
-    )
-    assert activated.status_code == 200, activated.text
     assert await counts() == (1, 1)
 
     deleted = await client.delete(
@@ -477,6 +468,7 @@ async def test_delete_gym_cascades_members(client, platform_token):
         json={"name": "Main", "code": "DC", "timezone": "Asia/Kolkata", "country_code": "+91"},
     )
     assert branch.status_code == 201, branch.text
+    plan = await _create_plan(client, owner["access_token"], "delcasc-monthly")
     member = await client.post(
         "/api/v1/members",
         headers=oh,
@@ -484,6 +476,7 @@ async def test_delete_gym_cascades_members(client, platform_token):
             "first_name": "Casc", "last_name": "Member",
             "email": "casc-member@example.com", "phone": "9000000000",
             "country_code": "+91", "branch_id": branch.json()["id"], "status": "active",
+            "plan_id": plan["id"],
         },
     )
     assert member.status_code == 201, member.text
@@ -588,12 +581,14 @@ async def test_restore_gym_full_cascade(client, platform_token):
         json={"name": "Main", "code": "RG", "timezone": "Asia/Kolkata", "country_code": "+91"},
     )
     assert branch.status_code == 201, branch.text
+    plan = await _create_plan(client, owner["access_token"], "restgym-monthly")
     member = await client.post(
         "/api/v1/members", headers=oh,
         json={
             "first_name": "Rest", "last_name": "Member",
             "email": "rest-member@example.com", "phone": "9000000000",
             "country_code": "+91", "branch_id": branch.json()["id"], "status": "active",
+            "plan_id": plan["id"],
         },
     )
     assert member.status_code == 201, member.text
@@ -640,12 +635,14 @@ async def test_restore_gym_later_deleted_member_stays_deleted(client, platform_t
         json={"name": "Main", "code": "RD", "timezone": "Asia/Kolkata", "country_code": "+91"},
     )
     assert branch.status_code == 201, branch.text
+    plan = await _create_plan(client, owner["access_token"], "restdiff-monthly")
     member = await client.post(
         "/api/v1/members", headers=oh,
         json={
             "first_name": "Diff", "last_name": "Member",
             "email": "diff-member@example.com", "phone": "9000000001",
             "country_code": "+91", "branch_id": branch.json()["id"], "status": "active",
+            "plan_id": plan["id"],
         },
     )
     assert member.status_code == 201, member.text

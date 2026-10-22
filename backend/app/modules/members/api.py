@@ -35,6 +35,10 @@ from app.modules.members.service import (
     set_member_avatar,
     update_member,
 )
+from app.modules.membership.service import (
+    activate_subscription,
+    create_subscription,
+)
 
 router = APIRouter(prefix="/members", tags=["members"])
 
@@ -61,6 +65,14 @@ async def create(
         is_active=body.is_active,
         notes=body.notes,
     )
+    sub = await create_subscription(
+        session,
+        tenant_id=actor.tenant_id,
+        member_id=member.id,
+        plan_id=body.plan_id,
+        branch_id=body.branch_id,
+    )
+    await activate_subscription(session, sub.id)
     return MemberOut.model_validate(member)
 
 

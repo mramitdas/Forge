@@ -26,6 +26,17 @@ async def test_search_matches_full_name(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     token = owner["access_token"]
     branch = await _branch_id(client, token)
+    plan = await client.post(
+        "/api/v1/plans",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Search Monthly",
+            "slug": "search-monthly",
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert plan.status_code == 201, plan.text
     created = await client.post(
         "/api/v1/members",
         headers={"Authorization": f"Bearer {token}"},
@@ -35,6 +46,7 @@ async def test_search_matches_full_name(client, gym_a):
             "email": "dblclick-qa@example.com",
             "phone": "+919900000011",
             "branch_id": branch,
+            "plan_id": plan.json()["id"],
             "status": "inactive",
         },
     )
@@ -50,6 +62,7 @@ async def test_search_matches_full_name(client, gym_a):
             "email": "sole-name@example.com",
             "phone": "+919900000012",
             "branch_id": branch,
+            "plan_id": plan.json()["id"],
             "status": "inactive",
         },
     )
