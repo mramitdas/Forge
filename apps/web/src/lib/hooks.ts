@@ -688,7 +688,7 @@ export function useCreateMember() {
       country_code?: string;
       gender?: string;
       branch_id: string;
-      status?: string;
+      plan_id: string;
     }) => apiFetch<MemberOut>("/members", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["members"] });

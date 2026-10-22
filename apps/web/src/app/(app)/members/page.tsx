@@ -17,7 +17,7 @@ import {
 } from "@/components/ui";
 import { Async, Count } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
-import { type Member } from "@/lib/mock";
+import { type Member, inr } from "@/lib/mock";
 import {
   byId,
   useBranches,
@@ -25,8 +25,6 @@ import {
   useDeleteMember,
   useMembersPage,
   usePlans,
-  useSubscribe,
-  useActivateSubscription,
   useUpdateMember,
 } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
@@ -85,8 +83,6 @@ export default function MembersPage() {
   const createMember = useCreateMember();
   const updateMember = useUpdateMember();
   const deleteMember = useDeleteMember();
-  const subscribe = useSubscribe();
-  const activate = useActivateSubscription();
   const can = useCan();
   const addGuard = useInFlight();
 
@@ -103,6 +99,10 @@ export default function MembersPage() {
     planId: "",
   });
 
+  const visiblePlans = plans.filter(
+    (p) => p.isActive && (p.branchId === null || p.branchId === form.branchId),
+  );
+
   const [editForm, setEditForm] = useState({
     first_name: "",
     last_name: "",
@@ -118,10 +118,10 @@ export default function MembersPage() {
   async function addMember(e: React.FormEvent) {
     e.preventDefault();
     const nameParts = form.name.trim().split(/\s+/);
-    if (!nameParts[0]) return;
+    if (!nameParts[0] || !form.planId) return;
     await addGuard.run(async () => {
       try {
-        const created = await createMember.mutateAsync({
+        await createMember.mutateAsync({
           first_name: nameParts[0],
           last_name: nameParts.slice(1).join(" ") || undefined,
           email: form.email || undefined,
@@ -129,15 +129,8 @@ export default function MembersPage() {
           country_code: form.countryCode || undefined,
           gender: form.gender,
           branch_id: form.branchId,
+          plan_id: form.planId,
         });
-        if (form.planId) {
-          const sub = await subscribe.mutateAsync({
-            member_id: created.id,
-            plan_id: form.planId,
-            branch_id: form.branchId,
-          });
-          await activate.mutateAsync(sub.id);
-        }
         setOpen(false);
         setToast({ type: "success", message: `${form.name.trim()} added` });
         setForm({ name: "", email: "", countryCode: "+91", phone: "", gender: "Male", branchId: form.branchId, planId: "" });
@@ -389,7 +382,7 @@ export default function MembersPage() {
         </Card>
       </Async>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Add member" subtitle="Members can subscribe to a plan later.">
+      <Modal open={open} onClose={() => setOpen(false)} title="Add member" subtitle="Subscription starts immediately.">
         <form onSubmit={addMember} className="space-y-4">
           <Field label="Full name">
             <Input
@@ -438,7 +431,7 @@ export default function MembersPage() {
                 id="member-branch"
                 aria-label="Branch"
                 value={form.branchId}
-                onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+                onChange={(e) => setForm({ ...form, branchId: e.target.value, planId: "" })}
               >
                 {branches.length === 0 && <option value="">No branches — add one first</option>}
                 {branches.map((b) => (
@@ -446,16 +439,19 @@ export default function MembersPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Intended plan">
+            <Field label="Plan">
               <Select
                 id="member-plan"
-                aria-label="Intended plan"
+                aria-label="Plan"
                 value={form.planId}
                 onChange={(e) => setForm({ ...form, planId: e.target.value })}
               >
-                <option value="">No plan yet</option>
-                {plans.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                {visiblePlans.length === 0 && (
+                  <option value="" disabled>No plans — create one first</option>
+                )}
+                {visiblePlans.length > 0 && <option value="" disabled>Select a plan…</option>}
+                {visiblePlans.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} · {inr(p.price)}</option>
                 ))}
               </Select>
             </Field>
@@ -464,7 +460,7 @@ export default function MembersPage() {
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={addGuard.busy}>
+            <Button type="submit" disabled={addGuard.busy || !form.planId}>
               {addGuard.busy ? "Adding…" : "Add member"}
             </Button>
           </div>
