@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Shipped:** implemented (commits `5bdc499`, `7e87222`, `cbb4c91`, `67a9d30`, `f73b276`, `04f20a7`, `HEAD`); all gates green, frontdesk 33/33.
+**Shipped:** implemented (commits `5bdc499`, `7e87222`, `cbb4c91`, `67a9d30`, `f73b276`, `04f20a7`, `741ae0a`); all gates green, frontdesk 33/33.
 
 **Goal:** `POST /api/v1/members` requires `plan_id` and atomically creates + activates a subscription; the Add-member modal cannot submit without a valid plan.
 
