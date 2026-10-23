@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [dev, stag, prod]
+    branches: [main]
   pull_request:
 
 jobs:
@@ -40,7 +40,17 @@ jobs:
 
       - name: Prepare test roles
         working-directory: backend
-        run: python3 ../scripts/prepare_test_roles.py
+        run: |
+          .venv/bin/python -c "
+          import psycopg2
+          conn = psycopg2.connect('postgresql://gym:gym_dev_pass@localhost:5432/gym_erp_test')
+          conn.autocommit = True
+          cur = conn.cursor()
+          cur.execute("CREATE ROLE gym_admin LOGIN SUPERUSER PASSWORD 'gym_admin_pass'")
+          cur.execute('ALTER ROLE gym NOSUPERUSER NOBYPASSRLS')
+          conn.close()
+          print('test roles ready')
+          "
 
       - name: Ruff check
         working-directory: backend
