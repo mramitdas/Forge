@@ -137,7 +137,7 @@ async function main() {
 
     // Add-member modal cannot submit without a plan.
     await page.getByRole("button", { name: "Add member" }).click();
-    const addModal = page.locator("form").last();
+    const addModal = page.locator("form").filter({ has: page.locator('select[aria-label="Plan"]') });
     await addModal.locator("input").first().fill(`FD UI ${ts}`);
     check(
       "add-member submit disabled without a plan",
@@ -145,12 +145,23 @@ async function main() {
     );
     await addModal.locator('select[aria-label="Plan"]').selectOption(planB.body.id);
     await addModal.getByRole("button", { name: "Add member" }).click();
-    await page.getByText(`FD UI ${ts} added`).waitFor({ timeout: 15000 });
-    check("add-member with plan succeeds (toast + auto subscription)", true);
-    const uiCreated = await (
-      await api.get(`${BASE}/api/v1/members?search=FD%20UI%20${ts}`, { headers: auth })
-    ).json();
-    uiMemberId = uiCreated.items[0]?.id ?? null;
+    try {
+      await page.getByText(`FD UI ${ts} added`).waitFor({ timeout: 15000 });
+    } finally {
+      const uiCreated = await (
+        await api.get(`${BASE}/api/v1/members?search=FD%20UI%20${ts}`, { headers: auth })
+      ).json();
+      uiMemberId = uiCreated.items[0]?.id ?? null;
+    }
+    const uiSubs = uiMemberId
+      ? await (
+          await api.get(`${BASE}/api/v1/plans/subscriptions?member_id=${uiMemberId}`, { headers: auth })
+        ).json()
+      : [];
+    check(
+      "add-member with plan succeeds (toast + auto subscription)",
+      uiSubs.length === 1 && uiSubs[0].status === "active",
+    );
 
     const searchInput = page.locator('input[placeholder="Search name, email, phone"]');
     await searchInput.fill(MEMBER_A);
@@ -281,6 +292,7 @@ async function main() {
     await page.getByText("subscription activated").waitFor({ timeout: 15000 });
     const subRowBActive = page
       .locator("tbody tr", { hasText: MEMBER_B })
+      .filter({ hasText: PLAN_A })
       .filter({ hasText: "Active" });
     await must(
       "member B pending subscription activated via UI",

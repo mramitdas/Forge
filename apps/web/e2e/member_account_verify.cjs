@@ -65,6 +65,7 @@ async function main() {
       },
     });
     const plan = await planRes.json();
+    check("plan created", planRes.status() === 201, plan.slug);
     renewPlanId = plan.id;
     const created = await api.post(`${BASE}/api/v1/members`, {
       headers: auth,
@@ -81,7 +82,6 @@ async function main() {
     });
     const member = await created.json();
     check("member created via API with plan", created.status() === 201, member.id);
-    check("plan created", planRes.status() === 201, plan.slug);
 
     const upgradePlan = await (
       await api.post(`${BASE}/api/v1/plans`, {
