@@ -1,7 +1,7 @@
 # Plan Required When Adding a Member — Design
 
 **Date:** 2026-10-22
-**Status:** approved (design walkthrough); awaiting implementation plan
+**Status:** shipped (implementation plan: `docs/superpowers/plans/2026-10-22-member-plan-required.md`; HEAD `04f20a7` + fix commit)
 **Repo state at design time:** member-status 3-value enum shipped (`8be4b19`, `2bf747b`, `c0a2b1c`, `a48e8ec`), all gates green.
 
 ## Problem

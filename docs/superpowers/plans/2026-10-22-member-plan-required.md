@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Shipped:** implemented (commits `5bdc499`, `7e87222`, `cbb4c91`, `67a9d30`, `f73b276`, `04f20a7`, `HEAD`); all gates green, frontdesk 33/33.
+
 **Goal:** `POST /api/v1/members` requires `plan_id` and atomically creates + activates a subscription; the Add-member modal cannot submit without a valid plan.
 
 **Architecture:** One backend cutover (schema gains required `plan_id`; the `create` endpoint orchestrates existing `membership.service.create_subscription` + `activate_subscription` in the same session/transaction — no validation is re-implemented), a mechanical pytest/e2e fixture ripple (every member create gains `plan_id`; now-redundant manual subscribe/activate calls are removed where the auto-created subscription covers them), and the add-modal UI (required plan select filtered to active/branch-compatible plans, dead `status` key removed, copy updated).
@@ -12,7 +14,7 @@
 
 **Environment rules:** dev servers (`make dev` :8000, `make web` :3000) stay running — never restart. Playwright `workers: 1` only. House e2e scripts strictly sequential (shared dev DB). Node for unit tests: `PATH="/var/folders/_g/6d1ch_hn6q3446y1r_y_vhp80000gn/T/opencode/node-v24.22.1-darwin-arm64/bin:$PATH" npm test`. Never `git add -A` — stage listed paths only. Retry once on index.lock. No new comments in code (existing style).
 
-**Current baselines:** pytest **120**, ruff clean, tsc clean, npm **22**, `make e2e` **59 passed/1 skipped**, e2e-frontdesk **29**, e2e-member **15**, e2e-roles **18**, e2e-plans **9**, e2e-gym **36**. After Task 1: pytest **125** (5 new). After Task 3: e2e-frontdesk **31** (2 new UI checks).
+**Current baselines:** pytest **120**, ruff clean, tsc clean, npm **22**, `make e2e` **59 passed/1 skipped**, e2e-frontdesk **29**, e2e-member **15**, e2e-roles **18**, e2e-plans **9**, e2e-gym **36**. After Task 1: pytest **125** (5 new). After Task 3: e2e-frontdesk **32** (2 new UI checks; final 33 with the roster regression check).
 
 **Key facts the implementer must know:**
 - Plan validation already lives in `create_subscription` (`backend/app/modules/membership/service.py:184-192`): missing/soft-deleted/foreign plan → `NotFoundError("Plan not found", code="NOT_FOUND")` (404); `not plan.is_active` → `ConflictError("Plan is disabled", code="PLAN_DISABLED")` (409); branch-specific plan vs branch → `ConflictError(..., code="PLAN_BRANCH_MISMATCH")` (409). DO NOT re-implement — let these bubble.
@@ -699,7 +701,7 @@ Inside the `if (!openInv)` block (~:296-335): create the plan BEFORE the member,
 Run one at a time from repo root, waiting for each:
 
 ```bash
-make e2e-frontdesk   # expected 31/31 (29 + 2 new add-member checks)
+make e2e-frontdesk   # expected 33/33 (29 + 2 new add-member checks + roster regression)
 make e2e-member      # expected 15/15
 make e2e-roles       # expected 18/18
 make e2e-plans       # expected 9/9
@@ -748,7 +750,7 @@ Expected: `59 passed`, `1 skipped`
 - [ ] **Step 4: House e2e scripts, strictly sequential**
 
 ```bash
-make e2e-frontdesk   # expected 31/31
+make e2e-frontdesk   # expected 33/33
 make e2e-member      # expected 15/15
 make e2e-roles       # expected 18/18
 make e2e-plans       # expected 9/9

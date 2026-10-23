@@ -608,12 +608,20 @@ async def test_member_create_rejects_disabled_plan(client, gym_acct):
         json={
             "first_name": "Dis",
             "last_name": "Abled",
+            "email": "rollback-probe@example.com",
             "branch_id": branch["id"],
             "plan_id": plan["id"],
         },
     )
     assert response.status_code == 409, response.text
     assert response.json()["error"]["code"] == "PLAN_DISABLED"
+    probe = await client.get(
+        "/api/v1/members",
+        headers=_headers(token),
+        params={"search": "rollback-probe@example.com"},
+    )
+    assert probe.status_code == 200, probe.text
+    assert probe.json()["items"] == [], probe.text
 
 
 async def test_member_create_rejects_wrong_branch_plan(client, gym_acct):

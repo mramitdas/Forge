@@ -163,6 +163,16 @@ async function main() {
       uiSubs.length === 1 && uiSubs[0].status === "active",
     );
 
+    const rosterRow = page.locator("tbody tr", { hasText: `FD UI ${ts}` });
+    await rosterRow.first().waitFor({ timeout: 15000 });
+    const rosterPlan = rosterRow.first().getByText(PLAN_B).first();
+    let rosterPlanVisible = false;
+    try {
+      await rosterPlan.waitFor({ timeout: 15000 });
+      rosterPlanVisible = true;
+    } catch {}
+    check("new member's plan appears in roster", rosterPlanVisible);
+
     const searchInput = page.locator('input[placeholder="Search name, email, phone"]');
     await searchInput.fill(MEMBER_A);
     const memberRow = page.locator("tbody tr", { hasText: MEMBER_A });
