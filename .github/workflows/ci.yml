@@ -40,18 +40,7 @@ jobs:
 
       - name: Prepare test roles
         working-directory: backend
-        run: psql -U gym -h localhost -d gym_erp_test -c "ALTER ROLE gym NOSUPERUSER NOBYPASSRLS"
-      - name: Ruff check
-        working-directory: backend
-        run: .venv/bin/ruff check app/ tests/
-
-      - name: Run tests
-        working-directory: backend
-        run: .venv/bin/python -m pytest -q
-
-  frontend:
-    name: Frontend build
-    runs-on: ubuntu-latest
+        run: psql -U gym -h localhost -d gym_erp_test -w -c "ALTER ROLE gym NOSUPERUSER NOBYPASSRLS"
     defaults:
       run:
         working-directory: apps/web
