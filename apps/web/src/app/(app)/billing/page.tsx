@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Badge,
   Button,
   Card,
   Input,
@@ -11,12 +10,17 @@ import {
   StatusBadge,
   Toast,
 } from "@/components/ui";
-import { Async, Skeleton, SkeletonText } from "@/components/skeleton";
+import { Async, Count, Skeleton, SkeletonText } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
+import { MonthlyChart } from "@/components/monthly-chart";
+import { YearSelector } from "@/components/year-selector";
 import { inr } from "@/lib/mock";
 import { useInvoiceSummary, useInvoicesPage, useMemberCtx, usePayInvoice } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
+import type { InvoiceSummaryOut } from "@/lib/types";
+
+const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
 const methods = [
   {
@@ -61,9 +65,17 @@ const methods = [
   },
 ];
 
-function SummaryCards() {
-  const { summary, isLoading, isError } = useInvoiceSummary();
-
+function SummaryCards({
+  summary,
+  isLoading,
+  isError,
+  year,
+}: {
+  summary: InvoiceSummaryOut | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  year: number;
+}) {
   return (
     <Async
       loading={isLoading}
@@ -81,13 +93,29 @@ function SummaryCards() {
     >
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Outstanding", value: inr(summary?.outstanding_minor ?? 0), tone: "text-amber" },
-          { label: "Collected", value: inr(summary?.collected_minor ?? 0), tone: "text-green" },
-          { label: "Overdue", value: inr(summary?.overdue_minor ?? 0), tone: "text-red" },
+          {
+            label: "Outstanding",
+            value: inr(summary?.outstanding_minor ?? 0),
+            tone: "text-amber",
+            hint: `Issued in ${year}`,
+          },
+          {
+            label: "Collected",
+            value: inr(summary?.collected_minor ?? 0),
+            tone: "text-green",
+            hint: `Received in ${year}`,
+          },
+          {
+            label: "Overdue",
+            value: inr(summary?.overdue_minor ?? 0),
+            tone: "text-red",
+            hint: `Issued in ${year} · past due`,
+          },
         ].map((c) => (
           <Card key={c.label} className="p-4">
             <p className="text-[12px] font-medium text-ink-faint">{c.label}</p>
             <p className={`mt-1.5 text-[22px] font-semibold tracking-tight ${c.tone}`}>{c.value}</p>
+            <p className="mt-1 text-[11px] text-ink-faint">{c.hint}</p>
           </Card>
         ))}
       </div>
@@ -102,12 +130,15 @@ export default function BillingPage() {
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [year, setYear] = useState(new Date().getFullYear());
 
   const { invoices, total, isLoading, isError } = useInvoicesPage({
     page,
     pageSize: PAGE_SIZE,
     search: search.trim() || undefined,
+    year,
   });
+  const { summary, isLoading: summaryLoading, isError: summaryError } = useInvoiceSummary(year);
   const { members: rawMembers } = useMemberCtx();
   const payInvoice = usePayInvoice();
   const can = useCan();
@@ -116,8 +147,21 @@ export default function BillingPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   useEffect(() => {
+    setPage(1);
+  }, [year, search]);
+
+  useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+
+  const chartData = useMemo(
+    () =>
+      MONTH_KEYS.map((key) => ({
+        month: key.charAt(0).toUpperCase() + key.slice(1),
+        amount: summary?.monthly?.[key] ?? 0,
+      })),
+    [summary],
+  );
 
   const memberMap = useMemo(
     () => new Map(rawMembers.map((m) => [m.id, m.full_name || m.first_name])),
@@ -146,27 +190,48 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-5">
-      <SummaryCards />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-[13px] text-ink-faint">
+            <Count loading={isLoading} width="inline-block h-3 w-16">
+              {total} {total === 1 ? "invoice" : "invoices"}
+            </Count>
+          </p>
+          <YearSelector
+            id="billing-year"
+            year={year}
+            onYearChange={setYear}
+            ariaLabel="Select billing year"
+          />
+        </div>
+        <Input
+          id="billing-search"
+          name="billing-search"
+          aria-label="Search invoice # or member"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search invoice # or member"
+          className="h-8! w-52! text-[12px]!"
+        />
+      </div>
+
+      <SummaryCards
+        summary={summary}
+        isLoading={summaryLoading}
+        isError={summaryError}
+        year={year}
+      />
+
+      <MonthlyChart
+        title="Collections"
+        subtitle={`Payments received in ${year}`}
+        seriesName="Collected"
+        ariaLabel={`Payments received in ${year}`}
+        data={chartData}
+      />
 
       <Async loading={isLoading} error={isError} skeleton={<TableSkeleton columns={7} rows={8} />}>
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
-            <h2 className="text-[15px] font-semibold tracking-tight">Invoices</h2>
-            <div className="flex items-center gap-3">
-              <Input
-                id="billing-search"
-                name="billing-search"
-                aria-label="Search invoice # or member"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search invoice # or member"
-                className="h-8! w-52! text-[12px]!"
-              />
-              <Badge tone="gray">
-                {search.trim() ? `${invoices.length} of ${total}` : `${total} total`}
-              </Badge>
-            </div>
-          </div>
           <table className="w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-fill text-[12px] text-ink-faint">
@@ -207,14 +272,14 @@ export default function BillingPage() {
               {search.trim() && invoices.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-8 text-center text-[13px] text-ink-faint">
-                    No invoices match “{search}”.
+                    No invoices match “{search}” in {year}.
                   </td>
                 </tr>
               )}
               {!search.trim() && total === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-8 text-center text-[13px] text-ink-faint">
-                    No invoices yet.
+                    No invoices issued in {year}.
                   </td>
                 </tr>
               )}

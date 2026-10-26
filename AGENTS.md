@@ -40,7 +40,7 @@ user approval.
    (repo root; runs `npx playwright test e2e/platform --workers=1`) — 100%
    pass required. If a legitimate UI change breaks a test, **update the
    test in the same commit**. (`platform_admin_verify.cjs` retired; the other
-   six e2e scripts remain house-style gates for their own domains, run via
+   seven e2e scripts remain house-style gates for their own domains, run via
    `make e2e-gym` etc.)
 
 ## Settings page is role-split
@@ -116,9 +116,9 @@ The super-admin gate is a proper `@playwright/test` suite under
   every platform route first so the serial phase is compile-free. Debug a
   failure with `--trace on-first-retry`.
 - Canonical entry points (repo root): `make e2e` (platform suite),
-  `make e2e-ui` (UI mode), `make e2e-all` (platform + six house scripts,
-  sequential). The six house-style scripts (`gym_ops`, `plans`,
-  `member_account`, `role_visibility`, `frontdesk`, `expenses`) are
+  `make e2e-ui` (UI mode), `make e2e-all` (platform + seven house scripts,
+  sequential). The seven house-style scripts (`gym_ops`, `plans`,
+  `member_account`, `role_visibility`, `frontdesk`, `expenses`, `billing`) are
   single-process and run via `make e2e-<name>` (raw form:
   `NODE_PATH="$(npm root -g)" node e2e/<name>_verify.cjs`) — always
   sequentially, never in parallel (shared dev DB).

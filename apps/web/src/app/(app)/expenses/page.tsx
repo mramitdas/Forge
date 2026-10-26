@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Badge, Button, Card, Input, Modal, Select, Textarea, Toast } from "@/components/ui";
 import { Async, Count, Skeleton, SkeletonText } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
+import { MonthlyChart } from "@/components/monthly-chart";
+import { YearSelector } from "@/components/year-selector";
 import { inr } from "@/lib/mock";
 import { apiFetch } from "@/lib/api";
 import { useCreateExpense, useDeleteExpense, useUpdateExpense } from "@/lib/hooks";
@@ -21,41 +22,6 @@ interface YearExpenses {
   monthly: Record<string, number>;
   total: number;
   expenses: ExpenseOut[];
-}
-
-function YearSelector({ year, onYearChange }: { year: number; onYearChange: (year: number) => void }) {
-  const years = useMemo(() => {
-    const current = new Date().getFullYear();
-    const arr: number[] = [];
-    for (let y = current - 5; y <= current + 5; y++) arr.push(y);
-    return arr;
-  }, []);
-
-  const handleYearChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    onYearChange(Number(e.target.value));
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <label htmlFor="expense-year" className="text-[12px] font-medium text-ink-soft">
-        Year
-      </label>
-      <div className="w-24">
-        <Select
-          id="expense-year"
-          value={String(year)}
-          onChange={handleYearChange}
-          aria-label="Select expense year"
-        >
-          {years.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </Select>
-      </div>
-    </div>
-  );
 }
 
 function SummaryCards({
@@ -95,27 +61,6 @@ function SummaryCards({
         ))}
       </div>
     </Async>
-  );
-}
-
-function SpendingGraph({ year, data }: { year: number; data: { month: string; amount: number }[] }) {
-  return (
-    <Card className="p-5">
-      <div className="mb-4">
-        <h3 className="text-[15px] font-semibold tracking-tight">Spending</h3>
-        <p className="mt-0.5 text-[12px] text-ink-faint">Monthly spend for {year}</p>
-      </div>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-            <XAxis dataKey="month" />
-            <YAxis width={56} tickFormatter={(v: number) => (v ? `₹${Math.round(v / 100000)}k` : "₹0")} />
-            <Tooltip formatter={(value) => inr(Number(value))} />
-            <Bar dataKey="amount" name="Spent" fill="#7c6cf0" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </Card>
   );
 }
 
@@ -262,7 +207,7 @@ export default function ExpensesPage() {
               {expenses.length} {expenses.length === 1 ? "expense" : "expenses"}
             </Count>
           </p>
-          <YearSelector year={year} onYearChange={setYear} />
+          <YearSelector id="expense-year" year={year} onYearChange={setYear} ariaLabel="Select expense year" />
         </div>
         {can("expenses.manage") && (
           <Button onClick={() => setAdding(true)}>
@@ -276,7 +221,13 @@ export default function ExpensesPage() {
 
       <SummaryCards total={total} thisMonth={thisMonthSpend} categories={categories} />
 
-      <SpendingGraph year={year} data={chartData} />
+      <MonthlyChart
+        title="Spending"
+        subtitle={`Monthly spend for ${year}`}
+        seriesName="Spent"
+        ariaLabel={`Monthly spend for ${year}`}
+        data={chartData}
+      />
 
       <Async loading={isLoading} error={isError} skeleton={<TableSkeleton columns={6} rows={8} />}>
         <Card className="overflow-hidden">
