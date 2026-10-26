@@ -98,6 +98,7 @@ export default function MembersPage() {
     branchId: "",
     planId: "",
   });
+  const selectedPlan = form.planId ? form.planId : "";
 
   const visiblePlans = plans.filter(
     (p) => p.isActive && (p.branchId === null || p.branchId === form.branchId),
@@ -441,9 +442,10 @@ export default function MembersPage() {
             </Field>
             <Field label="Plan">
               <Select
+                required
                 id="member-plan"
                 aria-label="Plan"
-                value={form.planId}
+                value={selectedPlan}
                 onChange={(e) => setForm({ ...form, planId: e.target.value })}
               >
                 {visiblePlans.length === 0 && (
@@ -457,7 +459,22 @@ export default function MembersPage() {
             </Field>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setForm({
+                  name: "",
+                  email: "",
+                  countryCode: "+91",
+                  phone: "",
+                  gender: "Male",
+                  branchId: form.branchId,
+                  planId: "",
+                });
+                setOpen(false);
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={addGuard.busy || !form.planId}>
