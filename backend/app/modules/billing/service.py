@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import extract, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,10 +20,30 @@ from app.modules.billing.models import (
 from app.modules.members.models import Member
 from app.modules.membership.models import Subscription
 
+MONTH_NAMES = (
+    "",
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+)
+
 
 def _compute_tax(amount_minor: int, tax_rate_bp: int) -> int:
     """Tax in minor units rounded to nearest integer (half-up)."""
     return (amount_minor * tax_rate_bp + 5000) // 10000
+
+
+def _year_bounds(year: int) -> tuple[datetime, datetime]:
+    return datetime(year, 1, 1, tzinfo=UTC), datetime(year + 1, 1, 1, tzinfo=UTC)
 
 
 async def _next_invoice_number(session: AsyncSession, tenant_id: uuid.UUID, now: datetime) -> str:
@@ -121,6 +141,7 @@ async def list_invoices(
     tenant_id: uuid.UUID,
     member_id: uuid.UUID | None = None,
     q: str | None = None,
+    year: int | None = None,
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[Invoice], int]:
@@ -129,6 +150,9 @@ async def list_invoices(
     )
     if member_id:
         stmt = stmt.where(Invoice.member_id == member_id)
+    if year is not None:
+        start, end = _year_bounds(year)
+        stmt = stmt.where(Invoice.issue_date >= start, Invoice.issue_date < end)
     if q:
         like = f"%{q}%"
         stmt = stmt.join(Member, Member.id == Invoice.member_id, isouter=True).where(
@@ -150,19 +174,17 @@ async def list_invoices(
 
 
 async def invoice_summary(
-    session: AsyncSession, *, tenant_id: uuid.UUID
-) -> dict[str, int]:
-    base = (Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+    session: AsyncSession, *, tenant_id: uuid.UUID, year: int | None = None
+) -> dict[str, int | dict[str, int]]:
+    base: tuple = (Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
     open_statuses = ("open", "partial")
+    if year is not None:
+        start, end = _year_bounds(year)
+        base += (Invoice.issue_date >= start, Invoice.issue_date < end)
 
     outstanding = await session.scalar(
         select(func.coalesce(func.sum(Invoice.total_minor - Invoice.paid_minor), 0)).where(
             *base, Invoice.status.in_(open_statuses)
-        )
-    )
-    collected = await session.scalar(
-        select(func.coalesce(func.sum(Invoice.paid_minor), 0)).where(
-            *base, Invoice.status != "void"
         )
     )
     overdue = await session.scalar(
@@ -172,10 +194,40 @@ async def invoice_summary(
             Invoice.due_date < datetime.now(UTC),
         )
     )
+
+    # Collected is cash received, not the paid_minor cohort of this year's
+    # invoices: a payment can settle an invoice issued in an earlier year.
+    pay_base: tuple = (
+        Payment.tenant_id == tenant_id,
+        Payment.deleted_at.is_(None),
+        Payment.status == "succeeded",
+    )
+    monthly: dict[str, int] = {}
+    if year is not None:
+        start, end = _year_bounds(year)
+        pay_base += (Payment.paid_at >= start, Payment.paid_at < end)
+        month_rows = await session.execute(
+            select(
+                extract("month", Payment.paid_at).label("month"),
+                func.sum(Payment.amount_minor).label("total"),
+            )
+            .where(*pay_base)
+            .group_by("month")
+            .order_by("month")
+        )
+        monthly = {
+            MONTH_NAMES[int(row.month)]: int(row.total or 0)
+            for row in month_rows.all()
+        }
+
+    collected = await session.scalar(
+        select(func.coalesce(func.sum(Payment.amount_minor), 0)).where(*pay_base)
+    )
     return {
         "outstanding_minor": int(outstanding or 0),
         "collected_minor": int(collected or 0),
         "overdue_minor": int(overdue or 0),
+        "monthly": monthly,
     }
 
 

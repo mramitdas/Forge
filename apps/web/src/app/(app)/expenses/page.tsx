@@ -1,34 +1,42 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Badge, Button, Card, Input, Modal, Select, Textarea, Toast } from "@/components/ui";
-import { Async, Skeleton, SkeletonText } from "@/components/skeleton";
+import { Async, Count, Skeleton, SkeletonText } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
+import { MonthlyChart } from "@/components/monthly-chart";
+import { YearSelector } from "@/components/year-selector";
 import { inr } from "@/lib/mock";
-import { useCreateExpense, useDeleteExpense, useExpensesData, useExpensesPage, useUpdateExpense } from "@/lib/hooks";
+import { apiFetch } from "@/lib/api";
+import { useCreateExpense, useDeleteExpense, useUpdateExpense } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
 import type { ExpenseOut } from "@/lib/types";
 
 const CATEGORIES = ["Rent", "Salary", "Electricity", "Water", "Internet", "Maintenance", "Marketing", "Other"];
 const METHODS = ["cash", "upi", "card", "netbanking", "wallet", "other"];
+const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
-function SummaryCards() {
-  const { expenses, isLoading, isError } = useExpensesData();
+interface YearExpenses {
+  monthly: Record<string, number>;
+  total: number;
+  expenses: ExpenseOut[];
+}
 
-  const total = expenses.reduce((a, e) => a + e.amount_minor, 0);
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-  const thisMonth = expenses
-    .filter((e) => new Date(e.paid_at) >= monthStart)
-    .reduce((a, e) => a + e.amount_minor, 0);
-  const categories = new Set(expenses.map((e) => e.category)).size;
-
+function SummaryCards({
+  total,
+  thisMonth,
+  categories,
+}: {
+  total: number;
+  thisMonth: number;
+  categories: number;
+}) {
   return (
     <Async
-      loading={isLoading}
-      error={isError}
+      loading={false}
+      error={false}
       skeleton={
         <div className="grid grid-cols-3 gap-4">
           {[0, 1, 2].map((i) => (
@@ -56,6 +64,15 @@ function SummaryCards() {
   );
 }
 
+function useYearExpenses(year: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["expenses", "year", year],
+    queryFn: () => apiFetch<YearExpenses>(`/expenses?year=${year}`),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export default function ExpensesPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ExpenseOut | null>(null);
@@ -67,11 +84,8 @@ export default function ExpensesPage() {
     method: "cash",
     paidAt: new Date().toISOString().slice(0, 10),
   });
+  const [year, setYear] = useState(new Date().getFullYear());
 
-  const PAGE_SIZE = 20;
-  const [page, setPage] = useState(1);
-  const { expenses, total, isLoading, isError } = useExpensesPage({ page, pageSize: PAGE_SIZE });
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
@@ -80,14 +94,29 @@ export default function ExpensesPage() {
   const editGuard = useInFlight();
   const deleteGuard = useInFlight();
 
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  const yearExpenses = useYearExpenses(year, can("expenses.view"));
+  const expenses = yearExpenses.data?.expenses ?? [];
+  const total = yearExpenses.data?.total ?? 0;
+  const monthly = yearExpenses.data?.monthly ?? {};
+  const isLoading = yearExpenses.isLoading;
+  const isError = yearExpenses.isError;
 
   const sorted = useMemo(
     () => [...expenses].sort((a, b) => (a.paid_at < b.paid_at ? 1 : -1)),
     [expenses],
   );
+
+  const chartData = useMemo(
+    () =>
+      MONTH_KEYS.map((key) => ({
+        month: key.charAt(0).toUpperCase() + key.slice(1),
+        amount: monthly[key] ?? 0,
+      })),
+    [monthly],
+  );
+
+  const categories = useMemo(() => new Set(expenses.map((e) => e.category)).size, [expenses]);
+  const thisMonthSpend = monthly[MONTH_KEYS[new Date().getMonth()]] ?? 0;
 
   function openEdit(e: ExpenseOut) {
     const d = new Date(e.paid_at);
@@ -171,21 +200,37 @@ export default function ExpensesPage() {
 
   return (
     <div className="space-y-5">
-      <SummaryCards />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-[13px] text-ink-faint">
+            <Count loading={isLoading} width="inline-block h-3 w-16">
+              {expenses.length} {expenses.length === 1 ? "expense" : "expenses"}
+            </Count>
+          </p>
+          <YearSelector id="expense-year" year={year} onYearChange={setYear} ariaLabel="Select expense year" />
+        </div>
+        {can("expenses.manage") && (
+          <Button onClick={() => setAdding(true)}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+            </svg>
+            Add expense
+          </Button>
+        )}
+      </div>
+
+      <SummaryCards total={total} thisMonth={thisMonthSpend} categories={categories} />
+
+      <MonthlyChart
+        title="Spending"
+        subtitle={`Monthly spend for ${year}`}
+        seriesName="Spent"
+        ariaLabel={`Monthly spend for ${year}`}
+        data={chartData}
+      />
 
       <Async loading={isLoading} error={isError} skeleton={<TableSkeleton columns={6} rows={8} />}>
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <h2 className="text-[15px] font-semibold tracking-tight">Expenses</h2>
-            <div className="flex items-center gap-2">
-              <Badge tone="gray">{total} total</Badge>
-              {can("expenses.manage") && (
-                <Button size="xs" onClick={() => setAdding(true)}>
-                  Add expense
-                </Button>
-              )}
-            </div>
-          </div>
           <table className="w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-fill text-[12px] text-ink-faint">
@@ -235,19 +280,6 @@ export default function ExpensesPage() {
               ))}
             </tbody>
           </table>
-          <div className="flex items-center justify-between px-5 py-3 text-[13px] text-ink-faint">
-            <span>
-              Page {page} of {totalPages}
-            </span>
-            <span className="flex gap-2">
-              <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Previous
-              </Button>
-              <Button variant="secondary" size="xs" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </Button>
-            </span>
-          </div>
         </Card>
       </Async>
 

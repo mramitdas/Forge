@@ -108,6 +108,7 @@ export interface InvoiceSummaryOut {
   outstanding_minor: number;
   collected_minor: number;
   overdue_minor: number;
+  monthly?: Record<string, number>;
 }
 
 export interface CheckInOut {

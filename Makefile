@@ -2,7 +2,7 @@ PY := .venv/bin/python
 RUFF := .venv/bin/ruff
 ALEMBIC := .venv/bin/alembic
 
-.PHONY: db-up db-init db-psql migrate migrate-downgrade seed reset test test-backend test-web lint fmt dev web help e2e e2e-ui e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses e2e-all
+.PHONY: db-up db-init db-psql migrate migrate-downgrade seed reset test test-backend test-web lint fmt dev web help e2e e2e-ui e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses e2e-billing e2e-all
 
 help:
 	@echo "Targets:"
@@ -27,7 +27,8 @@ help:
 	@echo "  e2e-roles    run role_visibility house e2e script"
 	@echo "  e2e-frontdesk run frontdesk house e2e script"
 	@echo "  e2e-expenses run expenses house e2e script"
-	@echo "  e2e-all      platform suite + all six house scripts, sequential"
+	@echo "  e2e-billing  run billing house e2e script"
+	@echo "  e2e-all      platform suite + all seven house scripts, sequential"
 
 # Starts a local Postgres cluster however this machine happens to manage it.
 # Debian/Ubuntu ship pg_ctlcluster; macOS via Homebrew uses brew services.
@@ -115,4 +116,7 @@ e2e-frontdesk:
 e2e-expenses:
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/expenses_verify.cjs
 
-e2e-all: e2e e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses
+e2e-billing:
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/billing_verify.cjs
+
+e2e-all: e2e e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses e2e-billing

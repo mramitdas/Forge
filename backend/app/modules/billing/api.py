@@ -26,6 +26,7 @@ async def list_invoices(
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     member_id: Annotated[uuid.UUID | None, Query()] = None,
     q: Annotated[str | None, Query()] = None,
+    year: Annotated[int | None, Query(ge=1970, le=9999)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> InvoicePage:
@@ -34,6 +35,7 @@ async def list_invoices(
         tenant_id=actor.tenant_id,
         member_id=member_id,
         q=q,
+        year=year,
         page=page,
         page_size=page_size,
     )
@@ -48,8 +50,11 @@ async def list_invoices(
 async def invoice_summary(
     actor: Annotated[Actor, Depends(require_permission("billing.invoices.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+    year: Annotated[int | None, Query(ge=1970, le=9999)] = None,
 ) -> InvoiceSummaryOut:
-    summary = await billing_svc.invoice_summary(session, tenant_id=actor.tenant_id)
+    summary = await billing_svc.invoice_summary(
+        session, tenant_id=actor.tenant_id, year=year
+    )
     return InvoiceSummaryOut(**summary)
 
 

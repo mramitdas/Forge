@@ -495,6 +495,7 @@ export function useInvoicesPage(params: {
   page: number;
   pageSize: number;
   search?: string;
+  year?: number;
 }): {
   invoices: Invoice[];
   total: number;
@@ -510,6 +511,7 @@ export function useInvoicesPage(params: {
         page_size: String(params.pageSize),
       });
       if (params.search) sp.set("q", params.search);
+      if (params.year) sp.set("year", String(params.year));
       return apiFetch<PageOut<InvoiceOut>>(`/invoices?${sp.toString()}`);
     },
     placeholderData: keepPreviousData,
@@ -524,15 +526,18 @@ export function useInvoicesPage(params: {
   };
 }
 
-export function useInvoiceSummary(): {
+export function useInvoiceSummary(year?: number): {
   summary: InvoiceSummaryOut | undefined;
   isLoading: boolean;
   isError: boolean;
 } {
   const can = useCan();
   const q = useQuery({
-    queryKey: ["invoices", "summary"],
-    queryFn: () => apiFetch<InvoiceSummaryOut>("/invoices/summary"),
+    queryKey: ["invoices", "summary", year],
+    queryFn: () =>
+      apiFetch<InvoiceSummaryOut>(
+        year ? `/invoices/summary?year=${year}` : "/invoices/summary",
+      ),
     enabled: can("billing.invoices.view"),
   });
   return { summary: q.data, isLoading: q.isLoading, isError: q.isError };

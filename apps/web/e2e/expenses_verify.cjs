@@ -1,8 +1,9 @@
 // Expenses page E2E: empty state, add, edit, delete, validation, imported data.
 //
 // Requires the backend + frontend dev servers and the imported dev DB.
-// demo-owner sees an empty demo gym; the evolve-gym owner sees the 58
-// imported GMS expenses (₹6,99,210 total).
+// demo-owner sees the demo gym; the evolve-gym owner sees the imported GMS
+// expenses, year-scoped by the year selector (2025: 41 rows / ₹4,84,730,
+// 2024: 17 rows / ₹2,14,480).
 const { chromium } = require("playwright");
 
 const BASE = process.env.FORGE_BASE_URL || "http://localhost:3000";
@@ -66,8 +67,8 @@ async function main() {
 
     // Add expense (modal content is a div, not a form — target widgets directly)
     await page.getByRole("button", { name: "Add expense" }).click();
-    await page.locator("select").first().waitFor({ timeout: 10000 });
-    await page.locator("select").first().selectOption("Rent");
+    await page.locator("#expense-category").waitFor({ timeout: 10000 });
+    await page.locator("#expense-category").selectOption("Rent");
     await page.locator('input[type="number"]').fill("25000");
     await page.getByRole("button", { name: "Save expense" }).click();
     await page.getByText("Expense recorded").waitFor({ timeout: 10000 });
@@ -123,25 +124,50 @@ async function main() {
     );
     check("expense deleted", (await rowCount(page)) === startsAt);
 
-    // ── Imported gym: 58 GMS expenses, categories, total ──
+    // ── Imported gym: year-scoped GMS expenses, categories, totals ──
     await page.goto(`${BASE}/login`);
     await login(page, IMPORTED_OWNER);
     check("imported owner login works", true);
 
     await page.goto(`${BASE}/expenses`);
-    await page.waitForSelector("table tbody tr", { timeout: 15000 });
-    const importedRows = await rowCount(page);
-    check("imported expenses render", importedRows > 0, `rows=${importedRows}`);
 
-    const cats = await page.locator("table tbody tr td:nth-child(2)").allTextContents();
-    const unique = [...new Set(cats.map((c) => c.trim()))].sort();
-    check("categories match GMS import", unique.join(",") === "Electricity,Rent,Salary", unique.join(","));
+    const yearSelect = page.locator('select[aria-label="Select expense year"]');
+    await must("year selector renders", yearSelect.waitFor({ timeout: 15000 }));
 
-    const totalText = await page.evaluate(() => {
-      const label = [...document.querySelectorAll("p")].find((p) => p.textContent?.trim() === "Total spent");
-      return label?.nextElementSibling?.textContent || label?.parentElement?.textContent || "";
-    });
-    check("total spent is ₹6,99,210", totalText.includes("6,99,210"), totalText.replace(/\s+/g, " ").trim());
+    const selectYear = async (year, expectedRows) => {
+      await yearSelect.selectOption(String(year));
+      await page.waitForFunction(
+        (n) => document.querySelectorAll("table tbody tr").length === n,
+        expectedRows,
+        { timeout: 30000 },
+      );
+    };
+
+    const totalSpentText = () =>
+      page.evaluate(() => {
+        const label = [...document.querySelectorAll("p")].find((p) => p.textContent?.trim() === "Total spent");
+        return label?.nextElementSibling?.textContent || label?.parentElement?.textContent || "";
+      });
+
+    // 2025: 41 imported expenses, ₹48,47,300 minor → ₹4,84,730.
+    await selectYear(2025, 41);
+    check("2025 expenses render", (await rowCount(page)) === 41);
+
+    const cats2025 = await page.locator("table tbody tr td:nth-child(2)").allTextContents();
+    const unique2025 = [...new Set(cats2025.map((c) => c.trim()))].sort();
+    check("2025 categories match GMS import", unique2025.join(",") === "Electricity,Rent,Salary", unique2025.join(","));
+
+    const total2025 = await totalSpentText();
+    check("2025 total spent is ₹4,84,730", total2025.includes("4,84,730"), total2025.replace(/\s+/g, " ").trim());
+
+    // Switching the year rewires cards, graph, and table together.
+    await selectYear(2024, 17);
+    check("2024 expenses render", (await rowCount(page)) === 17);
+    const total2024 = await totalSpentText();
+    check("2024 total spent is ₹2,14,480", total2024.includes("2,14,480"), total2024.replace(/\s+/g, " ").trim());
+
+    await must("spending graph renders", page.getByRole("heading", { name: "Spending", exact: true }).waitFor({ timeout: 15000 }));
+    check("spending graph has an SVG chart", (await page.locator("svg.recharts-surface").count()) > 0);
 
     // Delete button visible for owner (expenses.manage)
     const delButtons = await page.locator("table tbody tr button:has-text('Delete')").count();
