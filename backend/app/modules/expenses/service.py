@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import NotFoundError, ValidationError
@@ -43,6 +43,12 @@ class ExpenseOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ExpenseYearOut(BaseModel):
+    monthly: dict[str, int]
+    total: int
+    expenses: list[ExpenseOut]
+
+
 async def create_expense(
     session: AsyncSession,
     *,
@@ -72,6 +78,61 @@ async def create_expense(
     session.add(expense)
     await session.flush()
     return expense
+
+
+async def list_expenses_by_year(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    year: int,
+) -> ExpenseYearOut:
+    """Return the monthly breakdown, year total, and the year's expenses."""
+    year_match = (
+        Expense.tenant_id == tenant_id,
+        Expense.deleted_at.is_(None),
+        extract("year", Expense.paid_at) == year,
+    )
+
+    monthly_rows = await session.execute(
+        select(
+            extract("month", Expense.paid_at).label("month"),
+            func.sum(Expense.amount_minor).label("total"),
+        )
+        .where(*year_match)
+        .group_by("month")
+        .order_by("month")
+    )
+    month_names = [
+        "", "jan", "feb", "mar", "apr", "may", "jun",
+        "jul", "aug", "sep", "oct", "nov", "dec",
+    ]
+    monthly: dict[str, int] = {}
+    for row in monthly_rows.all():
+        monthly[month_names[int(row.month)]] = int(row.total or 0)
+
+    total = int(
+        (
+            await session.execute(
+                select(func.sum(Expense.amount_minor)).where(*year_match)
+            )
+        ).scalar()
+        or 0
+    )
+
+    rows = (
+        await session.execute(
+            select(Expense)
+            .where(*year_match)
+            .order_by(Expense.paid_at.desc(), Expense.id.desc())
+            .limit(1000)
+        )
+    ).scalars().all()
+
+    return ExpenseYearOut(
+        monthly=monthly,
+        total=total,
+        expenses=[ExpenseOut.model_validate(row) for row in rows],
+    )
 
 
 async def list_expenses(
