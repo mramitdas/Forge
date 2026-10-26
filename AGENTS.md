@@ -105,6 +105,17 @@
   `gh pr list`); rely on issue/PR comments, not memory of a previous session.
 - Confirm the target branch (`dev`) and issue number before the first action.
 - Confirm the dev servers are up (§2) before running UI or e2e work.
+## Branch layout
+
+- `prod` — default/protected branch. **Can be merged only from `stag`.**
+- `stag` — staging. **Can be merged only from `dev`.**
+- `dev` — integration branch. **Can be merged only from feature/issue branches** (`<type>/<issue#>-<slug>`).
+- Feature/issue branches target `dev`. Promotion through the chain happens via PRs only, one hop at a time.
+- Remote `origin` is `https://github.com/mramitdas/Forge.git`; all changes land through PRs and no direct pushes to integration branches are permitted.
+- Server-side branch protection requires PR + CI checks (`Backend lint + tests`, `Frontend build`); required approvals are 0 (solo maintainer); the branch-flow workflow and PR discipline enforce the flow.
+
+
+
 
 ## 2. Repository map & local environment
 
