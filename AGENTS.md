@@ -134,3 +134,17 @@ The super-admin gate is a proper `@playwright/test` suite under
 - E2E scripts run against the RUNNING servers (`NODE_PATH="$(npm root -g)"`
   prefix for Playwright); never restart servers mid-session to "pick up
   changes" — uvicorn/Next hot-reload already do.
+
+## Design Context
+
+- `PRODUCT.md` — product register, platform (web), users, positioning, brand
+  personality, anti-references, design principles, accessibility target
+  (WCAG 2.1 AA).
+- `DESIGN.md` — normative design tokens (colors, typography, radii, spacing,
+  components) plus the six-section system spec and Do's/Don'ts.
+- `.impeccable/design.json` — sidecar for `$impeccable live`/panel rendering
+  (tonal ramps, shadows, motion, breakpoints, 8 self-contained component
+  examples).
+
+Read both files before any UI work. The platform admin panel remains frozen
+per the rules above; design-token changes still require the `make e2e` gate.
