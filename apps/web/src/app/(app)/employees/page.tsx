@@ -418,7 +418,7 @@ export default function EmployeesPage() {
               value={form.roleId}
               onChange={(e) => setForm({ ...form, roleId: e.target.value })}
             >
-              {assignableRoles.length === 0 && <option value="">No roles available</option>}
+              <option value="">{assignableRoles.length === 0 ? "No roles available" : "No role"}</option>
               {assignableRoles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -482,7 +482,7 @@ export default function EmployeesPage() {
                   value={editForm.roleId}
                   onChange={(e) => setEditForm({ ...editForm, roleId: e.target.value })}
                 >
-                  {assignableRoles.length === 0 && <option value="">No roles available</option>}
+                  <option value="">{assignableRoles.length === 0 ? "No roles available" : "No role"}</option>
                   {assignableRoles.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
