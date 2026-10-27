@@ -305,3 +305,35 @@ export interface PermissionOut {
   module: string;
   description: string;
 }
+
+export interface EmployeeOut {
+  id: string;
+  email: string;
+  full_name: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  is_active: boolean;
+  is_platform: boolean;
+  created_at: string;
+  role_ids: string[];
+  role_names: string[];
+}
+
+export interface EmployeeCreatedOut extends EmployeeOut {
+  temporary_password: string;
+}
+
+export interface EmployeeFormData {
+  email: string;
+  full_name: string;
+  phone: string | null;
+  role_ids: string[];
+}
+
+export interface EmployeeUpdateData {
+  full_name?: string;
+  phone?: string | null;
+  is_active?: boolean;
+  role_ids?: string[];
+}

@@ -112,6 +112,7 @@ const nav: {
   { href: "/subscriptions", label: "Subscriptions", icon: "subscriptions", perm: "membership.view" },
   { href: "/billing", label: "Billing", icon: "billing", perm: "billing.view" },
   { href: "/expenses", label: "Expenses", icon: "expenses", perm: "expenses.view" },
+  { href: "/employees", label: "Employees", icon: "branches", perm: "identity.view" },
   { href: "/notifications", label: "Notifications", icon: "notifications", perm: "notifications.view" },
   { href: "/branches", label: "Branches", icon: "branches", perm: "tenancy.view" },
   { href: "/roles", label: "Roles", icon: "roles", perm: "identity.manage" },
