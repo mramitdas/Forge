@@ -31,7 +31,6 @@ echo
 echo "Reset complete — fresh schema + seed:"
 echo "  platform  admin@gym-erp.dev / admin-pass-123"
 echo "  owner     demo-owner@gym-erp.dev / owner-pass-123"
-echo "  staff     receptionist@ / branch-manager@ / trainer@ (see seed_dev.py)"
 echo
 echo "Sessions created before the reset are invalid (gym ids changed):"
 echo "log out and back in at http://localhost:3000."

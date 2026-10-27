@@ -19,7 +19,7 @@ from app.core.tenant import (
 from app.db.session import get_sessionmaker
 from app.modules.identity.models import Credential, Role, User, UserRole, split_full_name
 from app.modules.identity.permissions import ROLE_TEMPLATES
-from app.modules.identity.service import assign_role, seed_platform_roles
+from app.modules.identity.service import seed_platform_roles
 from app.modules.membership.service import create_plan
 from app.modules.tenancy.models import Branch, Gym
 from app.modules.tenancy.service import provision_gym
@@ -39,28 +39,6 @@ DEFAULT_BRANCH = {
     "code": "MAIN",
     "timezone": "Asia/Kolkata",
 }
-
-# Demo staff users, one per role template. Emails/passwords for local exploration.
-DEMO_STAFF = [
-    {
-        "role_name": "Branch Manager",
-        "email": "branch-manager@gym-erp.dev",
-        "full_name": "Branch Manager",
-        "password": "manager-pass-123",
-    },
-    {
-        "role_name": "Receptionist",
-        "email": "receptionist@gym-erp.dev",
-        "full_name": "Front Desk",
-        "password": "receptionist-pass-123",
-    },
-    {
-        "role_name": "Trainer",
-        "email": "trainer@gym-erp.dev",
-        "full_name": "Trainer",
-        "password": "trainer-pass-123",
-    },
-]
 
 PLANS = [
     {
@@ -194,54 +172,7 @@ async def seed() -> None:
         finally:
             reset_tenant_context(token)
 
-    # 5. Demo staff users, one per role (idempotent by email).
-    if gym_id is not None:
-        ctx = TenantContext(tenant_id=gym_id, platform_scope=False)
-        token = set_tenant_context(ctx)
-        try:
-            async with maker() as session:
-                await session.begin()
-                for staff in DEMO_STAFF:
-                    existing = await session.execute(
-                        select(User.id).where(User.email == staff["email"])
-                    )
-                    if existing.first() is not None:
-                        print(f"staff {staff['email']} already exists")
-                        continue
-                    role_id = await session.scalar(
-                        select(Role.id).where(
-                            Role.tenant_id == gym_id,
-                            Role.name == staff["role_name"],
-                            Role.deleted_at.is_(None),
-                        )
-                    )
-                    if role_id is None:
-                        print(f"role {staff['role_name']!r} not found, skipping")
-                        continue
-                    staff_first, staff_last = split_full_name(staff["full_name"])
-                    user = User(
-                        tenant_id=gym_id,
-                        email=staff["email"],
-                        full_name=staff["full_name"],
-                        first_name=staff_first,
-                        last_name=staff_last,
-                        is_active=True,
-                        is_platform=False,
-                    )
-                    user.credential = Credential(
-                        password_hash=hash_password(staff["password"])
-                    )
-                    session.add(user)
-                    await session.flush()
-                    await assign_role(session, user_id=user.id, role_id=role_id)
-                    print(
-                        f"created staff {staff['email']} as {staff['role_name']}"
-                    )
-                await session.commit()
-        finally:
-            reset_tenant_context(token)
-
-    # 6. Platform Owner role (idempotent by name) assigned to the platform admin.
+    # 5. Platform Owner role (idempotent by name) assigned to the platform admin.
     ctx = TenantContext(
         tenant_id=uuid.UUID(settings.platform_tenant_id), platform_scope=True
     )
@@ -269,7 +200,7 @@ async def seed() -> None:
     finally:
         reset_tenant_context(token)
 
-    # 7. Sync role flags from templates (locks Gym Owner, keeps staff editable).
+    # 6. Sync role flags from templates (locks Gym Owner).
     if gym_id is not None:
         ctx = TenantContext(tenant_id=gym_id, platform_scope=False)
         token = set_tenant_context(ctx)

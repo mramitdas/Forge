@@ -429,7 +429,7 @@ async def platform_revenue_endpoint(
 
 @tenant_router.get("", response_model=list[BranchOut])
 async def list_branches(
-    actor: Annotated[Actor, Depends(require_permission("tenancy.branches.view"))],
+    actor: Annotated[Actor, Depends(require_permission("tenancy.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> list[BranchOut]:
     rows = await session.scalars(
@@ -443,7 +443,7 @@ async def list_branches(
 @tenant_router.post("", response_model=BranchOut, status_code=201)
 async def create_branch(
     body: BranchCreate,
-    actor: Annotated[Actor, Depends(require_permission("tenancy.branches.create"))],
+    actor: Annotated[Actor, Depends(require_permission("tenancy.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> BranchOut:
     await ensure_branch_fields_free(
@@ -473,7 +473,7 @@ async def create_branch(
 async def update_branch_endpoint(
     branch_id: uuid.UUID,
     body: BranchUpdate,
-    actor: Annotated[Actor, Depends(require_permission("tenancy.branches.update"))],
+    actor: Annotated[Actor, Depends(require_permission("tenancy.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> BranchOut:
     data = body.model_dump(exclude_unset=True)
@@ -490,7 +490,7 @@ async def update_branch_endpoint(
 @tenant_router.delete("/{branch_id}", status_code=204)
 async def remove_branch(
     branch_id: uuid.UUID,
-    actor: Annotated[Actor, Depends(require_permission("tenancy.branches.delete"))],
+    actor: Annotated[Actor, Depends(require_permission("tenancy.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await delete_branch(
@@ -503,7 +503,7 @@ async def remove_branch(
 
 @settings_router.get("", response_model=GymSettingsOut)
 async def get_settings(
-    actor: Annotated[Actor, Depends(require_permission("tenancy.settings.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("tenancy.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> GymSettingsOut:
     gym = await session.get(Gym, actor.tenant_id)
@@ -520,7 +520,7 @@ async def get_settings(
 @settings_router.patch("", response_model=GymSettingsOut)
 async def update_settings(
     body: GymSettingsUpdate,
-    actor: Annotated[Actor, Depends(require_permission("tenancy.settings.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("tenancy.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> GymSettingsOut:
     gym = await session.get(Gym, actor.tenant_id)
@@ -543,7 +543,7 @@ async def update_settings(
 
 @subscriptions_router.get("/tier", response_model=TenantTierOut)
 async def get_tenant_tier(
-    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.view"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> TenantTierOut:
     gym = await session.get(Gym, actor.tenant_id)

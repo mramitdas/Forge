@@ -4,17 +4,20 @@
 // Nav gating + denied empty state: apps/web/src/app/(app)/layout.tsx
 //
 // Requires the backend + frontend dev servers running locally and a seeded
-// dev DB (demo gym users: receptionist@ / trainer@ / branch-manager@ /
-// demo-owner@gym-erp.dev).
+// dev DB (demo owner = demo-owner@gym-erp.dev / owner-pass-123). The script
+// provisions two throwaway roles + employees through the API and cleans them
+// up afterwards; it never touches the Gym Owner role.
+const { execFileSync } = require("node:child_process");
 const { chromium } = require("playwright");
 
 const BASE = process.env.FORGE_BASE_URL || "http://localhost:3000";
+const OWNER = { email: "demo-owner@gym-erp.dev", password: "owner-pass-123" };
+const TS = Date.now().toString(36);
 
 const USERS = {
-  receptionist: { email: "receptionist@gym-erp.dev", password: "receptionist-pass-123" },
-  trainer: { email: "trainer@gym-erp.dev", password: "trainer-pass-123" },
-  branchManager: { email: "branch-manager@gym-erp.dev", password: "manager-pass-123" },
-  owner: { email: "demo-owner@gym-erp.dev", password: "owner-pass-123" },
+  viewer: { email: `e2e-viewer-${TS}@gym-erp.dev`, password: "E2e-Viewer-123!" },
+  manager: { email: `e2e-manager-${TS}@gym-erp.dev`, password: "E2e-Manager-123!" },
+  owner: OWNER,
 };
 
 const results = [];
@@ -85,50 +88,96 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   page.setDefaultTimeout(60000);
+  const api = page.context().request;
+  const roleIds = [];
+  const employeeIds = [];
+  let auth = null;
 
   try {
-    // ── Receptionist: front-desk, no expenses/reports/roles ──
-    await login(page, USERS.receptionist);
+    // Owner API session for fixtures.
+    const loginRes = await api.post(`${BASE}/api/v1/auth/login`, { data: OWNER });
+    const { access_token } = await loginRes.json();
+    auth = { Authorization: `Bearer ${access_token}` };
+
+    const viewerRole = await api.post(`${BASE}/api/v1/permissions/roles`, {
+      headers: auth,
+      data: {
+        name: `E2E Viewer ${TS}`,
+        description: "View-only members and check-ins",
+        permission_codes: ["members.view", "attendance.view", "tenancy.view"],
+        branch_scope: "all",
+      },
+    });
+    check("fixture: view-only role created", viewerRole.status() === 201, `status ${viewerRole.status()}`);
+    roleIds.push((await viewerRole.json()).id);
+
+    const managerRole = await api.post(`${BASE}/api/v1/permissions/roles`, {
+      headers: auth,
+      data: {
+        name: `E2E Manager ${TS}`,
+        description: "Front-desk manager",
+        permission_codes: [
+          "members.manage",
+          "attendance.view",
+          "membership.view",
+          "billing.view",
+          "expenses.view",
+          "notifications.view",
+          "tenancy.view",
+        ],
+        branch_scope: "all",
+      },
+    });
+    check("fixture: manager role created", managerRole.status() === 201, `status ${managerRole.status()}`);
+    roleIds.push((await managerRole.json()).id);
+
+    for (const [user, roleIndex, name] of [
+      [USERS.viewer, 0, "E2E Viewer"],
+      [USERS.manager, 1, "E2E Manager"],
+    ]) {
+      const emp = await api.post(`${BASE}/api/v1/employees`, {
+        headers: auth,
+        data: {
+          email: user.email,
+          full_name: `${name} ${TS}`,
+          password: user.password,
+          role_ids: [roleIds[roleIndex]],
+        },
+      });
+      check(`fixture: employee ${user.email} created`, emp.status() === 201, `status ${emp.status()}`);
+      employeeIds.push((await emp.json()).id);
+    }
+
+    // ── Viewer: members + check-ins + branches, no writes ──
+    await login(page, USERS.viewer);
     await navChecks(
       page,
-      "receptionist",
-      ["/members", "/checkins", "/plans", "/subscriptions", "/billing", "/branches"],
-      ["/expenses", "/roles"],
+      "viewer",
+      ["/members", "/checkins", "/branches"],
+      ["/billing", "/plans", "/subscriptions", "/expenses", "/roles"],
     );
-    await forbiddenCheck(page, "receptionist", "/expenses");
-    await forbiddenCheck(page, "receptionist", "/roles");
-    await allowedCheck(page, "receptionist", ["/billing", "/checkins"]);
+    await forbiddenCheck(page, "viewer", "/expenses");
+    await forbiddenCheck(page, "viewer", "/roles");
+    await allowedCheck(page, "viewer", ["/members", "/checkins"]);
 
     await gotoPage(page, "/members");
-    const recCreate = await page.getByRole("button", { name: /add member/i }).count();
-    check('receptionist: /members shows "Add member" button', recCreate >= 1, `count=${recCreate}`);
+    const viewerCreate = await page.getByRole("button", { name: /add member/i }).count();
+    check('viewer: /members hides "Add member" button (no members.manage)', viewerCreate === 0, `count=${viewerCreate}`);
 
-    // ── Trainer: view/check-in only, no billing/expenses/members.create/roles ──
-    await login(page, USERS.trainer);
+    // ── Manager: reception set + expenses, still no roles ──
+    await login(page, USERS.manager);
     await navChecks(
       page,
-      "trainer",
-      ["/members", "/checkins", "/plans", "/notifications", "/branches"],
-      ["/billing", "/subscriptions", "/expenses", "/roles"],
-    );
-    await forbiddenCheck(page, "trainer", "/expenses");
-    await forbiddenCheck(page, "trainer", "/roles");
-    await allowedCheck(page, "trainer", ["/members", "/checkins"]);
-
-    await gotoPage(page, "/members");
-    const trainerCreate = await page.getByRole("button", { name: /add member/i }).count();
-    check('trainer: /members hides "Add member" button (no members.create)', trainerCreate === 0, `count=${trainerCreate}`);
-
-    // ── Branch Manager: receptionist set + expenses, still no roles ──
-    await login(page, USERS.branchManager);
-    await navChecks(
-      page,
-      "branch-manager",
-      ["/members", "/checkins", "/plans", "/subscriptions", "/billing", "/expenses", "/branches"],
+      "manager",
+      ["/members", "/checkins", "/plans", "/billing", "/expenses", "/branches"],
       ["/roles"],
     );
-    await forbiddenCheck(page, "branch-manager", "/roles");
-    await allowedCheck(page, "branch-manager", ["/expenses", "/billing"]);
+    await forbiddenCheck(page, "manager", "/roles");
+    await allowedCheck(page, "manager", ["/expenses", "/billing"]);
+
+    await gotoPage(page, "/members");
+    const managerCreate = await page.getByRole("button", { name: /add member/i }).count();
+    check('manager: /members shows "Add member" button (members.manage)', managerCreate >= 1, `count=${managerCreate}`);
 
     // ── Gym Owner control: everything accessible, nothing hidden ──
     await login(page, USERS.owner);
@@ -141,6 +190,48 @@ async function main() {
   } catch (err) {
     check("unexpected failure", false, String(err).slice(0, 200));
   } finally {
+    if (auth) {
+      for (const id of employeeIds) {
+        try {
+          await api.delete(`${BASE}/api/v1/employees/${id}`, { headers: auth });
+        } catch {}
+      }
+      for (const id of roleIds) {
+        try {
+          await api.delete(`${BASE}/api/v1/permissions/roles/${id}`, { headers: auth });
+        } catch {}
+      }
+      // There is no employee-delete endpoint and the role delete above 409s
+      // while assignments exist. Remove the throwaway rows directly from the
+      // dev DB.
+      try {
+        const rid = roleIds.map((id) => `'${id}'`).join(",");
+        const uid = employeeIds.map((id) => `'${id}'`).join(",");
+        const userSql = uid
+          ? `DELETE FROM user_roles WHERE user_id IN (${uid}); ` +
+            `DELETE FROM credentials WHERE user_id IN (${uid}); ` +
+            `DELETE FROM users WHERE id IN (${uid}); `
+          : "";
+        execFileSync(
+          "psql",
+          [
+            "-q",
+            "-U",
+            process.env.PGUSER || "amit",
+            "-h",
+            process.env.PGHOST || "localhost",
+            "-d",
+            process.env.PGDATABASE || "gym_erp",
+            "-c",
+            userSql +
+              `DELETE FROM user_roles WHERE role_id IN (${rid}); ` +
+              `DELETE FROM role_permissions WHERE role_id IN (${rid}); ` +
+              `DELETE FROM roles WHERE id IN (${rid});`,
+          ],
+          { stdio: "ignore" },
+        );
+      } catch {}
+    }
     await browser.close();
   }
 

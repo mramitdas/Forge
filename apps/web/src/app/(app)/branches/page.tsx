@@ -307,7 +307,7 @@ export default function BranchesPage() {
             {branches.length} locations · {totalMembers} members across branches
           </Count>
         </p>
-        {can("tenancy.branches.create") && (
+        {can("tenancy.manage") && (
           <Button
             variant="secondary"
             onClick={() => {
@@ -356,7 +356,7 @@ export default function BranchesPage() {
           <EmptyState
             title="No branches yet"
             hint={
-              can("tenancy.branches.create")
+              can("tenancy.manage")
                 ? "Add your first location to start managing members and check-ins."
                 : "Your gym has no branches. Ask the owner to add one."
             }
@@ -394,14 +394,14 @@ export default function BranchesPage() {
                     GSTIN {b.gst_number}
                   </p>
                 )}
-                {(can("tenancy.branches.update") || can("tenancy.branches.delete")) && (
+                {can("tenancy.manage") && (
                   <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
-                    {can("tenancy.branches.update") && b.is_active && (
+                    {can("tenancy.manage") && b.is_active && (
                       <Button variant="ghost" size="sm" onClick={() => openEdit(b)}>
                         Edit
                       </Button>
                     )}
-                    {can("tenancy.branches.update") &&
+                    {can("tenancy.manage") &&
                       (b.is_active ? (
                         <Button variant="ghost" size="sm" onClick={() => setDisableTarget(b)}>
                           Disable
@@ -411,7 +411,7 @@ export default function BranchesPage() {
                           Enable
                         </Button>
                       ))}
-                    {can("tenancy.branches.delete") && (
+                    {can("tenancy.manage") && (
                       <Button variant="ghost" size="sm" className="text-red hover:text-red" onClick={() => setDeleteTarget(b)}>
                         Delete
                       </Button>

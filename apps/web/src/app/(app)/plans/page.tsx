@@ -275,7 +275,7 @@ export default function PlansPage() {
             {plans.length} plans · GST {plans[0]?.taxBp ? plans[0].taxBp / 100 : 18}% applies
           </Count>
         </p>
-        {can("membership.plans.create") && (
+        {can("membership.manage") && (
           <Button variant="secondary" onClick={() => setCreateOpen(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
               <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -335,7 +335,7 @@ export default function PlansPage() {
           <EmptyState
             title={branchFilter === "all" ? "No plans yet" : "No plans for this branch"}
             hint={
-              can("membership.plans.create")
+              can("membership.manage")
                 ? "Create a plan to start selling memberships."
                 : "Ask the owner to create a plan."
             }
@@ -385,7 +385,7 @@ export default function PlansPage() {
                     </li>
                   ))}
                 </ul>
-                {p.isActive && can("membership.subscriptions.activate") && (
+                {p.isActive && can("membership.manage") && (
                   <Button
                     variant={p.popular ? "primary" : "secondary"}
                     className="mt-5 w-full"
@@ -397,14 +397,14 @@ export default function PlansPage() {
                     Subscribe
                   </Button>
                 )}
-                {(can("membership.plans.update") || can("membership.plans.delete")) && (
+                {can("membership.manage") && (
                   <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
-                    {can("membership.plans.update") && p.isActive && (
+                    {can("membership.manage") && p.isActive && (
                       <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
                         Edit
                       </Button>
                     )}
-                    {can("membership.plans.update") &&
+                    {can("membership.manage") &&
                       (p.isActive ? (
                         <Button variant="ghost" size="sm" onClick={() => setDisableTarget(p)}>
                           Disable
@@ -414,7 +414,7 @@ export default function PlansPage() {
                           Enable
                         </Button>
                       ))}
-                    {can("membership.plans.delete") && (
+                    {can("membership.manage") && (
                       <Button variant="ghost" size="sm" className="text-red hover:text-red" onClick={() => setDeleteTarget(p)}>
                         Delete
                       </Button>
