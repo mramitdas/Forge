@@ -18,6 +18,10 @@ import {
 import type {
   BranchOut,
   CheckInOut,
+  EmployeeCreatedOut,
+  EmployeeFormData,
+  EmployeeOut,
+  EmployeeUpdateData,
   ExpenseOut,
   GymOut,
   GymOwnerOut,
@@ -1231,6 +1235,67 @@ export function useDeleteRole() {
       apiFetch<void>(`/permissions/roles/${roleId}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roles"] });
+    },
+  });
+}
+
+export function useEmployees(): {
+  employees: EmployeeOut[];
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
+  const q = useQuery({
+    queryKey: ["employees"],
+    queryFn: () => apiFetch<EmployeeOut[]>("/employees"),
+    enabled: can("users.view"),
+    retry: false,
+  });
+  return useMemo(
+    () => ({
+      employees: q.data ?? [],
+      isLoading: q.isLoading,
+      isError: q.isError,
+    }),
+    [q.data, q.isLoading, q.isError],
+  );
+}
+
+export function useCreateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: EmployeeFormData) =>
+      apiFetch<EmployeeCreatedOut>("/employees", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+export function useUpdateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { userId: string; body: EmployeeUpdateData }) =>
+      apiFetch<EmployeeOut>(`/employees/${args.userId}`, {
+        method: "PATCH",
+        body: JSON.stringify(args.body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+export function useDeleteEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiFetch<void>(`/employees/${userId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
     },
   });
 }
