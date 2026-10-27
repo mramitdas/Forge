@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { cn } from "@/components/ui";
-import { toggleVerb, VERBS, verbIsAvailable, verbIsOn } from "@/lib/permission-verbs";
+import {
+  moduleIsManaged,
+  toggleVerb,
+  VERBS,
+  verbIsAvailable,
+  verbIsOn,
+} from "@/lib/permission-verbs";
 import type { PermissionOut } from "@/lib/types";
 
 const MODULES = [
@@ -17,8 +23,10 @@ const VERB_CELL = "flex flex-1 justify-center";
 /**
  * Interactive permission editor: settings-style read/write/update/delete
  * pills per module, plus an expandable per-module list of the raw catalog
- * codes for fine-grained control. Pill ON adds every concrete verb code;
- * pill OFF removes them (and drops *.manage, which implies all verbs).
+ * codes for fine-grained control. A pill only toggles the concrete codes it
+ * maps to; when a module has no separate code for a verb the pill is disabled.
+ * `*.manage` is a switch of its own in Details and locks the row's pills while
+ * selected (full control).
  */
 export function RolePermissionPills({
   catalog,
@@ -79,21 +87,31 @@ export function RolePermissionPills({
               <div className={cn(ROW, "py-1.5")}>
                 <span className={cn(MODULE_CELL, "text-[13px] text-ink-soft")}>{m}</span>
                 {VERBS.map((v) => {
+                  const managed = moduleIsManaged(codeList, value);
                   const on = verbIsOn(codeList, v, value);
                   const available = verbIsAvailable(codeList, v);
+                  const locked = managed || !available;
                   return (
                     <span key={v} className={VERB_CELL}>
                       <button
                         type="button"
                         aria-label={`${m} ${v} ${on ? "on" : "off"}`}
                         aria-pressed={on}
-                        disabled={!available && !on}
-                        title={available ? undefined : `${m} has no separate ${v} permission`}
+                        disabled={locked}
+                        title={
+                          managed
+                            ? `${m}.manage grants full control — edit it under Details`
+                            : available
+                              ? undefined
+                              : `${m} has no separate ${v} permission`
+                        }
                         onClick={() => onChange(toggleVerb(codeList, v, value))}
                         className={cn(
                           "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
                           on ? "bg-accent" : "border border-line-strong bg-fill-strong",
-                          !available && !on && "cursor-not-allowed opacity-40",
+                          locked && "cursor-not-allowed",
+                          !managed && available && "cursor-pointer",
+                          locked && !on && "opacity-40",
                         )}
                       >
                         <span
