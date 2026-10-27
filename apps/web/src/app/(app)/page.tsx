@@ -100,8 +100,8 @@ function OverviewHeader() {
   const firstName = me?.user.full_name?.split(" ")[0] ?? "there";
   const maxBranch = Math.max(...branches.map((b) => b.members), 1);
   const b0 = branches[0];
-  const showOccupancy = can("tenancy.branches.view");
-  const showCheckins = can("attendance.records.view");
+  const showOccupancy = can("tenancy.view");
+  const showCheckins = can("attendance.view");
 
   return (
     <>
@@ -131,7 +131,7 @@ function OverviewHeader() {
               </p>
             )}
           </div>
-          {can("attendance.checkin") && (
+          {can("attendance.manage") && (
             <Button onClick={() => setOpen(true)}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -263,10 +263,10 @@ function StatsGrid() {
           },
         ]
       : []),
-    ...(can("attendance.records.view")
+    ...(can("attendance.view")
       ? [{ label: "Active today", value: String(todayAllowed), delta: "Today", up: true }]
       : []),
-    ...(can("billing.invoices.view")
+    ...(can("billing.view")
       ? [
           {
             label: "Monthly revenue",
@@ -508,9 +508,9 @@ function LeaderboardBar() {
 
 export default function OverviewPage() {
   const can = useCan();
-  const showRevenue = can("billing.invoices.view");
-  const showOccupancy = can("tenancy.branches.view");
-  const showCheckins = can("attendance.records.view");
+  const showRevenue = can("billing.view");
+  const showOccupancy = can("tenancy.view");
+  const showCheckins = can("attendance.view");
   const showNotifications = can("notifications.view");
 
   return (

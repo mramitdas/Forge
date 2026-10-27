@@ -310,7 +310,7 @@ export default function CheckinsPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-5">
       <div className="space-y-6 xl:col-span-2">
-        {can("attendance.checkin") && <QuickCheckinCard />}
+        {can("attendance.manage") && <QuickCheckinCard />}
       </div>
       <div className="xl:col-span-3">
         <RecentActivity />

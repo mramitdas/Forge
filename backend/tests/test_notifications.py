@@ -74,11 +74,19 @@ async def test_mark_all_read_clears_every_unread(client, gym_a):
     owner = await login(client, "owner-gyma@example.com", "owner-pass-123")
     headers = {"Authorization": f"Bearer {owner['access_token']}"}
 
-    # Second gym_a user (branch manager has notifications.view) to prove
-    # mark-all only touches the caller's rows.
-    roles = await client.get("/api/v1/permissions/roles", headers=headers)
-    assert roles.status_code == 200, roles.text
-    branch_manager = next(r for r in roles.json() if r["name"] == "Branch Manager")
+    # Second gym_a user with notifications.view to prove mark-all only
+    # touches the caller's rows.
+    role = await client.post(
+        "/api/v1/permissions/roles",
+        headers=headers,
+        json={
+            "name": "Notify Reader",
+            "description": "Read-only notifications",
+            "permission_codes": ["notifications.view"],
+            "branch_scope": "all",
+        },
+    )
+    assert role.status_code == 201, role.text
     employee = await client.post(
         "/api/v1/employees",
         headers=headers,
@@ -86,7 +94,7 @@ async def test_mark_all_read_clears_every_unread(client, gym_a):
             "email": "bm-markall@example.com",
             "full_name": "BM MarkAll",
             "password": "bm-pass-123",
-            "role_ids": [branch_manager["id"]],
+            "role_ids": [role.json()["id"]],
         },
     )
     assert employee.status_code == 201, employee.text

@@ -207,7 +207,7 @@ async function main() {
     // ── 3. Billing: list → detail → pay → void ──
     await page.goto(`${BASE}/billing`);
     await page.getByText("Outstanding").waitFor({ timeout: 20000 });
-    await must("billing page renders summary cards + invoices table", page.getByText("Invoices", { exact: true }).waitFor({ timeout: 10000 }));
+    await must("billing page renders summary cards + invoices table", page.getByPlaceholder("Search invoice # or member").waitFor({ timeout: 10000 }));
     await must("billing pager renders Page X of Y", page.getByText(/^Page \d+ of \d+$/).waitFor({ timeout: 10000 }));
 
     const searchBox = page.getByPlaceholder("Search invoice # or member");

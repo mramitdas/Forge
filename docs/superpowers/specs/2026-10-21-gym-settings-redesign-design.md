@@ -22,7 +22,7 @@ receptionist, trainer). The dispatcher (`settings/page.tsx`) routes
 `me.is_platform` → `PlatformSettings`, everyone else → `GymSettings`. By
 decision **A**, the redesigned cards render for **all gym-side roles**, each
 seeing their own role name and their own (partially-lit) permission pills. The
-gym-profile card remains gated on `can("tenancy.settings.manage")` — in
+gym-profile card remains gated on `can("tenancy.manage")` — in
 practice owner-only, unchanged from today.
 
 ## Card order (new)
@@ -30,7 +30,7 @@ practice owner-only, unchanged from today.
 ```
 Profile                     (all users)
 Password                    (all users)
-Gym profile & access        (tenancy.settings.manage — owner)
+Gym profile & access        (tenancy.manage — owner)
 Role & permissions          (all gym users)
 Danger zone                 (unchanged)
 ```
@@ -90,10 +90,10 @@ Role:
 │  Gym Owner   │   ← blue accent Badge, value = me.role_name
 └──────────────┘
 
-          read   write   update   delete
-Attendance  ●✓     ●✓      ○·       ○·
-Billing     ●✓     ●✓      ○·       ○·
-Expenses    ●✓     ●✓      ●✓       ●✓
+          view   manage
+Attendance  ●✓     ●✓
+Billing     ●✓     ○·
+Expenses    ●✓     ●✓
 …
 ```
 
@@ -104,22 +104,14 @@ Expenses    ●✓     ●✓      ●✓       ●✓
   `tenancy`, `members`, `membership`, `billing`, `expenses`, `attendance`,
   `notifications`, `reports`, `identity`), even when partially granted — a
   receptionist sees an honest mix.
-- Four pills per row. Pill = rounded-full toggle-style chip, rendered
-  **non-interactive** (`aria-disabled`, no pointer cursor, no handlers): ON =
-  filled accent, OFF = muted outline. The owner cannot edit their own
-  permissions; this is a read-only summary, replacing the prettified mono-chip
-  dump.
-- Pill is ON iff the role's effective permission set (from `me.permissions`)
-  contains any code mapping to it:
-
-  | Pill | Satisfied by |
-  |---|---|
-  | read | `*.view`, `export` |
-  | write | `create`, `checkin`, `activate`, `capture`, `refund` |
-  | update | `update`, `manage` |
-  | delete | `delete`, `manage` |
-
-  (`manage` implies full control → all four ON.)
+- Two switches per row: **View** (read-only) and **Manage** (edit/delete).
+  Rendered **non-interactive** (`aria-disabled`, no pointer cursor, no
+  handlers): ON = filled accent, OFF = muted outline. The owner cannot edit
+  their own permissions; this is a read-only summary, replacing the prettified
+  mono-chip dump.
+- Every gym module grants exactly two catalog codes, `<module>.view` and
+  `<module>.manage`, and **manage implies view**. There are no narrower verbs
+  and no per-code Details panel; the role editor offers the same two switches.
 
 - The old "Your role & permissions" and "Granted permissions" cards are
   removed; this single card replaces both.
@@ -147,8 +139,10 @@ Expenses    ●✓     ●✓      ●✓       ●✓
    drops the `actor.is_platform` condition — **any** attempt to change email is
    rejected. The frontend no longer sends `email`, so this is defense in depth.
 
-No change to `/auth/change-password` (already open to every logged-in user)
-or to the permission catalog/role templates.
+No change to `/auth/change-password` (already open to every logged-in user).
+The permission catalog and role templates do change: gym modules keep only
+`<module>.view` / `<module>.manage`, and only the locked Platform Owner and Gym
+Owner templates remain (staff role templates are removed).
 
 ## 7. E2E and docs (same commit, per AGENTS.md)
 

@@ -176,7 +176,7 @@ async def test_impersonate_owner_opens_gym_session(client, platform_token):
     body = me.json()
     assert body["is_platform"] is False
     assert body["tenant_name"] == "Gym impgym"
-    assert "members.create" in body["permissions"]
+    assert "members.manage" in body["permissions"]
 
     # A freshly provisioned gym has no branches; the owner creates them.
     branches = await client.get(
