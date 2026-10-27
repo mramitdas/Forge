@@ -1248,7 +1248,7 @@ export function useEmployees(): {
   const q = useQuery({
     queryKey: ["employees"],
     queryFn: () => apiFetch<EmployeeOut[]>("/employees"),
-    enabled: can("users.view"),
+    enabled: can("identity.view"),
     retry: false,
   });
   return useMemo(

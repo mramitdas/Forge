@@ -36,10 +36,27 @@ async function login(page, user) {
   const page = await browser.newPage();
   page.setDefaultTimeout(60000);
   let failed = false;
+  const api = page.context().request;
+  const ts = Date.now().toString(36);
+  let employeeId = null;
+  let auth = null;
 
   try {
     await login(page, OWNER);
     check("owner login lands on dashboard", page.url().includes("/"));
+
+    const loginRes = await api.post(`${BASE}/api/v1/auth/login`, { data: OWNER });
+    const { access_token } = await loginRes.json();
+    auth = { Authorization: `Bearer ${access_token}` };
+    const created = await api.post(`${BASE}/api/v1/employees`, {
+      headers: auth,
+      data: {
+        email: `e2e-employee-${ts}@gym-erp.dev`,
+        full_name: `E2E Employee ${ts}`,
+      },
+    });
+    if (created.status() !== 201) throw new Error(`employee fixture: ${created.status()}`);
+    employeeId = (await created.json()).id;
 
     await page.goto(`${BASE}/employees`);
     await must(
@@ -105,6 +122,11 @@ async function login(page, user) {
   } catch {
     failed = true;
   } finally {
+    if (auth && employeeId) {
+      try {
+        await api.delete(`${BASE}/api/v1/employees/${employeeId}`, { headers: auth });
+      } catch {}
+    }
     await browser.close();
     const passed = results.filter((r) => r.ok).length;
     console.log(`\n${passed}/${results.length} checks passed`);

@@ -231,7 +231,7 @@ export default function EmployeesPage() {
             {employees.length} {employees.length === 1 ? "employee" : "employees"}
           </Count>
         </p>
-        {can("users.manage") && (
+        {can("identity.manage") && (
           <Button onClick={openAdd}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
               <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -320,7 +320,7 @@ export default function EmployeesPage() {
                     })}
                   </td>
                   <td className="px-5 py-3 text-right">
-                    {can("users.manage") && (
+                    {can("identity.manage") && (
                       <div className="flex items-center justify-end gap-1">
                         <Button size="sm" variant="ghost" onClick={() => openEdit(emp)}>
                           Edit

@@ -315,7 +315,7 @@ async def list_employees(
 async def update_employee(
     user_id: uuid.UUID,
     body: EmployeeUpdateRequest,
-    actor: Annotated[Actor, Depends(require_permission("users.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> EmployeeOut:
     user = await identity_svc.update_employee(
@@ -341,7 +341,7 @@ async def update_employee(
 @employees_router.delete("/{user_id}", status_code=204)
 async def delete_employee(
     user_id: uuid.UUID,
-    actor: Annotated[Actor, Depends(require_permission("users.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await identity_svc.delete_employee(
