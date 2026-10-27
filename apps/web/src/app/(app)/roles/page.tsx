@@ -352,7 +352,7 @@ export default function RolesPage() {
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
         title={`Delete ${deleteTarget?.name ?? ""}?`}
-        subtitle="Staff assigned to this role will lose its permissions"
+        subtitle="A role can only be deleted when no employee is assigned to it"
       >
         <p className="text-[13px] text-ink-soft">
           Deleting {deleteTarget?.name ?? "this role"} is permanent and cannot be undone.
