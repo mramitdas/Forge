@@ -85,7 +85,7 @@ export function useBranches(): {
   const branchesQ = useQuery({
     queryKey: ["branches"],
     queryFn: () => apiFetch<BranchOut[]>("/branches"),
-    enabled: can("tenancy.branches.view"),
+    enabled: can("tenancy.view"),
   });
   const membersQ = useQuery({
     queryKey: ["members", "all"],
@@ -251,17 +251,17 @@ export function useMemberCtx(): {
   const subsQ = useQuery({
     queryKey: ["subscriptions"],
     queryFn: () => apiFetch<SubscriptionOut[]>("/plans/subscriptions"),
-    enabled: can("membership.subscriptions.view"),
+    enabled: can("membership.view"),
   });
   const checkinsQ = useQuery({
     queryKey: ["checkins", "all"],
     queryFn: () => fetchPaged<CheckInOut>("/checkin"),
-    enabled: can("attendance.records.view"),
+    enabled: can("attendance.view"),
   });
   const invoicesQ = useQuery({
     queryKey: ["invoices", "ctx"],
     queryFn: () => apiFetch<PageOut<InvoiceOut>>("/invoices?page_size=200"),
-    enabled: can("billing.invoices.view"),
+    enabled: can("billing.view"),
   });
 
   return useMemo(
@@ -405,7 +405,7 @@ export function useMemberDetail(id: string): {
     queryKey: ["subscriptions", id],
     queryFn: () =>
       apiFetch<SubscriptionOut[]>(`/plans/subscriptions?member_id=${id}`),
-    enabled: !!id && can("membership.subscriptions.view"),
+    enabled: !!id && can("membership.view"),
   });
   const timelineQ = useQuery({
     queryKey: ["member", id, "timeline"],
@@ -462,7 +462,7 @@ export function useTenantTier(): {
   const q = useQuery({
     queryKey: ["tenant-tier"],
     queryFn: () => apiFetch<TenantTierOut>("/subscriptions/tier"),
-    enabled: can("membership.subscriptions.view"),
+    enabled: can("membership.view"),
   });
   return { tier: q.data, isLoading: q.isLoading, isError: q.isError };
 }
@@ -472,13 +472,13 @@ export function useCheckins(): { items: CheckinRecord[]; isLoading: boolean; isE
   const q = useQuery({
     queryKey: ["checkins", "all"],
     queryFn: () => fetchPaged<CheckInOut>("/checkin"),
-    enabled: can("attendance.records.view"),
+    enabled: can("attendance.view"),
   });
   const ctxQ = useMemberCtx();
   const branchesQ = useQuery({
     queryKey: ["branches"],
     queryFn: () => apiFetch<BranchOut[]>("/branches"),
-    enabled: can("tenancy.branches.view"),
+    enabled: can("tenancy.view"),
   });
 
   return useMemo(() => {
@@ -519,7 +519,7 @@ export function useInvoicesPage(params: {
       return apiFetch<PageOut<InvoiceOut>>(`/invoices?${sp.toString()}`);
     },
     placeholderData: keepPreviousData,
-    enabled: can("billing.invoices.view"),
+    enabled: can("billing.view"),
   });
   const page = q.data ?? { items: [] as InvoiceOut[], total: 0 };
   return {
@@ -542,7 +542,7 @@ export function useInvoiceSummary(year?: number): {
       apiFetch<InvoiceSummaryOut>(
         year ? `/invoices/summary?year=${year}` : "/invoices/summary",
       ),
-    enabled: can("billing.invoices.view"),
+    enabled: can("billing.view"),
   });
   return { summary: q.data, isLoading: q.isLoading, isError: q.isError };
 }
@@ -1145,7 +1145,7 @@ export function useGymSettings(): {
     queryKey: ["settings"],
     queryFn: () => apiFetch<GymSettingsOut>("/settings"),
     retry: false,
-    enabled: can("tenancy.settings.manage"),
+    enabled: can("tenancy.manage"),
   });
   return useMemo(
     () => ({ settings: q.data ?? null, isLoading: q.isLoading, isError: q.isError }),

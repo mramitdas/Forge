@@ -1,34 +1,47 @@
 from __future__ import annotations
 
-from app.modules.identity.permissions import ROLE_TEMPLATES, template_permission_codes
+from app.modules.identity.permissions import (
+    PERMISSIONS,
+    ROLE_TEMPLATES,
+    template_permission_codes,
+)
+
+GYM_MODULES = {
+    "attendance",
+    "billing",
+    "expenses",
+    "identity",
+    "members",
+    "membership",
+    "notifications",
+    "reports",
+    "tenancy",
+}
 
 
-def test_receptionist_template_includes_checkin_history_and_branches() -> None:
-    """Front desk must be able to read attendance history and branch context.
-
-    The nav shows Check-ins for `attendance.checkin`, and the overview fetches
-    branches — without these two codes the receptionist lands on 403 error
-    cards.
-    """
-    codes = template_permission_codes(ROLE_TEMPLATES["receptionist"])
-    assert "attendance.checkin" in codes
-    assert "attendance.records.view" in codes
-    assert "tenancy.branches.view" in codes
+def test_only_owner_templates_remain() -> None:
+    assert set(ROLE_TEMPLATES) == {"platform_owner", "gym_owner"}
 
 
-def test_receptionist_template_does_not_grant_destructive_codes() -> None:
-    codes = template_permission_codes(ROLE_TEMPLATES["receptionist"])
-    assert "members.delete" not in codes
-    assert "tenancy.branches.delete" not in codes
-    assert "roles.manage" not in codes
+def test_gym_owner_has_view_and_manage_for_every_module() -> None:
+    codes = template_permission_codes(ROLE_TEMPLATES["gym_owner"])
+    expected = {
+        f"{module}.{capability}"
+        for module in GYM_MODULES
+        for capability in ("view", "manage")
+    }
+    assert set(codes) == expected
+    assert len(codes) == 18
 
 
-def test_trainer_template_includes_branch_context() -> None:
-    """Trainers read check-in rows; without branches.view those rows and the
-    overview occupancy card degrade to "Unknown branch" and hidden cards."""
-    codes = template_permission_codes(ROLE_TEMPLATES["trainer"])
-    assert "tenancy.branches.view" in codes
-    assert "attendance.records.view" in codes
-    assert "attendance.checkin" in codes
-    assert "tenancy.branches.update" not in codes
-    assert "tenancy.branches.delete" not in codes
+def test_platform_owner_stays_platform_only() -> None:
+    codes = template_permission_codes(ROLE_TEMPLATES["platform_owner"])
+    assert codes
+    assert all(code.startswith("platform.") for code in codes)
+
+
+def test_gym_catalog_has_exactly_two_capabilities_per_module() -> None:
+    gym_codes = [p["code"] for p in PERMISSIONS if not p["code"].startswith("platform.")]
+    assert sorted(gym_codes) == sorted(
+        f"{module}.{capability}" for module in GYM_MODULES for capability in ("view", "manage")
+    )

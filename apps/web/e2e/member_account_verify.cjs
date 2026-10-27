@@ -141,7 +141,7 @@ async function main() {
 
     // Invoice detail page
     await page.goto(`${BASE}/billing`);
-    await page.getByText("Invoices", { exact: true }).waitFor({ timeout: 15000 });
+    await page.getByPlaceholder("Search invoice # or member").waitFor({ timeout: 15000 });
     await page.locator("a", { hasText: /^INV-/ }).first().click();
     await page.waitForURL(/\/billing\/.+/, { timeout: 10000 });
     await must("invoice detail page renders", page.getByText("Line items", { exact: true }).waitFor({ timeout: 10000 }), page.url());

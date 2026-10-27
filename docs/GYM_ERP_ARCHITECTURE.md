@@ -412,8 +412,8 @@ Priority legend: **P0** = v1 launch must-have · **P1** = v1.x shortly after · 
 
 ### 9.2 Permission Catalog Structure
 
-- **Scope:** `module.feature.action` — e.g., `members.update`, `billing.invoices.refund`, `inventory.stock.adjust`.
-- **Feature flags:** coarse module access (e.g., `feature.payroll`) separate from fine-grained actions.
+- **Gym scope:** exactly two capabilities per module — `<module>.view` (read-only) and `<module>.manage` (edit/delete). Manage always includes view, so a manage-only grant also satisfies view checks.
+- **Platform scope:** `platform.*` capabilities stay finer-grained (`platform.gyms.create`, `platform.subscriptions.manage`, …) and are unrelated to gym roles.
 - **Data scope:** each permission may be paired with a branch scope: `all_branches` | `branch_ids[]`. Default for employees is `branch_ids` of their assigned branches; manager/owner roles default to all.
 
 ### 9.3 Entity Model

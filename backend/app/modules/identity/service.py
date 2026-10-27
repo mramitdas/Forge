@@ -336,6 +336,10 @@ async def get_effective_permissions(
             perms[rp.permission_code] = branches
         elif branches is not None and existing is not None:
             existing.update(branches)
+    # Gym capabilities are two-tier: manage always includes view.
+    for code in list(perms):
+        if code.endswith(".manage") and not code.startswith("platform."):
+            perms.setdefault(code[: -len(".manage")] + ".view", perms[code])
     return perms
 
 

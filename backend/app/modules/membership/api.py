@@ -24,7 +24,7 @@ router = APIRouter(prefix="/plans", tags=["membership"])
 @router.post("", response_model=PlanOut, status_code=201)
 async def create_plan(
     body: PlanCreate,
-    actor: Annotated[Actor, Depends(require_permission("membership.plans.create"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> PlanOut:
     plan = await membership_svc.create_plan(
@@ -46,7 +46,7 @@ async def create_plan(
 
 @router.get("", response_model=list[PlanOut])
 async def list_plans(
-    actor: Annotated[Actor, Depends(require_permission("membership.plans.view"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     branch_id: uuid.UUID | None = None,
 ) -> list[PlanOut]:
@@ -60,7 +60,7 @@ async def list_plans(
 async def update_plan(
     plan_id: uuid.UUID,
     body: PlanUpdate,
-    actor: Annotated[Actor, Depends(require_permission("membership.plans.update"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> PlanOut:
     data = body.model_dump(exclude_unset=True)
@@ -73,7 +73,7 @@ async def update_plan(
 @router.delete("/{plan_id}", status_code=204)
 async def remove_plan(
     plan_id: uuid.UUID,
-    actor: Annotated[Actor, Depends(require_permission("membership.plans.delete"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await membership_svc.delete_plan(
@@ -84,7 +84,7 @@ async def remove_plan(
 @router.post("/subscribe", response_model=SubscriptionOut, status_code=201)
 async def subscribe(
     body: SubscriptionCreate,
-    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.activate"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> SubscriptionOut:
     sub = await membership_svc.create_subscription(
@@ -100,7 +100,7 @@ async def subscribe(
 
 @router.get("/subscriptions", response_model=list[SubscriptionOut])
 async def list_subscriptions(
-    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.view"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     member_id: uuid.UUID | None = None,
 ) -> list[SubscriptionOut]:
@@ -113,7 +113,7 @@ async def list_subscriptions(
 @router.post("/subscriptions/{subscription_id}/activate", response_model=SubscriptionOut)
 async def activate(
     subscription_id: uuid.UUID,
-    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.activate"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> SubscriptionOut:
     sub = await membership_svc.activate_subscription(session, subscription_id)
@@ -123,7 +123,7 @@ async def activate(
 @router.post("/subscriptions/{subscription_id}/renew", response_model=SubscriptionOut)
 async def renew(
     subscription_id: uuid.UUID,
-    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.activate"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     body: RenewBody | None = None,
 ) -> SubscriptionOut:
@@ -141,7 +141,7 @@ class UpgradeBody(BaseModel):
 async def upgrade(
     subscription_id: uuid.UUID,
     body: UpgradeBody,
-    actor: Annotated[Actor, Depends(require_permission("membership.subscriptions.activate"))],
+    actor: Annotated[Actor, Depends(require_permission("membership.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> SubscriptionOut:
     sub = await membership_svc.upgrade_subscription(

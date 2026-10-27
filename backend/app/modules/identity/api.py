@@ -162,7 +162,7 @@ async def change_password_route(
 
 @roles_router.get("", response_model=list[PermissionOut])
 async def permission_catalog(
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> list[PermissionOut]:
     rows = await session.scalars(select(PermissionCatalog).order_by(PermissionCatalog.code))
@@ -171,7 +171,7 @@ async def permission_catalog(
 
 @roles_router.get("/roles", response_model=list[RoleOut])
 async def list_roles(
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> list[RoleOut]:
     rows = await session.scalars(
@@ -203,7 +203,7 @@ async def list_roles(
 async def update_role(
     role_id: uuid.UUID,
     body: UpdateRoleRequest,
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> RoleOut:
     role = await identity_svc.update_role(
@@ -229,7 +229,7 @@ async def update_role(
 @roles_router.post("/roles", response_model=RoleOut, status_code=201)
 async def create_role(
     body: CreateRoleRequest,
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> RoleOut:
     role = await identity_svc.create_role(
@@ -246,7 +246,7 @@ async def create_role(
 @roles_router.delete("/roles/{role_id}", status_code=204)
 async def delete_role(
     role_id: uuid.UUID,
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await identity_svc.delete_role(
@@ -257,7 +257,7 @@ async def delete_role(
 @employees_router.post("", response_model=EmployeeCreatedOut, status_code=201)
 async def create_employee(
     body: CreateEmployeeRequest,
-    actor: Annotated[Actor, Depends(require_permission("users.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> EmployeeCreatedOut:
     temporary_password = body.password or generate_temporary_password()
@@ -284,7 +284,7 @@ async def create_employee(
 
 @employees_router.get("", response_model=list[EmployeeOut])
 async def list_employees(
-    actor: Annotated[Actor, Depends(require_permission("users.view"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> list[EmployeeOut]:
     rows = await session.scalars(
@@ -352,7 +352,7 @@ async def delete_employee(
 @employees_router.post("/assign", status_code=204)
 async def assign_role(
     body: AssignRoleRequest,
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await identity_svc.assign_role(session, user_id=body.user_id, role_id=body.role_id)

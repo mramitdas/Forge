@@ -21,7 +21,7 @@ router = APIRouter(prefix="/checkin", tags=["attendance"])
 @router.post("", response_model=CheckInOut, status_code=201)
 async def create_checkin(
     body: CheckInCreate,
-    actor: Annotated[Actor, Depends(require_permission("attendance.checkin"))],
+    actor: Annotated[Actor, Depends(require_permission("attendance.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> CheckInOut:
     result = await check_in(
@@ -37,7 +37,7 @@ async def create_checkin(
 
 @router.get("", response_model=dict)
 async def list_attendance(
-    actor: Annotated[Actor, Depends(require_permission("attendance.records.view"))],
+    actor: Annotated[Actor, Depends(require_permission("attendance.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

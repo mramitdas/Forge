@@ -107,15 +107,15 @@ const nav: {
 }[] = [
   { href: "/", label: "Overview", icon: "overview" },
   { href: "/members", label: "Members", icon: "members", perm: "members.view" },
-  { href: "/checkins", label: "Check-ins", icon: "checkins", perm: ["attendance.checkin", "attendance.records.view"] },
-  { href: "/plans", label: "Plans", icon: "plans", perm: "membership.plans.view" },
-  { href: "/subscriptions", label: "Subscriptions", icon: "subscriptions", perm: "membership.subscriptions.view" },
-  { href: "/billing", label: "Billing", icon: "billing", perm: "billing.invoices.view" },
+  { href: "/checkins", label: "Check-ins", icon: "checkins", perm: "attendance.view" },
+  { href: "/plans", label: "Plans", icon: "plans", perm: "membership.view" },
+  { href: "/subscriptions", label: "Subscriptions", icon: "subscriptions", perm: "membership.view" },
+  { href: "/billing", label: "Billing", icon: "billing", perm: "billing.view" },
   { href: "/expenses", label: "Expenses", icon: "expenses", perm: "expenses.view" },
   { href: "/employees", label: "Employees", icon: "branches", perm: "users.view" },
   { href: "/notifications", label: "Notifications", icon: "notifications", perm: "notifications.view" },
-  { href: "/branches", label: "Branches", icon: "branches", perm: "tenancy.branches.view" },
-  { href: "/roles", label: "Roles", icon: "roles", perm: "roles.manage" },
+  { href: "/branches", label: "Branches", icon: "branches", perm: "tenancy.view" },
+  { href: "/roles", label: "Roles", icon: "roles", perm: "identity.manage" },
 ];
 
 const platformNav: {
