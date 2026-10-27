@@ -205,7 +205,7 @@ export default function MembersPage() {
             {total} members
           </Count>
         </p>
-        {can("members.create") && (
+        {can("members.manage") && (
           <Button onClick={() => {
             setForm((f) => ({ ...f, branchId: f.branchId || branches[0]?.id || "" }));
             setOpen(true);
@@ -330,12 +330,12 @@ export default function MembersPage() {
                       onKeyDown={(e) => e.stopPropagation()}
                     >
                       <div className="flex items-center justify-end gap-1">
-                        {can("members.update") && (
+                        {can("members.manage") && (
                           <Button size="sm" variant="ghost" onClick={() => openEdit(m)}>
                             Edit
                           </Button>
                         )}
-                        {can("members.update") && (
+                        {can("members.manage") && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -345,7 +345,7 @@ export default function MembersPage() {
                             {m.isActive ? "Disable" : "Enable"}
                           </Button>
                         )}
-                        {can("members.delete") && (
+                        {can("members.manage") && (
                           <Button
                             size="sm"
                             variant="ghost"

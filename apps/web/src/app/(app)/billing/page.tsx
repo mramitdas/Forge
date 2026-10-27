@@ -261,7 +261,7 @@ export default function BillingPage() {
                     <StatusBadge status={i.status} />
                   </td>
                   <td className="px-5 py-3 text-right">
-                    {(i.status === "open" || i.status === "overdue") && can("billing.payments.capture") && (
+                    {(i.status === "open" || i.status === "overdue") && can("billing.manage") && (
                       <Button size="xs" onClick={() => setPaying(i.id)}>
                         Pay now
                       </Button>

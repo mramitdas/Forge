@@ -116,6 +116,9 @@ e2e-frontdesk:
 e2e-expenses:
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/expenses_verify.cjs
 
+e2e-employees:
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/employee_verify.cjs
+
 e2e-billing:
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/billing_verify.cjs
 

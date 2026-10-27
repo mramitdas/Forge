@@ -85,7 +85,7 @@ export default function SubscriptionsPage() {
         />
       </div>
 
-      {can("membership.subscriptions.view") && (
+      {can("membership.view") && (
         <Card className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div>
             <p className="kicker">Gym plan</p>
@@ -153,7 +153,7 @@ export default function SubscriptionsPage() {
                     </td>
                     <td className="px-4 py-3 font-medium">{inr(s.price)}</td>
                     <td className="px-5 py-3 text-right">
-                      {s.status === "pending" && can("membership.subscriptions.activate") && (
+                      {s.status === "pending" && can("membership.manage") && (
                         <Button size="xs" onClick={() => activateSub(s.id)}>
                           Activate
                         </Button>
