@@ -446,7 +446,7 @@ async def delete_role(
     )
     if assignments:
         raise ConflictError(
-            f"Role is assigned to {assignments} user(s) and cannot be deleted",
+            f"This role is assigned to {assignments} employee(s) and cannot be deleted",
             code="ROLE_IN_USE",
         )
     role.deleted_at = datetime.now(UTC)

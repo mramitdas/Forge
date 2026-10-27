@@ -58,7 +58,7 @@ async def test_delete_role_in_use_is_409_and_locked_is_422(client, platform_toke
     assert in_use.status_code == 409, in_use.text
     err = in_use.json()["error"]
     assert err["code"] == "ROLE_IN_USE"
-    assert "1 user" in err["message"]
+    assert "1 employee" in err["message"]
 
     # Locked seeded role (Gym Owner, is_editable=False) refuses deletion
     # before the usage check.
