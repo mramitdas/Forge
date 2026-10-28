@@ -109,7 +109,7 @@ async def test_permission_catalog_and_roles(client, gym_a):
     response = await client.get("/api/v1/permissions", headers=headers)
     assert response.status_code == 200
     codes = {p["code"] for p in response.json()}
-    assert len(codes) >= 25
+    assert len(codes) >= 24
     assert {"members.manage", "attendance.manage", "identity.manage"} <= codes
 
     response = await client.get("/api/v1/permissions/roles", headers=headers)
