@@ -168,8 +168,8 @@ export default function PlansPage() {
           branch_id: planForm.branchId || null,
           description: planForm.description || undefined,
           billing_period: dur.period,
-          amount_minor: Number(planForm.amountMinor),
-          entry_fee_minor: Number(planForm.entryFeeMinor),
+          amount_minor: Math.round(Number(planForm.amountMinor) * 100),
+          entry_fee_minor: Math.round(Number(planForm.entryFeeMinor) * 100),
           tax_rate_bp: Math.round(Number(planForm.taxPercent) * 100),
           duration_months: dur.months,
           auto_renew: planForm.autoRenew,
@@ -191,8 +191,8 @@ export default function PlansPage() {
       branchId: p.branchId ?? "",
       description: p.description,
       durationMonths: p.durationMonths ? String(p.durationMonths) : "1",
-      amountMinor: String(p.price),
-      entryFeeMinor: String(p.entryFee),
+      amountMinor: String(p.price / 100),
+      entryFeeMinor: String(p.entryFee / 100),
       taxPercent: String(p.taxBp / 100),
       autoRenew: p.autoRenew,
     });
@@ -211,8 +211,8 @@ export default function PlansPage() {
             branch_id: editForm.branchId || null,
             description: editForm.description || undefined,
             billing_period: dur.period,
-            amount_minor: Number(editForm.amountMinor),
-            entry_fee_minor: Number(editForm.entryFeeMinor),
+            amount_minor: Math.round(Number(editForm.amountMinor) * 100),
+            entry_fee_minor: Math.round(Number(editForm.entryFeeMinor) * 100),
             tax_rate_bp: Math.round(Number(editForm.taxPercent) * 100),
             duration_months: dur.months,
             auto_renew: editForm.autoRenew,
@@ -533,28 +533,30 @@ export default function PlansPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Price (₹, paise)">
+            <Field label="Price (₹)">
               <Input
                 type="number"
                 min="0"
+                step="0.01"
                 required
                 id="plan-amount"
                 name="plan-amount"
-                aria-label="Price (₹, paise)"
-                placeholder="e.g. 150000"
+                aria-label="Price (₹)"
+                placeholder="e.g. 1500"
                 value={planForm.amountMinor}
                 onChange={(e) => setPlanForm({ ...planForm, amountMinor: e.target.value })}
               />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Entry fee (₹, paise)">
+            <Field label="Entry fee (₹)">
               <Input
                 type="number"
                 min="0"
+                step="0.01"
                 id="plan-entry-fee"
                 name="plan-entry-fee"
-                aria-label="Entry fee (₹, paise)"
+                aria-label="Entry fee (₹)"
                 placeholder="0"
                 value={planForm.entryFeeMinor}
                 onChange={(e) => setPlanForm({ ...planForm, entryFeeMinor: e.target.value })}
@@ -644,27 +646,29 @@ export default function PlansPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Price (₹, paise)">
+            <Field label="Price (₹)">
               <Input
                 type="number"
                 min="0"
+                step="0.01"
                 required
                 id="plan-edit-amount"
                 name="plan-edit-amount"
-                aria-label="Price (₹, paise)"
+                aria-label="Price (₹)"
                 value={editForm.amountMinor}
                 onChange={(e) => setEditForm({ ...editForm, amountMinor: e.target.value })}
               />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Entry fee (₹, paise)">
+            <Field label="Entry fee (₹)">
               <Input
                 type="number"
                 min="0"
+                step="0.01"
                 id="plan-edit-entry-fee"
                 name="plan-edit-entry-fee"
-                aria-label="Entry fee (₹, paise)"
+                aria-label="Entry fee (₹)"
                 value={editForm.entryFeeMinor}
                 onChange={(e) => setEditForm({ ...editForm, entryFeeMinor: e.target.value })}
               />
