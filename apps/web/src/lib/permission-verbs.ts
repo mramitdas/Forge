@@ -10,7 +10,6 @@ export const MODULE_LABELS: Record<string, string> = {
   members: "Members",
   membership: "Plans & Subscriptions",
   notifications: "Notifications",
-  reports: "Reports",
   tenancy: "Branches & settings",
 };
 
