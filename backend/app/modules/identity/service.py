@@ -514,6 +514,10 @@ async def create_employee(
         )
         for role in roles:
             session.add(UserRole(user_id=user.id, role_id=role.id))
+        # Flush before returning: autoflush=False means the pre-commit
+        # employee_roles() SELECT in the API layer would otherwise see no
+        # assignment rows and the 201 body would report empty roles.
+        await session.flush()
     return user
 
 
@@ -600,10 +604,11 @@ async def delete_employee(
 async def assign_role(session: AsyncSession, *, user_id: uuid.UUID, role_id: uuid.UUID) -> None:
     user = await session.get(User, user_id)
     role = await session.get(Role, role_id)
+    # Tenant RLS filters session.get() by the actor's tenant, so a foreign
+    # tenant's user or role resolves to None and surfaces 404 NOT_FOUND —
+    # the designed cross-tenant behavior (pinned by test_employee_crud).
     if user is None or role is None:
         raise NotFoundError("User or role not found", code="NOT_FOUND")
-    if user.tenant_id != role.tenant_id:
-        raise ConflictError("Cross-tenant role assignment", code="TENANT_MISMATCH")
     session.add(UserRole(user_id=user_id, role_id=role_id))
 
 

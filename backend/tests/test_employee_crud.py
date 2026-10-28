@@ -89,12 +89,10 @@ async def test_create_employee_returns_temporary_password(client, gym_a):
         assert row["role_names"] == [role["name"]]
         assert created["email"] == email.lower()
         assert created["full_name"] == "Crud Employee"
-        # KNOWN QUIRK (pinned): create_employee adds UserRole rows after its
-        # final flush and sessions use autoflush=False, so the 201 body
-        # reports empty role fields even though the assignment persists
-        # (verified via the listing below). A follow-up fix may tighten this.
-        assert created["role_ids"] == []
-        assert created["role_names"] == []
+        # The 201 body reflects the assignment: the service flushes UserRole
+        # rows before employee_roles() selects them for the response.
+        assert created["role_ids"] == [role["id"]]
+        assert created["role_names"] == [role["name"]]
         temp_password = created["temporary_password"]
         assert temp_password, "temporary_password must be returned"
         assert len(temp_password) >= 8
