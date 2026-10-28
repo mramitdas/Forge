@@ -10,7 +10,7 @@ import asyncio
 import uuid
 
 from app.core.config import get_settings
-from app.core.security import hash_password
+from app.core.security import hash_password, password_rule_failures
 from app.core.tenant import (
     TenantContext,
     reset_tenant_context,
@@ -25,8 +25,6 @@ from app.modules.tenancy.models import Branch, Gym
 from app.modules.tenancy.service import provision_gym
 from sqlalchemy import select
 
-PLATFORM_EMAIL = "admin@gym-erp.dev"
-PLATFORM_PASSWORD = "admin-pass-123"
 GYM_SLUG = "demo"
 GYM_NAME = "Demo Fitness"
 OWNER_EMAIL = "demo-owner@gym-erp.dev"
@@ -68,6 +66,20 @@ PLANS = [
 
 async def seed() -> None:
     settings = get_settings()
+    admin_email = settings.platform_admin_email.strip()
+    admin_password = settings.platform_admin_password
+    if not admin_email or not admin_password:
+        raise SystemExit(
+            "seed_dev: platform admin credentials missing. Set both "
+            "GYM_PLATFORM_ADMIN_EMAIL and GYM_PLATFORM_ADMIN_PASSWORD "
+            "(backend/.env) before running seed."
+        )
+    failures = password_rule_failures(admin_password)
+    if failures:
+        raise SystemExit(
+            "seed_dev: GYM_PLATFORM_ADMIN_PASSWORD is too weak — failed "
+            f"rules: {', '.join(failures)}."
+        )
     maker = get_sessionmaker()
 
     # 1. Platform user (idempotent). Context must be set BEFORE session.begin()
@@ -80,22 +92,22 @@ async def seed() -> None:
         async with maker() as session:
             await session.begin()
             existing = await session.execute(
-                select(User.id).where(User.email == PLATFORM_EMAIL)
+                select(User.id).where(User.email == admin_email)
             )
             if existing.first() is None:
                 admin_first, admin_last = split_full_name("Platform Admin")
                 user = User(
                     tenant_id=uuid.UUID(settings.platform_tenant_id),
-                    email=PLATFORM_EMAIL,
+                    email=admin_email,
                     full_name="Platform Admin",
                     first_name=admin_first,
                     last_name=admin_last,
                     is_active=True,
                     is_platform=True,
                 )
-                user.credential = Credential(password_hash=hash_password(PLATFORM_PASSWORD))
+                user.credential = Credential(password_hash=hash_password(admin_password))
                 session.add(user)
-                print(f"created platform user {PLATFORM_EMAIL}")
+                print(f"created platform user {admin_email}")
             await session.commit()
     finally:
         reset_tenant_context(token)
@@ -184,7 +196,7 @@ async def seed() -> None:
                 session, uuid.UUID(settings.platform_tenant_id)
             )
             admin = await session.scalar(
-                select(User).where(User.email == PLATFORM_EMAIL)
+                select(User).where(User.email == admin_email)
             )
             if admin is not None:
                 has = await session.scalar(
@@ -195,7 +207,7 @@ async def seed() -> None:
                 )
                 if has is None:
                     session.add(UserRole(user_id=admin.id, role_id=owner_role.id))
-                    print(f"assigned Platform Owner role to {PLATFORM_EMAIL}")
+                    print(f"assigned Platform Owner role to {admin_email}")
             await session.commit()
     finally:
         reset_tenant_context(token)

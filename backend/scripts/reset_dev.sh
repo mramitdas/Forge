@@ -29,8 +29,7 @@ psql -d postgres -v ON_ERROR_STOP=1 \
 
 echo
 echo "Reset complete — fresh schema + seed:"
-echo "  platform  admin@gym-erp.dev / admin-pass-123"
-echo "  owner     demo-owner@gym-erp.dev / owner-pass-123"
+echo "  platform  (from GYM_PLATFORM_ADMIN_EMAIL) — no demo data; use \`make seed-fixtures\` for e2e fixtures"
 echo
 echo "Sessions created before the reset are invalid (gym ids changed):"
 echo "log out and back in at http://localhost:3000."
