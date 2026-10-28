@@ -469,11 +469,30 @@ export function useTenantTier(): {
   return { tier: q.data, isLoading: q.isLoading, isError: q.isError };
 }
 
-export function useCheckins(): { items: CheckinRecord[]; isLoading: boolean; isError: boolean } {
+export function useCheckins(params?: { page?: number; pageSize?: number }): {
+  items: CheckinRecord[];
+  total: number;
+  isLoading: boolean;
+  isError: boolean;
+} {
   const can = useCan();
   const q = useQuery({
-    queryKey: ["checkins", "all"],
-    queryFn: () => fetchPaged<CheckInOut>("/checkin"),
+    queryKey: params
+      ? ["checkins", "page", params]
+      : ["checkins", "all"],
+    queryFn: () => {
+      if (params) {
+        const sp = new URLSearchParams({
+          page: String(params.page ?? 1),
+          page_size: String(params.pageSize ?? 50),
+        });
+        return apiFetch<PageOut<CheckInOut>>(`/checkin?${sp.toString()}`);
+      }
+      return fetchPaged<CheckInOut>("/checkin").then(
+        (items) => ({ items, total: items.length }) as PageOut<CheckInOut>,
+      );
+    },
+    placeholderData: params ? keepPreviousData : undefined,
     enabled: can("attendance.view"),
   });
   const ctxQ = useMemberCtx();
@@ -490,10 +509,16 @@ export function useCheckins(): { items: CheckinRecord[]; isLoading: boolean; isE
     const branchNames = new Map(
       (branchesQ.data ?? []).map((b) => [b.id, b.name]),
     );
-    const items = (q.data ?? []).map((c) =>
+    const page = q.data ?? { items: [] as CheckInOut[], total: 0 };
+    const items = page.items.map((c) =>
       toUiCheckin(c, memberNames, branchNames),
     );
-    return { items, isLoading: q.isLoading, isError: q.isError || ctxQ.isError || branchesQ.isError };
+    return {
+      items,
+      total: page.total ?? page.items.length,
+      isLoading: q.isLoading,
+      isError: q.isError || ctxQ.isError || branchesQ.isError,
+    };
   }, [q.data, q.isLoading, q.isError, ctxQ.members, ctxQ.isError, branchesQ.data, branchesQ.isError]);
 }
 

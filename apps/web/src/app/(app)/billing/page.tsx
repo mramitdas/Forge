@@ -14,6 +14,8 @@ import { Async, Count, Skeleton, SkeletonText } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
 import { MonthlyChart } from "@/components/monthly-chart";
 import { YearSelector } from "@/components/year-selector";
+import { PageSizeSelect } from "@/components/page-size-select";
+import { usePageSize } from "@/lib/use-page-size";
 import { inr } from "@/lib/mock";
 import { useInvoiceSummary, useInvoicesPage, useMemberCtx, usePayInvoice } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
@@ -124,17 +126,17 @@ function SummaryCards({
 }
 
 export default function BillingPage() {
-  const PAGE_SIZE = 20;
   const [paying, setPaying] = useState<string | null>(null);
   const [method, setMethod] = useState("upi");
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("billing");
   const [year, setYear] = useState(new Date().getFullYear());
 
   const { invoices, total, isLoading, isError } = useInvoicesPage({
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     search: search.trim() || undefined,
     year,
   });
@@ -144,7 +146,7 @@ export default function BillingPage() {
   const can = useCan();
   const payGuard = useInFlight();
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   useEffect(() => {
     setPage(1);
@@ -289,7 +291,11 @@ export default function BillingPage() {
             <span>
               Page {page} of {totalPages}
             </span>
-            <span className="flex gap-2">
+            <span className="flex items-center gap-2">
+              <PageSizeSelect
+                value={pageSize}
+                onChange={(n) => { setPageSize(n); setPage(1); }}
+              />
               <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                 Previous
               </Button>
