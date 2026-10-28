@@ -170,14 +170,14 @@ async function main() {
     // Permission edit goes through the Edit modal (two switches per module).
     await roleCard.getByRole("button", { name: "Edit", exact: true }).click();
     const editModal = page.locator("div.fixed.inset-0");
-    await editModal.locator('[data-module="reports"]').getByRole("button", { name: "reports view off" }).click();
+    await editModal.locator('[data-module="attendance"]').getByRole("button", { name: "attendance view off" }).click();
     await editModal.getByRole("button", { name: /^Save changes \(/ }).click();
     await must("roles: custom role permission edit saves via UI", roleCard.getByText("3 permissions", { exact: true }).waitFor({ timeout: 15000 }));
 
-    // Restore: remove reports.view through the same Edit modal.
+    // Restore: remove attendance.view through the same Edit modal.
     await roleCard.getByRole("button", { name: "Edit", exact: true }).click();
     const restoreModal = page.locator("div.fixed.inset-0");
-    await restoreModal.locator('[data-module="reports"]').getByRole("button", { name: "reports view on" }).click();
+    await restoreModal.locator('[data-module="attendance"]').getByRole("button", { name: "attendance view on" }).click();
     await restoreModal.getByRole("button", { name: /^Save changes \(/ }).click();
     await must("roles: permission edit restores", roleCard.getByText("2 permissions", { exact: true }).waitFor({ timeout: 15000 }));
 
