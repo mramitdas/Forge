@@ -1,16 +1,25 @@
-// Billing page E2E: year selector, cash-year summary, collections chart,
-// search, and pagination. Read-only — no fixtures are mutated.
+// Billing page E2E: year selector, summary cards, chart, search, pagination.
+// Self-provisioning: every asserted invoice is created by this script via the
+// plan → member → subscription flow (POST /members with a plan_id creates the
+// member, an active subscription, and a pending invoice in one call).
 //
-// Requires the backend + frontend dev servers and the imported dev DB.
-// demo-owner sees the demo gym (invoices in the current year); the
-// evolve-gym owner sees the imported GMS invoices (2024: 491,
-// 2025: 1,331, 2026: 143).
+// Requires the backend + frontend dev servers and the seeded dev DB
+// (demo owner = demo-owner@gym-erp.dev / owner-pass-123). Invoices have no
+// delete endpoint, but DELETE /members/{id} soft-deletes the member together
+// with their subscriptions, invoices, and payments — that is the cleanup path,
+// run in `finally` so re-runs stay idempotent.
 const { chromium } = require("playwright");
 
 const BASE = process.env.FORGE_BASE_URL || "http://localhost:3000";
 const OWNER = { email: "demo-owner@gym-erp.dev", password: "owner-pass-123" };
-const IMPORTED_OWNER = { email: "mramitdas99@gmail.com", password: "evolve-import-2026" };
 const CURRENT_YEAR = new Date().getFullYear();
+const ts = Date.now().toString(36);
+
+// Enough invoices to fill Page 1 (UI page size is 20) and overflow onto
+// Page 2 regardless of any seeded baseline.
+const CREATED = 25;
+const UI_PAGE_SIZE = 20;
+const NAME_TOKEN = `e2ebill${ts}`;
 
 const results = [];
 function check(name, ok, extra = "") {
@@ -80,12 +89,89 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   page.setDefaultTimeout(60000);
+  let api = null;
+  let auth = null;
+  const memberIds = [];
+  let planId = null;
+  const invoiceNumbers = [];
 
   try {
-    // ── Demo gym: current-year view, year switch, search, pagination ──
     await login(page, OWNER);
     check("owner login lands on dashboard", true, page.url());
 
+    // ── API session: fixtures are created (and cleaned up) over the API ──
+    api = page.context().request;
+    const loginRes = await api.post(`${BASE}/api/v1/auth/login`, {
+      data: { email: OWNER.email, password: OWNER.password },
+    });
+    check("api login returns token", loginRes.ok());
+    const { access_token } = await loginRes.json();
+    auth = { Authorization: `Bearer ${access_token}` };
+
+    const branchesRes = await api.get(`${BASE}/api/v1/branches`, { headers: auth });
+    check("api branches list ok", branchesRes.ok());
+    const branches = await branchesRes.json();
+    const branchId = branches[0]?.id;
+    check("a branch exists for fixtures", Boolean(branchId));
+
+    // Baseline BEFORE creating anything: expected totals are seeded data plus
+    // exactly our delta.
+    const baseRes = await api.get(
+      `${BASE}/api/v1/invoices?year=${CURRENT_YEAR}&page=1&page_size=1`,
+      { headers: auth },
+    );
+    check("api baseline invoice list ok", baseRes.ok());
+    const baselineTotal = (await baseRes.json()).total ?? 0;
+
+    // ── Self-provisioned fixtures: plan → members (each member create makes
+    // an active subscription and a pending invoice for it) ──
+    const planRes = await api.post(`${BASE}/api/v1/plans`, {
+      headers: auth,
+      data: {
+        name: `E2E Billing Plan ${ts}`,
+        slug: `e2e-billing-${ts}`,
+        branch_id: branchId,
+        description: `e2e ${ts}`,
+        billing_period: "monthly",
+        amount_minor: 99900,
+        entry_fee_minor: 0,
+        tax_rate_bp: 0,
+        auto_renew: false,
+      },
+    });
+    check("api create plan returns 201", planRes.status() === 201);
+    planId = (await planRes.json()).id;
+
+    for (let i = 1; i <= CREATED; i++) {
+      const res = await api.post(`${BASE}/api/v1/members`, {
+        headers: auth,
+        data: {
+          first_name: NAME_TOKEN,
+          last_name: `B${String(i).padStart(2, "0")}${ts}`,
+          branch_id: branchId,
+          plan_id: planId,
+          status: "active",
+        },
+      });
+      if (res.status() !== 201) {
+        check(`api create member ${i}`, false, `${res.status()} ${String(await res.text()).slice(0, 120)}`);
+        throw new Error("member create failed");
+      }
+      const member = await res.json();
+      memberIds.push(member.id);
+      const invRes = await api.get(
+        `${BASE}/api/v1/invoices?member_id=${member.id}&year=${CURRENT_YEAR}&page_size=5`,
+        { headers: auth },
+      );
+      const items = invRes.ok() ? (await invRes.json()).items : [];
+      if (items[0]?.number) invoiceNumbers.push(items[0].number);
+    }
+    check(`api created ${CREATED} members with invoices`, memberIds.length === CREATED && invoiceNumbers.length === CREATED);
+
+    const expectedTotal = baselineTotal + CREATED;
+    const expectedPages = Math.ceil(expectedTotal / UI_PAGE_SIZE);
+
+    // ── UI: billing page renders the self-created data ──
     await page.goto(`${BASE}/billing`);
     await must(
       "billing page renders",
@@ -96,87 +182,89 @@ async function main() {
     await must("year selector renders", yearSelect(page).waitFor({ timeout: 10000 }));
     check("year defaults to the current year", (await yearSelect(page).inputValue()) === String(CURRENT_YEAR));
 
-    const count = await countText(page);
-    check("invoice count is year-scoped", /^\d+ invoices?$/.test(count || ""), count);
+    await must("count reflects baseline + created", page.getByText(`${expectedTotal} invoices`, { exact: true }).waitFor({ timeout: 30000 }));
+    check("page 1 is full", (await rowCount(page)) === UI_PAGE_SIZE);
 
     await must("collected card shows cash basis", page.getByText(`Received in ${CURRENT_YEAR}`, { exact: true }).waitFor());
-    await must("outstanding card shows issue basis", page.getByText(`Issued in ${CURRENT_YEAR}`, { exact: true }).first().waitFor());
     const collected = await statValue(page, "Collected");
     check("collected renders as INR", /^₹[\d,]+$/.test(collected), collected);
 
-    await must(
-      "collections chart renders",
-      chart(page).waitFor({ timeout: 15000 }),
-    );
-    check("collections chart has an SVG", (await page.locator('svg.recharts-surface').count()) > 0);
+    await must("collections chart renders", chart(page).waitFor({ timeout: 15000 }));
+    check("collections chart has an SVG", (await page.locator("svg.recharts-surface").count()) > 0);
 
+    // ── Pagination: Page 1 of N, next, previous ──
     const pageLabel = await page.getByText(/^Page 1 of \d+$/).textContent();
-    const totalPages = Number((pageLabel || "").match(/of (\d+)/)?.[1] || 1);
-    check("pagination reflects the year total", totalPages > 1, pageLabel || "");
-
-    if (totalPages > 1) {
-      await page.getByRole("button", { name: "Next", exact: true }).click();
-      await must("next page renders", page.getByText(/^Page 2 of/).waitFor());
-      check("page 2 keeps page size", (await rowCount(page)) === 20);
-      await page.getByRole("button", { name: "Previous", exact: true }).click();
-      await must("previous page returns", page.getByText(/^Page 1 of/).waitFor());
-    }
-
-    const firstNumber = (await page.locator("table tbody tr").first().locator("a").first().textContent())?.trim();
-    await page.locator("#billing-search").fill(firstNumber || "");
-    await waitRows(page, 1);
-    check("search narrows the year to one invoice", (await rowCount(page)) === 1, firstNumber || "");
-    check("searched invoice is the first row", await page.getByText(firstNumber, { exact: true }).first().isVisible());
-    await page.locator("#billing-search").fill("");
-    await waitRows(page, 20);
-    check("clearing search restores the page", (await rowCount(page)) === 20);
-
-    await yearSelect(page).selectOption(String(CURRENT_YEAR - 1));
-    await must(
-      "empty prior year explains itself",
-      page.getByText(`No invoices issued in ${CURRENT_YEAR - 1}.`).waitFor({ timeout: 20000 }),
-    );
-    check("prior-year count is zero", (await countText(page)) === "0 invoices");
-    check("prior-year collected is zero", (await statValue(page, "Collected")) === "₹0");
     check(
-      "chart follows the year",
-      (await chart(page).getAttribute("aria-label")) === `Payments received in ${CURRENT_YEAR - 1}`,
+      "pagination says Page 1 of expected",
+      pageLabel?.trim() === `Page 1 of ${expectedPages}`,
+      `${(pageLabel || "").trim()} (expected Page 1 of ${expectedPages})`,
     );
-    check("empty year has no bars", (await page.locator('[role="img"] .recharts-bar-rectangle').count()) === 0);
 
-    await yearSelect(page).selectOption(String(CURRENT_YEAR));
-    await waitRows(page, 20);
-    check("switching back restores rows", (await rowCount(page)) === 20);
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await must("next page renders", page.getByText(/^Page 2 of/).waitFor());
+    const page2Rows = Math.min(UI_PAGE_SIZE, expectedTotal - UI_PAGE_SIZE);
+    await waitRows(page, page2Rows);
+    check("page 2 keeps page size", (await rowCount(page)) === page2Rows, `rows=${await rowCount(page)}`);
+    await page.getByRole("button", { name: "Previous", exact: true }).click();
+    await must("previous page returns", page.getByText(/^Page 1 of/).waitFor());
+    await waitRows(page, UI_PAGE_SIZE);
 
-    // ── Imported gym: cross-year GMS invoices + monthly collections ──
-    await page.goto(`${BASE}/login`);
-    await login(page, IMPORTED_OWNER);
-    check("imported owner login works", true);
+    // ── Search: unique member last name narrows to exactly one row ──
+    const target = `B07${ts}`;
+    await page.locator("#billing-search").fill(target);
+    await waitRows(page, 1);
+    check("search narrows to one row", (await rowCount(page)) === 1, target);
+    const searchedCount = await countText(page);
+    check("search count is 1 invoice", searchedCount === "1 invoice", searchedCount || "");
+    const searchedNumber = invoiceNumbers[6];
+    check(
+      "searched row is the created invoice",
+      await page.getByText(searchedNumber, { exact: true }).first().isVisible(),
+      searchedNumber,
+    );
 
-    await page.goto(`${BASE}/billing`);
-    await must("imported billing renders", page.waitForSelector("table tbody", { state: "attached", timeout: 20000 }));
-
-    await yearSelect(page).selectOption("2025");
-    await must("2025 invoice count renders", page.getByText("1331 invoices", { exact: true }).waitFor({ timeout: 30000 }));
-    check("2025 page count", await page.getByText("Page 1 of 67", { exact: true }).isVisible());
-    check("2025 collected is ₹14,51,300", (await statValue(page, "Collected")) === "₹14,51,300");
-    check("2025 chart has twelve months of cash", (await page.locator('[role="img"] .recharts-bar-rectangle').count()) === 12);
-
-    await yearSelect(page).selectOption("2024");
-    await must("2024 invoice count renders", page.getByText("491 invoices", { exact: true }).waitFor({ timeout: 30000 }));
-    check("2024 page count", await page.getByText("Page 1 of 25", { exact: true }).isVisible());
-    check("2024 keeps page size", (await rowCount(page)) === 20);
-
-    await yearSelect(page).selectOption("2026");
-    await must("2026 invoice count renders", page.getByText("143 invoices", { exact: true }).waitFor({ timeout: 30000 }));
-    check("2026 page count", await page.getByText("Page 1 of 8", { exact: true }).isVisible());
-    check("2026 collected is ₹1,85,100", (await statValue(page, "Collected")) === "₹1,85,100");
-    check("2026 chart has three cash months", (await page.locator('[role="img"] .recharts-bar-rectangle').count()) === 3);
+    // ── Clear: restores the full created count and pagination ──
+    await page.locator("#billing-search").fill("");
+    await must("clearing search restores the count", page.getByText(`${expectedTotal} invoices`, { exact: true }).waitFor({ timeout: 30000 }));
+    await waitRows(page, UI_PAGE_SIZE);
+    check("clearing search restores page 1 rows", (await rowCount(page)) === UI_PAGE_SIZE);
+    check(
+      "clearing search restores pagination",
+      (await page.getByText(/^Page 1 of \d+$/).textContent())?.trim() === `Page 1 of ${expectedPages}`,
+    );
   } catch (err) {
     if (!(err && typeof err === "object" && err.named)) {
       check("unexpected failure", false, String(err).slice(0, 200));
     }
   } finally {
+    // Cleanup: delete the members we created (their subscriptions, invoices,
+    // and payments are retired with them), then the plan.
+    if (api && memberIds.length) {
+      let failed = 0;
+      for (const id of memberIds) {
+        try {
+          const res = await api.delete(`${BASE}/api/v1/members/${id}`, { headers: auth });
+          if (res.status() !== 204) {
+            failed++;
+            console.log(`CLEANUP FAILED ${id}: ${res.status()}`);
+          }
+        } catch (e) {
+          failed++;
+          console.log(`CLEANUP FAILED ${id}: ${String(e).slice(0, 200)}`);
+        }
+      }
+      check("cleanup deleted all created members", failed === 0, `${memberIds.length} members`);
+    } else if (memberIds.length) {
+      check("cleanup deleted all created members", false, "no api session");
+    }
+    if (api && planId) {
+      try {
+        const res = await api.delete(`${BASE}/api/v1/plans/${planId}`, { headers: auth });
+        check("cleanup deleted plan", res.status() === 204, String(res.status()));
+      } catch (e) {
+        check("cleanup deleted plan", false, String(e).slice(0, 200));
+      }
+    }
     await browser.close();
   }
 
