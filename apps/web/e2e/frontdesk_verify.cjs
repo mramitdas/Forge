@@ -157,10 +157,10 @@ async function main() {
       ? await (
           await api.get(`${BASE}/api/v1/plans/subscriptions?member_id=${uiMemberId}`, { headers: auth })
         ).json()
-      : [];
+      : { items: [] };
     check(
       "add-member with plan succeeds (toast + auto subscription)",
-      uiSubs.length === 1 && uiSubs[0].status === "active",
+      uiSubs.items.length === 1 && uiSubs.items[0].status === "active",
     );
 
     const rosterRow = page.locator("tbody tr", { hasText: `FD UI ${ts}` });
