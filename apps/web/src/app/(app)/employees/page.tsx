@@ -75,7 +75,12 @@ export default function EmployeesPage() {
   const { me } = useAuth();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize("employees");
-  const { employees, total, isLoading, isError } = useEmployeesPage({ page, pageSize });
+  const [search, setSearch] = useState("");
+  const { employees, total, isLoading, isError } = useEmployeesPage({
+    page,
+    pageSize,
+    search,
+  });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const { roles } = useRoles();
   const createEmployee = useCreateEmployee();
@@ -83,7 +88,6 @@ export default function EmployeesPage() {
   const deleteEmployee = useDeleteEmployee();
   const addGuard = useInFlight();
 
-  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<EmployeeOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EmployeeOut | null>(null);
@@ -113,17 +117,6 @@ export default function EmployeesPage() {
     roleId: "",
     is_active: true,
   });
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return employees;
-    return employees.filter(
-      (e) =>
-        e.full_name.toLowerCase().includes(q) ||
-        e.email.toLowerCase().includes(q) ||
-        (e.phone ?? "").toLowerCase().includes(q),
-    );
-  }, [employees, search]);
 
   function openAdd() {
     setForm({
@@ -284,7 +277,7 @@ export default function EmployeesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((emp) => (
+              {employees.map((emp) => (
                 <tr
                   key={emp.id}
                   className="border-b border-line last:border-0 hover:bg-accent-soft/40 transition-colors"
@@ -357,13 +350,13 @@ export default function EmployeesPage() {
               ))}
             </tbody>
           </table>
-          {!isLoading && filtered.length === 0 && (
+          {!isLoading && employees.length === 0 && (
             <EmptyState
               title="No employees found"
               hint={search ? "Try a different search." : "Add your first employee to get started."}
             />
           )}
-          {!isLoading && filtered.length > 0 && (
+          {!isLoading && employees.length > 0 && (
             <div className="flex items-center justify-between border-t border-line px-5 py-3">
               <span className="text-[12px] text-ink-faint">
                 Page {page} of {totalPages}

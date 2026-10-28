@@ -36,7 +36,11 @@ export default function SubscriptionsPage() {
   const [pageSize, setPageSize] = usePageSize("subscriptions");
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
-  const { subs, total, isLoading, isError } = useSubscriptionsPage({ page, pageSize });
+  const { subs, total, isLoading, isError } = useSubscriptionsPage({
+    page,
+    pageSize,
+    status: filter === "all" ? undefined : filter,
+  });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const { members: rawMembers } = useMemberCtx();
   const { plans } = usePlans();
@@ -52,12 +56,13 @@ export default function SubscriptionsPage() {
   const planMap = byId(plans);
   const branchMap = byId(branches);
 
-  const list = useMemo(() => {
-    const sorted = [...subs].sort((a, b) =>
-      a.status === "pending" ? -1 : b.status === "pending" ? 1 : 0,
-    );
-    return filter === "all" ? sorted : sorted.filter((s) => s.status === filter);
-  }, [filter, subs]);
+  const list = useMemo(
+    () =>
+      [...subs].sort((a, b) =>
+        a.status === "pending" ? -1 : b.status === "pending" ? 1 : 0,
+      ),
+    [subs],
+  );
 
   async function activateSub(id: string) {
     const sub = subs.find((s) => s.id === id);

@@ -441,7 +441,11 @@ export function useMemberDetail(id: string): {
   }, [memberQ.data, memberQ.isLoading, memberQ.isError, ctxQ, subsQ.data, subsQ.isLoading, subsQ.isError, timelineQ.data, timelineQ.isLoading, timelineQ.isError, id]);
 }
 
-export function useSubscriptionsPage(params: { page: number; pageSize: number }): {
+export function useSubscriptionsPage(params: {
+  page: number;
+  pageSize: number;
+  status?: string;
+}): {
   subs: Subscription[];
   total: number;
   isLoading: boolean;
@@ -455,6 +459,9 @@ export function useSubscriptionsPage(params: { page: number; pageSize: number })
         page: String(params.page),
         page_size: String(params.pageSize),
       });
+      if (params.status && params.status !== "all") {
+        sp.set("status", params.status);
+      }
       return apiFetch<PageOut<SubscriptionOut>>(`/plans/subscriptions?${sp.toString()}`);
     },
     placeholderData: keepPreviousData,
@@ -1316,7 +1323,11 @@ export function useDeleteRole() {
   });
 }
 
-export function useEmployeesPage(params: { page: number; pageSize: number }): {
+export function useEmployeesPage(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+}): {
   employees: EmployeeOut[];
   total: number;
   isLoading: boolean;
@@ -1330,6 +1341,10 @@ export function useEmployeesPage(params: { page: number; pageSize: number }): {
         page: String(params.page),
         page_size: String(params.pageSize),
       });
+      const q = params.search?.trim();
+      if (q) {
+        sp.set("search", q);
+      }
       return apiFetch<PageOut<EmployeeOut>>(`/employees?${sp.toString()}`);
     },
     placeholderData: keepPreviousData,

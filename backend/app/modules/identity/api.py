@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ForbiddenError
@@ -289,12 +289,20 @@ async def list_employees(
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=1000),
+    search: str | None = Query(None, max_length=256),
 ) -> EmployeePageOut:
-    rows = await session.scalars(
+    stmt = (
         select(User)
         .where(User.tenant_id == actor.tenant_id, User.deleted_at.is_(None))
         .order_by(User.full_name)
     )
+    q = search.strip() if search else ""
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(
+            or_(User.full_name.ilike(like), User.email.ilike(like))
+        )
+    rows = await session.scalars(stmt)
     users = list(rows)
     roles = await identity_svc.employee_roles(
         session, tenant_id=actor.tenant_id, user_ids=[u.id for u in users]

@@ -105,6 +105,9 @@ async def list_subscriptions(
     actor: Annotated[Actor, Depends(require_permission("membership.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     member_id: uuid.UUID | None = None,
+    status: str | None = Query(
+        None, pattern="^(active|pending|frozen|expired|cancelled)$"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=1000),
 ) -> SubscriptionPageOut:
@@ -113,6 +116,7 @@ async def list_subscriptions(
         session,
         tenant_id=actor.tenant_id,
         member_id=member_id,
+        status=status,
         pagination=pagination,
     )
     return SubscriptionPageOut(

@@ -381,6 +381,7 @@ async def list_subscriptions(
     *,
     tenant_id: uuid.UUID,
     member_id: uuid.UUID | None = None,
+    status: str | None = None,
     pagination: OffsetPagination,
 ) -> tuple[list[Subscription], int]:
     stmt = select(Subscription).where(
@@ -389,6 +390,8 @@ async def list_subscriptions(
     )
     if member_id:
         stmt = stmt.where(Subscription.member_id == member_id)
+    if status:
+        stmt = stmt.where(Subscription.status == status)
     total = (
         await session.scalar(select(func.count()).select_from(stmt.subquery()))
         or 0

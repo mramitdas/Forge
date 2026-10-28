@@ -199,6 +199,181 @@ async def test_employees_paged_shape_and_math(client, platform_token):
     ), "pages must not repeat rows"
 
 
+async def test_subscriptions_status_filter_before_pagination(
+    client, platform_token
+):
+    headers, _gym = await _owner_headers(client, platform_token, "pgsubsstat")
+    plan = await client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "name": "Status Plan pgsubsstat",
+            "slug": "status-plan-pgsubsstat",
+            "billing_period": "monthly",
+            "amount_minor": 100000,
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    plan_id = plan.json()["id"]
+    branch = await client.post(
+        "/api/v1/branches", headers=headers, json={"name": "Branch pgsubsstat"}
+    )
+    assert branch.status_code == 201, branch.text
+    branch_id = branch.json()["id"]
+    member_ids: list[dict] = []
+    for i in range(2):
+        m = await client.post(
+            "/api/v1/members",
+            headers=headers,
+            json={
+                "first_name": "Status",
+                "last_name": f"Tester{i}",
+                "email": f"status-{i}-pgsubsstat@example.com",
+                "gender": "Male",
+                "status": "active",
+                "branch_id": branch_id,
+                "plan_id": plan_id,
+            },
+        )
+        assert m.status_code == 201, m.text
+        member_ids.append(m.json()["id"])
+
+    res = await client.get(
+        "/api/v1/plans/subscriptions", headers=headers, params={"page_size": 1000}
+    )
+    assert res.status_code == 200, res.text
+    all_total = res.json()["total"]
+    assert all_total == 2
+    existing_status = res.json()["items"][0]["status"]
+
+    # one explicit fresh pending subscription (queued behind the existing term)
+    pending_sub = await client.post(
+        "/api/v1/plans/subscribe",
+        headers=headers,
+        json={
+            "member_id": member_ids[0],
+            "plan_id": plan_id,
+            "branch_id": branch_id,
+            "start_at": "2031-01-01T00:00:00Z",
+        },
+    )
+    assert pending_sub.status_code == 201, pending_sub.text
+    assert pending_sub.json()["status"] == "pending"
+
+    res = await client.get(
+        "/api/v1/plans/subscriptions", headers=headers, params={"page_size": 1000}
+    )
+    assert res.json()["total"] == 3, res.text
+
+    pending = await client.get(
+        "/api/v1/plans/subscriptions",
+        headers=headers,
+        params={"status": "pending", "page_size": 1000},
+    )
+    assert pending.status_code == 200, pending.text
+    assert pending.json()["total"] == 1
+    assert pending.json()["items"][0]["id"] == pending_sub.json()["id"]
+
+    if existing_status == "active":
+        active = await client.get(
+            "/api/v1/plans/subscriptions",
+            headers=headers,
+            params={"status": "active", "page_size": 1000},
+        )
+        assert active.status_code == 200, active.text
+        assert active.json()["total"] == 2
+        assert all(s["status"] == "active" for s in active.json()["items"])
+    else:
+        assert existing_status in {"cancelled", "frozen", "expired"}
+        other = await client.get(
+            "/api/v1/plans/subscriptions",
+            headers=headers,
+            params={"status": existing_status, "page_size": 1000},
+        )
+        assert other.json()["total"] == 2
+
+    # filtered total survives pagination
+    page1 = await client.get(
+        "/api/v1/plans/subscriptions",
+        headers=headers,
+        params={"status": pending_sub.json()["status"], "page": 1, "page_size": 1},
+    )
+    assert page1.status_code == 200, page1.text
+    assert page1.json()["total"] == 1
+    assert page1.json()["items"][0]["id"] == pending_sub.json()["id"]
+
+    res = await client.get(
+        "/api/v1/plans/subscriptions",
+        headers=headers,
+        params={"status": "nonsense"},
+    )
+    assert res.status_code == 422, res.text
+
+
+async def test_employees_search_before_pagination(client, platform_token):
+    headers, _gym = await _owner_headers(client, platform_token, "pgempsrch")
+    names = ["Anna Marke", "Anna Rivera", "Bob Crest"]
+    emails: list[str] = []
+    for i, name in enumerate(names):
+        email = f"pg-search-{i}-{uuid.uuid4().hex[:6]}@example.com"
+        emails.append(email)
+        created = await client.post(
+            "/api/v1/employees",
+            headers=headers,
+            json={
+                "email": email,
+                "full_name": name,
+                "password": "staff-Pass-123!",
+                "role_ids": [],
+            },
+        )
+        assert created.status_code == 201, created.text
+
+    base = await client.get("/api/v1/employees", headers=headers)
+    assert base.status_code == 200, base.text
+    base_total = base.json()["total"]
+    assert base_total == 3
+
+    found = await client.get(
+        "/api/v1/employees", headers=headers, params={"search": "Anna"}
+    )
+    assert found.status_code == 200, found.text
+    assert found.json()["total"] == 2
+    assert all("Anna" in e["full_name"] for e in found.json()["items"])
+
+    # search composes with pagination
+    paged = await client.get(
+        "/api/v1/employees",
+        headers=headers,
+        params={"search": "Anna", "page": 1, "page_size": 1},
+    )
+    assert paged.status_code == 200, paged.text
+    assert paged.json()["total"] == 2
+    assert len(paged.json()["items"]) == 1
+    page2 = await client.get(
+        "/api/v1/employees",
+        headers=headers,
+        params={"search": "Anna", "page": 2, "page_size": 1},
+    )
+    assert page2.status_code == 200, page2.text
+    assert page2.json()["total"] == 2
+    assert page2.json()["items"][0]["id"] != paged.json()["items"][0]["id"]
+
+    # email match
+    email_hit = await client.get(
+        "/api/v1/employees", headers=headers, params={"search": emails[2]}
+    )
+    assert email_hit.status_code == 200, email_hit.text
+    assert email_hit.json()["total"] == 1
+    assert email_hit.json()["items"][0]["email"] == emails[2]
+
+    miss = await client.get(
+        "/api/v1/employees", headers=headers, params={"search": "zzz-nomatch"}
+    )
+    assert miss.status_code == 200, miss.text
+    assert miss.json()["total"] == 0
+
+
 async def test_notifications_paged_shape_and_math(client, platform_token):
     headers, gym = await _owner_headers(client, platform_token, "pgnotes")
     owner_email = "owner-pgnotes@example.com"
