@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.kernel.pagination import OffsetPagination
 from app.modules.billing.models import Invoice
 from app.modules.identity.models import User
 from app.modules.notifications.models import InAppNotification
@@ -46,16 +47,32 @@ async def create_notification(
     return notification
 
 
+class NotificationPageOut(BaseModel):
+    items: list[NotificationOut]
+    total: int | None
+    page: int
+    page_size: int
+
+
 async def list_for_user(
-    session: AsyncSession, *, user_id: uuid.UUID, limit: int = 50
-) -> list[InAppNotification]:
+    session: AsyncSession, *, user_id: uuid.UUID, pagination: OffsetPagination
+) -> tuple[list[InAppNotification], int]:
+    total = (
+        await session.scalar(
+            select(func.count())
+            .select_from(InAppNotification)
+            .where(InAppNotification.user_id == user_id)
+        )
+        or 0
+    )
     rows = await session.scalars(
         select(InAppNotification)
         .where(InAppNotification.user_id == user_id)
         .order_by(InAppNotification.created_at.desc(), InAppNotification.id.desc())
-        .limit(limit)
+        .offset(pagination.offset())
+        .limit(pagination.page_size)
     )
-    return list(rows)
+    return list(rows), total or 0
 
 
 async def unread_count(session: AsyncSession, *, user_id: uuid.UUID) -> int:

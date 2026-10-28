@@ -38,7 +38,7 @@ class OffsetPagination:
     def __post_init__(self) -> None:
         if self.page < 1:
             self.page = 1
-        if not 1 <= self.page_size <= 100:
+        if not 1 <= self.page_size <= 1000:
             self.page_size = 20
 
     def offset(self) -> int:

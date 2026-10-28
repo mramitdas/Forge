@@ -86,7 +86,7 @@ async def _active_sub(client, token: str, member_id: str) -> dict:
         params={"member_id": member_id},
     )
     assert response.status_code == 200, response.text
-    return next(s for s in response.json() if s["status"] == "active")
+    return next(s for s in response.json()["items"] if s["status"] == "active")
 
 
 async def test_member_create_defaults_is_active(client, gym_acct):
@@ -227,7 +227,7 @@ async def test_member_delete_cascades_to_children(client, gym_acct):
         params={"member_id": member["id"]},
     )
     assert subs.status_code == 200, subs.text
-    assert subs.json() == [], subs.text
+    assert subs.json()["items"] == [], subs.text
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
     assert [i for i in invoices.json()["items"] if i["member_id"] == member["id"]] == []
@@ -586,9 +586,9 @@ async def test_member_create_with_plan_activates_subscription(client, gym_acct):
     )
     assert subs.status_code == 200, subs.text
     body = subs.json()
-    assert len(body) == 1, body
-    assert body[0]["status"] == "active", body
-    assert body[0]["plan_id"] == plan["id"], body
+    assert len(body["items"]) == 1, body
+    assert body["items"][0]["status"] == "active", body
+    assert body["items"][0]["plan_id"] == plan["id"], body
 
 
 async def test_member_create_rejects_disabled_plan(client, gym_acct):

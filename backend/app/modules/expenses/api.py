@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import Actor, get_session_for_actor, require_permission
+from app.kernel.pagination import OffsetPagination
 from app.modules.expenses.service import (
     ExpenseCreate,
     ExpenseOut,
@@ -46,11 +47,15 @@ async def list_expenses_by_year_route(
     actor: Annotated[Actor, Depends(require_permission("expenses.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     year: int | None = Query(None, ge=1970, le=9999),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(1000, ge=1, le=1000),
 ) -> ExpenseYearOut:
+    pagination = OffsetPagination(page=page, page_size=page_size)
     return await list_expenses_by_year(
         session=session,
         tenant_id=actor.tenant_id,
         year=year or datetime.now().year,
+        pagination=pagination,
     )
 
 

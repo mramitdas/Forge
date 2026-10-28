@@ -28,7 +28,7 @@ async def list_invoices(
     q: Annotated[str | None, Query()] = None,
     year: Annotated[int | None, Query(ge=1970, le=9999)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+    page_size: Annotated[int, Query(ge=1, le=1000)] = 50,
 ) -> InvoicePage:
     invoices, total = await billing_svc.list_invoices(
         session,

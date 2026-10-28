@@ -47,6 +47,8 @@ class ExpenseYearOut(BaseModel):
     monthly: dict[str, int]
     total: int
     expenses: list[ExpenseOut]
+    page: int
+    page_size: int
 
 
 async def create_expense(
@@ -85,6 +87,7 @@ async def list_expenses_by_year(
     *,
     tenant_id: uuid.UUID,
     year: int,
+    pagination: OffsetPagination,
 ) -> ExpenseYearOut:
     """Return the monthly breakdown, year total, and the year's expenses."""
     year_match = (
@@ -124,7 +127,8 @@ async def list_expenses_by_year(
             select(Expense)
             .where(*year_match)
             .order_by(Expense.paid_at.desc(), Expense.id.desc())
-            .limit(1000)
+            .offset(pagination.offset())
+            .limit(pagination.page_size)
         )
     ).scalars().all()
 
@@ -132,6 +136,8 @@ async def list_expenses_by_year(
         monthly=monthly,
         total=total,
         expenses=[ExpenseOut.model_validate(row) for row in rows],
+        page=pagination.page,
+        page_size=pagination.page_size,
     )
 
 

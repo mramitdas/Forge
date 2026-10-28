@@ -60,7 +60,7 @@ async def test_payment_notification_uses_invoice_number(
     assert notifications.status_code == 200, notifications.text
     payment_notes = [
         n
-        for n in notifications.json()
+        for n in notifications.json()["items"]
         if n["title"] == "Payment received"
         and n.get("payload", {}).get("invoice_id") == invoice["id"]
     ]

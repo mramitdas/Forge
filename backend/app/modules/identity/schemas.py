@@ -152,3 +152,10 @@ class UpdateRoleRequest(BaseModel):
     description: str | None = None
     permission_codes: list[str] = Field(default_factory=list)
     is_active: bool | None = None
+
+
+class EmployeePageOut(BaseModel):
+    items: list[EmployeeOut]
+    total: int | None
+    page: int
+    page_size: int

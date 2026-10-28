@@ -250,7 +250,7 @@ export function useMemberCtx(): {
   });
   const subsQ = useQuery({
     queryKey: ["subscriptions"],
-    queryFn: () => apiFetch<SubscriptionOut[]>("/plans/subscriptions"),
+    queryFn: () => fetchPaged<SubscriptionOut>("/plans/subscriptions"),
     enabled: can("membership.view"),
   });
   const checkinsQ = useQuery({
@@ -404,7 +404,9 @@ export function useMemberDetail(id: string): {
   const subsQ = useQuery({
     queryKey: ["subscriptions", id],
     queryFn: () =>
-      apiFetch<SubscriptionOut[]>(`/plans/subscriptions?member_id=${id}`),
+      apiFetch<PageOut<SubscriptionOut>>(
+        `/plans/subscriptions?member_id=${id}&page_size=1000`,
+      ),
     enabled: !!id && can("membership.view"),
   });
   const timelineQ = useQuery({
@@ -418,7 +420,7 @@ export function useMemberDetail(id: string): {
     const invoices = ctxQ.ctx.invoices
       .filter((i) => i.member_id === id)
       .map(toUiInvoice);
-    const subs = (subsQ.data ?? []).map(toUiSubscription);
+    const subs = (subsQ.data?.items ?? []).map(toUiSubscription);
     return {
       member: m ? toUiMember(m, ctxQ.ctx) : null,
       subs,
@@ -445,7 +447,7 @@ export function useSubscriptionsData(): {
 } {
   const q = useQuery({
     queryKey: ["subscriptions"],
-    queryFn: () => apiFetch<SubscriptionOut[]>("/plans/subscriptions"),
+    queryFn: () => fetchPaged<SubscriptionOut>("/plans/subscriptions"),
   });
   return useMemo(
     () => ({ subs: (q.data ?? []).map(toUiSubscription), isLoading: q.isLoading, isError: q.isError }),
@@ -663,7 +665,7 @@ export function useNotificationsData(): {
   const enabled = can("notifications.view");
   const q = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => apiFetch<NotificationOut[]>("/notifications"),
+    queryFn: () => fetchPaged<NotificationOut>("/notifications"),
     staleTime: 0,
     enabled,
   });
@@ -1247,7 +1249,7 @@ export function useEmployees(): {
   const can = useCan();
   const q = useQuery({
     queryKey: ["employees"],
-    queryFn: () => apiFetch<EmployeeOut[]>("/employees"),
+    queryFn: () => fetchPaged<EmployeeOut>("/employees"),
     enabled: can("identity.view"),
     retry: false,
   });

@@ -40,7 +40,7 @@ async def list_attendance(
     actor: Annotated[Actor, Depends(require_permission("attendance.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     member_id: uuid.UUID | None = None,
     branch_id: uuid.UUID | None = None,
     result: str | None = None,

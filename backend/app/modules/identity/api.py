@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ from app.modules.identity.schemas import (
     CreateRoleRequest,
     EmployeeCreatedOut,
     EmployeeOut,
+    EmployeePageOut,
     EmployeeUpdateRequest,
     LoginRequest,
     LogoutRequest,
@@ -282,11 +283,13 @@ async def create_employee(
     )
 
 
-@employees_router.get("", response_model=list[EmployeeOut])
+@employees_router.get("", response_model=EmployeePageOut)
 async def list_employees(
     actor: Annotated[Actor, Depends(require_permission("identity.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
-) -> list[EmployeeOut]:
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=1000),
+) -> EmployeePageOut:
     rows = await session.scalars(
         select(User)
         .where(User.tenant_id == actor.tenant_id, User.deleted_at.is_(None))
@@ -308,7 +311,14 @@ async def list_employees(
                 role_names=[r.name for r in role_list],
             )
         )
-    return result
+    total = len(result)
+    start = (page - 1) * page_size
+    return EmployeePageOut(
+        items=result[start : start + page_size],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @employees_router.patch("/{user_id}", response_model=EmployeeOut)
