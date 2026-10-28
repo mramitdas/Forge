@@ -29,6 +29,8 @@ import {
 } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { COUNTRY_CODES } from "@/lib/countries";
+import { PageSizeSelect } from "@/components/page-size-select";
+import { usePageSize } from "@/lib/use-page-size";
 import { useInFlight } from "@/lib/inflight";
 
 function CountryCodeSelect({
@@ -57,14 +59,13 @@ const statusParam: Record<(typeof filters)[number], string | undefined> = {
   frozen: "frozen",
 };
 
-const PAGE_SIZE = 10;
-
 export default function MembersPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<(typeof filters)[number]>("All");
   const [branch, setBranch] = useState("all");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("members");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
@@ -74,7 +75,7 @@ export default function MembersPage() {
   const { plans } = usePlans();
   const { members, total, isLoading, isError } = useMembersPage({
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     search: search.trim() || undefined,
     status: statusParam[status],
     branchId: branch,
@@ -114,7 +115,7 @@ export default function MembersPage() {
     status: "active",
   });
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   async function addMember(e: React.FormEvent) {
     e.preventDefault();
@@ -365,12 +366,16 @@ export default function MembersPage() {
           {!isLoading && members.length === 0 && (
             <EmptyState title="No members found" hint="Try a different search or filter." />
           )}
-          {totalPages > 1 && (
+          {!isLoading && members.length > 0 && (
             <div className="flex items-center justify-between border-t border-line px-5 py-3">
               <span className="text-[12px] text-ink-faint">
                 Page {page} of {totalPages}
               </span>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <PageSizeSelect
+                  value={pageSize}
+                  onChange={(n) => { setPageSize(n); setPage(1); }}
+                />
                 <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                   Previous
                 </Button>

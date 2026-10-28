@@ -84,7 +84,7 @@ async def test_create_employee_returns_temporary_password(client, gym_a):
         # The role assignment persists even though the create body omits it.
         listing = await client.get("/api/v1/employees", headers=oheaders)
         assert listing.status_code == 200, listing.text
-        row = next(r for r in listing.json() if r["id"] == emp_id)
+        row = next(r for r in listing.json()["items"] if r["id"] == emp_id)
         assert row["role_ids"] == [role["id"]]
         assert row["role_names"] == [role["name"]]
         assert created["email"] == email.lower()
@@ -134,7 +134,7 @@ async def test_list_excludes_gym_owner_and_soft_deleted(client, gym_a):
         listing = await client.get("/api/v1/employees", headers=oheaders)
         assert listing.status_code == 200, listing.text
         rows = listing.json()
-        ids = [row["id"] for row in rows]
+        ids = [row["id"] for row in rows["items"]]
         assert emp_id in ids
         # The gym owner is never listed as an employee.
         assert owner_id not in ids
@@ -145,7 +145,7 @@ async def test_list_excludes_gym_owner_and_soft_deleted(client, gym_a):
         assert deleted.status_code == 204, deleted.text
         listing_after = await client.get("/api/v1/employees", headers=oheaders)
         assert listing_after.status_code == 200, listing_after.text
-        ids_after = [row["id"] for row in listing_after.json()]
+        ids_after = [row["id"] for row in listing_after.json()["items"]]
         assert emp_id not in ids_after
     finally:
         await client.delete(f"/api/v1/employees/{emp_id}", headers=oheaders)
@@ -193,7 +193,7 @@ async def test_delete_soft_deletes(client, gym_a):
     assert deleted.status_code == 204, deleted.text
     listing = await client.get("/api/v1/employees", headers=oheaders)
     assert listing.status_code == 200, listing.text
-    assert emp_id not in [row["id"] for row in listing.json()]
+    assert emp_id not in [row["id"] for row in listing.json()["items"]]
     patched = await client.patch(
         f"/api/v1/employees/{emp_id}",
         headers=oheaders,
@@ -234,7 +234,7 @@ async def test_assign_role_and_cross_tenant_mismatch(client, gym_a, gym_b):
         assert assigned.status_code == 204, assigned.text
         listing = await client.get("/api/v1/employees", headers=oheaders_a)
         assert listing.status_code == 200, listing.text
-        row = next(r for r in listing.json() if r["id"] == emp_id)
+        row = next(r for r in listing.json()["items"] if r["id"] == emp_id)
         assert role_a["id"] in row["role_ids"]
 
         # Cross-tenant: a gym_a owner cannot attach a gym_b role to a

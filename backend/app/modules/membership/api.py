@@ -3,11 +3,12 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import Actor, get_session_for_actor, require_permission
+from app.kernel.pagination import OffsetPagination
 from app.modules.membership import service as membership_svc
 from app.modules.membership.schemas import (
     PlanCreate,
@@ -16,6 +17,7 @@ from app.modules.membership.schemas import (
     RenewBody,
     SubscriptionCreate,
     SubscriptionOut,
+    SubscriptionPageOut,
 )
 
 router = APIRouter(prefix="/plans", tags=["membership"])
@@ -98,16 +100,31 @@ async def subscribe(
     return SubscriptionOut.model_validate(sub)
 
 
-@router.get("/subscriptions", response_model=list[SubscriptionOut])
+@router.get("/subscriptions", response_model=SubscriptionPageOut)
 async def list_subscriptions(
     actor: Annotated[Actor, Depends(require_permission("membership.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     member_id: uuid.UUID | None = None,
-) -> list[SubscriptionOut]:
-    subs = await membership_svc.list_subscriptions(
-        session, tenant_id=actor.tenant_id, member_id=member_id
+    status: str | None = Query(
+        None, pattern="^(active|pending|frozen|expired|cancelled)$"
+    ),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=1000),
+) -> SubscriptionPageOut:
+    pagination = OffsetPagination(page=page, page_size=page_size)
+    subs, total = await membership_svc.list_subscriptions(
+        session,
+        tenant_id=actor.tenant_id,
+        member_id=member_id,
+        status=status,
+        pagination=pagination,
     )
-    return [SubscriptionOut.model_validate(s) for s in subs]
+    return SubscriptionPageOut(
+        items=[SubscriptionOut.model_validate(s) for s in subs],
+        total=total,
+        page=pagination.page,
+        page_size=pagination.page_size,
+    )
 
 
 @router.post("/subscriptions/{subscription_id}/activate", response_model=SubscriptionOut)

@@ -3,11 +3,12 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.kernel.events import bus
+from app.kernel.pagination import OffsetPagination
 from app.modules.members.models import Member
 from app.modules.membership.models import (
     MembershipPlan,
@@ -380,14 +381,26 @@ async def list_subscriptions(
     *,
     tenant_id: uuid.UUID,
     member_id: uuid.UUID | None = None,
-) -> list[Subscription]:
+    status: str | None = None,
+    pagination: OffsetPagination,
+) -> tuple[list[Subscription], int]:
     stmt = select(Subscription).where(
         Subscription.tenant_id == tenant_id,
         Subscription.deleted_at.is_(None),
     )
     if member_id:
         stmt = stmt.where(Subscription.member_id == member_id)
+    if status:
+        stmt = stmt.where(Subscription.status == status)
+    total = (
+        await session.scalar(select(func.count()).select_from(stmt.subquery()))
+        or 0
+    )
     rows = (
-        await session.execute(stmt.order_by(Subscription.start_at.desc(), Subscription.id.desc()))
+        await session.execute(
+            stmt.order_by(Subscription.start_at.desc(), Subscription.id.desc())
+            .offset(pagination.offset())
+            .limit(pagination.page_size)
+        )
     ).scalars().all()
-    return list(rows)
+    return list(rows), total or 0

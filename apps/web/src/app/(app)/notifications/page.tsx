@@ -5,8 +5,10 @@ import { Badge, Button, Card, EmptyState, Segmented, Toast } from "@/components/
 import { Async, Count } from "@/components/skeleton";
 import { NotificationListSkeleton } from "@/components/skeletons";
 import { type Notification } from "@/lib/mock";
-import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationsData } from "@/lib/hooks";
+import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationsPage } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { PageSizeSelect } from "@/components/page-size-select";
+import { usePageSize } from "@/lib/use-page-size";
 
 const typeIcon: Record<Notification["type"], React.ReactNode> = {
   payment: (
@@ -45,11 +47,14 @@ const typeIcon: Record<Notification["type"], React.ReactNode> = {
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("notifications");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   function notify(message: string, type: "success" | "error" = "success") {
     setToast({ message, type });
   }
-  const { notifications, unread, isLoading, isError } = useNotificationsData();
+  const { notifications, total, unread, isLoading, isError } = useNotificationsPage({ page, pageSize });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const markRead = useMarkNotificationRead();
   const markAllMutation = useMarkAllNotificationsRead();
   const can = useCan();
@@ -100,7 +105,7 @@ export default function NotificationsPage() {
             },
           ]}
           value={filter}
-          onChange={setFilter}
+          onChange={(v) => { setFilter(v as "all" | "unread"); setPage(1); }}
         />
         {can("notifications.view") && (
           <Button variant="ghost" size="sm" onClick={markAll} disabled={unread === 0 || isMarkingAll}>
@@ -135,10 +140,24 @@ export default function NotificationsPage() {
         </Card>
       </Async>
 
-      {notifications.length === 50 && (
-        <p className="text-center text-[12px] text-ink-faint">
-          Showing the latest 50 notifications.
-        </p>
+      {list.length > 0 && (
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[12px] text-ink-faint">
+            Page {page} of {totalPages}
+          </span>
+          <div className="flex items-center gap-2">
+            <PageSizeSelect
+              value={pageSize}
+              onChange={(n) => { setPageSize(n); setPage(1); }}
+            />
+            <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
+            <Button variant="secondary" size="xs" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
+          </div>
+        </div>
       )}
 
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}

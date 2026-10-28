@@ -19,12 +19,14 @@ import { COUNTRY_CODES } from "@/lib/countries";
 import {
   useCreateEmployee,
   useDeleteEmployee,
-  useEmployees,
+  useEmployeesPage,
   useRoles,
   useUpdateEmployee,
 } from "@/lib/hooks";
 import { ApiError } from "@/lib/api";
 import { useCan } from "@/lib/permissions";
+import { PageSizeSelect } from "@/components/page-size-select";
+import { usePageSize } from "@/lib/use-page-size";
 import { useAuth } from "@/lib/auth";
 import { useInFlight } from "@/lib/inflight";
 import type { EmployeeCreatedOut, EmployeeOut } from "@/lib/types";
@@ -71,14 +73,21 @@ function splitPhone(raw: string | null): { code: string; number: string } {
 export default function EmployeesPage() {
   const can = useCan();
   const { me } = useAuth();
-  const { employees, isLoading, isError } = useEmployees();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("employees");
+  const [search, setSearch] = useState("");
+  const { employees, total, isLoading, isError } = useEmployeesPage({
+    page,
+    pageSize,
+    search,
+  });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const { roles } = useRoles();
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();
   const addGuard = useInFlight();
 
-  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<EmployeeOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EmployeeOut | null>(null);
@@ -108,17 +117,6 @@ export default function EmployeesPage() {
     roleId: "",
     is_active: true,
   });
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return employees;
-    return employees.filter(
-      (e) =>
-        e.full_name.toLowerCase().includes(q) ||
-        e.email.toLowerCase().includes(q) ||
-        (e.phone ?? "").toLowerCase().includes(q),
-    );
-  }, [employees, search]);
 
   function openAdd() {
     setForm({
@@ -228,7 +226,7 @@ export default function EmployeesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[13px] text-ink-faint">
           <Count loading={isLoading} width="inline-block h-3 w-16">
-            {employees.length} {employees.length === 1 ? "employee" : "employees"}
+            {total} {total === 1 ? "employee" : "employees"}
           </Count>
         </p>
         {can("identity.manage") && (
@@ -260,7 +258,7 @@ export default function EmployeesPage() {
           aria-label="Search name, email, phone"
           placeholder="Search name, email, phone"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="pl-9"
         />
       </div>
@@ -279,7 +277,7 @@ export default function EmployeesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((emp) => (
+              {employees.map((emp) => (
                 <tr
                   key={emp.id}
                   className="border-b border-line last:border-0 hover:bg-accent-soft/40 transition-colors"
@@ -352,11 +350,30 @@ export default function EmployeesPage() {
               ))}
             </tbody>
           </table>
-          {!isLoading && filtered.length === 0 && (
+          {!isLoading && employees.length === 0 && (
             <EmptyState
               title="No employees found"
               hint={search ? "Try a different search." : "Add your first employee to get started."}
             />
+          )}
+          {!isLoading && employees.length > 0 && (
+            <div className="flex items-center justify-between border-t border-line px-5 py-3">
+              <span className="text-[12px] text-ink-faint">
+                Page {page} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <PageSizeSelect
+                  value={pageSize}
+                  onChange={(n) => { setPageSize(n); setPage(1); }}
+                />
+                <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <Button variant="secondary" size="xs" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
           )}
         </Card>
       </Async>

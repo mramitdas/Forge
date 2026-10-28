@@ -56,6 +56,10 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   page.setDefaultTimeout(60000);
+  // The expenses table counts the year's FULL row list; the year API has no
+  // row-count field, so pin the page size to the 1000 cap to guarantee the
+  // whole year is always on one page and the expected-row math below holds.
+  await page.addInitScript(() => localStorage.setItem("forge.page-size.expenses", "1000"));
   let api = null;
   let auth = null;
   const createdIds = [];

@@ -1,15 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Badge, Button, Card, Input, Modal, Select, Textarea, Toast } from "@/components/ui";
 import { Async, Count, Skeleton, SkeletonText } from "@/components/skeleton";
 import { TableSkeleton } from "@/components/skeletons";
 import { MonthlyChart } from "@/components/monthly-chart";
 import { YearSelector } from "@/components/year-selector";
+import { PageSizeSelect } from "@/components/page-size-select";
+import { usePageSize } from "@/lib/use-page-size";
 import { inr } from "@/lib/mock";
-import { apiFetch } from "@/lib/api";
-import { useCreateExpense, useDeleteExpense, useUpdateExpense } from "@/lib/hooks";
+import { useCreateExpense, useDeleteExpense, useExpensesYearPage, useUpdateExpense } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
 import type { ExpenseOut } from "@/lib/types";
@@ -17,12 +17,6 @@ import type { ExpenseOut } from "@/lib/types";
 const CATEGORIES = ["Rent", "Salary", "Electricity", "Water", "Internet", "Maintenance", "Marketing", "Other"];
 const METHODS = ["cash", "upi", "card", "netbanking", "wallet", "other"];
 const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-
-interface YearExpenses {
-  monthly: Record<string, number>;
-  total: number;
-  expenses: ExpenseOut[];
-}
 
 function SummaryCards({
   total,
@@ -64,15 +58,6 @@ function SummaryCards({
   );
 }
 
-function useYearExpenses(year: number, enabled: boolean) {
-  return useQuery({
-    queryKey: ["expenses", "year", year],
-    queryFn: () => apiFetch<YearExpenses>(`/expenses?year=${year}`),
-    enabled,
-    placeholderData: keepPreviousData,
-  });
-}
-
 export default function ExpensesPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ExpenseOut | null>(null);
@@ -85,6 +70,8 @@ export default function ExpensesPage() {
     paidAt: new Date().toISOString().slice(0, 10),
   });
   const [year, setYear] = useState(new Date().getFullYear());
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("expenses");
 
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
@@ -94,12 +81,14 @@ export default function ExpensesPage() {
   const editGuard = useInFlight();
   const deleteGuard = useInFlight();
 
-  const yearExpenses = useYearExpenses(year, can("expenses.view"));
-  const expenses = yearExpenses.data?.expenses ?? [];
-  const total = yearExpenses.data?.total ?? 0;
-  const monthly = yearExpenses.data?.monthly ?? {};
-  const isLoading = yearExpenses.isLoading;
-  const isError = yearExpenses.isError;
+  const yearPage = useExpensesYearPage({ year, page, pageSize });
+  const expenses = yearPage.expenses;
+  const total = yearPage.total;
+  const monthly = yearPage.monthly;
+  const isLoading = yearPage.isLoading;
+  const isError = yearPage.isError;
+  const hasFullPage = expenses.length === pageSize && expenses.length > 0;
+  const totalPages = hasFullPage ? page + 1 : page;
 
   const sorted = useMemo(
     () => [...expenses].sort((a, b) => (a.paid_at < b.paid_at ? 1 : -1)),
@@ -207,7 +196,7 @@ export default function ExpensesPage() {
               {expenses.length} {expenses.length === 1 ? "expense" : "expenses"}
             </Count>
           </p>
-          <YearSelector id="expense-year" year={year} onYearChange={setYear} ariaLabel="Select expense year" />
+          <YearSelector id="expense-year" year={year} onYearChange={(y) => { setYear(y); setPage(1); }} ariaLabel="Select expense year" />
         </div>
         {can("expenses.manage") && (
           <Button onClick={() => setAdding(true)}>
@@ -280,6 +269,25 @@ export default function ExpensesPage() {
               ))}
             </tbody>
           </table>
+          {!isLoading && sorted.length > 0 && (
+            <div className="flex items-center justify-between border-t border-line px-5 py-3">
+              <span className="text-[12px] text-ink-faint">
+                Page {page} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <PageSizeSelect
+                  value={pageSize}
+                  onChange={(n) => { setPageSize(n); setPage(1); }}
+                />
+                <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <Button variant="secondary" size="xs" disabled={page >= totalPages || !hasFullPage} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </Async>
 

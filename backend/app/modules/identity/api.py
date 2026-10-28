@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ForbiddenError
@@ -27,6 +27,7 @@ from app.modules.identity.schemas import (
     CreateRoleRequest,
     EmployeeCreatedOut,
     EmployeeOut,
+    EmployeePageOut,
     EmployeeUpdateRequest,
     LoginRequest,
     LogoutRequest,
@@ -282,16 +283,26 @@ async def create_employee(
     )
 
 
-@employees_router.get("", response_model=list[EmployeeOut])
+@employees_router.get("", response_model=EmployeePageOut)
 async def list_employees(
     actor: Annotated[Actor, Depends(require_permission("identity.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
-) -> list[EmployeeOut]:
-    rows = await session.scalars(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=1000),
+    search: str | None = Query(None, max_length=256),
+) -> EmployeePageOut:
+    stmt = (
         select(User)
         .where(User.tenant_id == actor.tenant_id, User.deleted_at.is_(None))
         .order_by(User.full_name)
     )
+    q = search.strip() if search else ""
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(
+            or_(User.full_name.ilike(like), User.email.ilike(like))
+        )
+    rows = await session.scalars(stmt)
     users = list(rows)
     roles = await identity_svc.employee_roles(
         session, tenant_id=actor.tenant_id, user_ids=[u.id for u in users]
@@ -308,7 +319,14 @@ async def list_employees(
                 role_names=[r.name for r in role_list],
             )
         )
-    return result
+    total = len(result)
+    start = (page - 1) * page_size
+    return EmployeePageOut(
+        items=result[start : start + page_size],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @employees_router.patch("/{user_id}", response_model=EmployeeOut)
