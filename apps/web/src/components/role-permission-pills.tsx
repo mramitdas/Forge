@@ -15,7 +15,7 @@ import type { PermissionOut } from "@/lib/types";
 
 const MODULES = [
   "attendance", "billing", "expenses", "identity", "members",
-  "membership", "notifications", "reports", "tenancy",
+  "membership", "notifications", "tenancy",
 ] as const;
 
 const ROW = "flex items-center gap-2";

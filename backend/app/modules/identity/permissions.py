@@ -82,13 +82,6 @@ PERMISSIONS: list[dict[str, str]] = [
         "description": "Record check-ins and manage attendance",
     },
     {"code": "notifications.view", "module": "notifications", "description": "View notifications"},
-    {
-        "code": "notifications.manage",
-        "module": "notifications",
-        "description": "Manage notifications",
-    },
-    {"code": "reports.view", "module": "reports", "description": "View reports and dashboards"},
-    {"code": "reports.manage", "module": "reports", "description": "Manage report settings"},
     {"code": "identity.view", "module": "identity", "description": "View employees"},
     {
         "code": "identity.manage",

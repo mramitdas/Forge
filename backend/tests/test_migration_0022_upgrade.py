@@ -16,7 +16,9 @@ Seeded legacy state at revision 0021:
 Asserts after `alembic upgrade head`:
 - legacy granular codes are retired from the catalog and role permissions,
 - non-owner staff role templates (and their assignments) are removed,
-- Gym Owner holds exactly the 18 two-tier codes (9 modules x view/manage).
+- Gym Owner holds exactly the 15 two-tier gym codes,
+- the dead codes retired by 0023 (`reports.view`, `reports.manage`,
+  `notifications.manage`) are gone from the catalog and from role grants.
 """
 
 from __future__ import annotations
@@ -58,6 +60,14 @@ LEGACY_CODES = (
 )
 
 _LEGACY_CODE_NAMES = tuple(code for code, _ in LEGACY_CODES)
+
+DEAD_CODES_0023 = ("reports.view", "reports.manage", "notifications.manage")
+
+_DEAD_MODULE_DESCRIPTIONS = {
+    "reports.view": ("reports", "View reports and dashboards"),
+    "reports.manage": ("reports", "Manage report settings"),
+    "notifications.manage": ("notifications", "Manage notifications"),
+}
 
 _GYM_CODE_PREDICATE = lambda p: not p["code"].startswith("platform.")  # noqa: E731
 _EXPECTED_GYM_CODES = frozenset(p["code"] for p in PERMISSIONS if _GYM_CODE_PREDICATE(p))
@@ -279,7 +289,7 @@ def test_0022_upgrade_on_populated_legacy_database():
         assert code not in owner_codes, f"legacy grant {code} survived on Gym Owner"
 
     assert catalog == _EXPECTED_GYM_CODES | _EXPECTED_PLATFORM_CODES, (
-        "permission catalog drifted from the 9x2 gym + platform two-tier set"
+        "permission catalog drifted from the two-tier gym + platform set"
     )
 
     # Non-owner gym staff role templates removed (role + its assignments).
@@ -287,9 +297,128 @@ def test_0022_upgrade_on_populated_legacy_database():
     assert not front_desk_exists
     assert not assignment_exists
 
-    # Gym Owner rebuilt holding exactly the 18 two-tier codes.
-    assert len(_EXPECTED_GYM_CODES) == 18
+    # Gym Owner rebuilt holding exactly the 15 two-tier gym codes.
+    assert len(_EXPECTED_GYM_CODES) == 15
     assert owner_codes == _EXPECTED_GYM_CODES
+    for code in DEAD_CODES_0023:
+        assert code not in catalog
+        assert code not in owner_codes
+
+
+def test_migration_0023_removes_dead_codes_and_role_grants():
+    temp_db = f"gym_erp_migtest_{time.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    temp_url = f"postgresql+asyncpg://{_DB_USER}:{_DB_PASSWORD}@{_DB_HOST}:{_DB_PORT}/{temp_db}"
+
+    create = _connect_autocommit("postgres")
+    try:
+        with create.cursor() as cur:
+            cur.execute(f'CREATE DATABASE "{temp_db}"')
+    finally:
+        create.close()
+
+    try:
+        # Build the real schema at the 0022 revision (full 18-code gym catalog).
+        to_0022 = _run_alembic(temp_url, "upgrade", "0022_two_tier_permissions")
+        assert to_0022.returncode == 0, (
+            f"upgrade to 0022 failed:\n{to_0022.stderr}\n{to_0022.stdout}"
+        )
+
+        dead_role_id = _seed_dead_code_grants(temp_db)
+
+        # ...then apply the migration under test.
+        to_head = _run_alembic(temp_url, "upgrade", "head")
+        assert to_head.returncode == 0, f"upgrade head failed:\n{to_head.stderr}\n{to_head.stdout}"
+        assert "0023_retire_dead_codes" in to_head.stderr, to_head.stderr
+
+        conn = _connect(temp_db, _DB_USER, _DB_PASSWORD)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT set_config('app.platform_scope', 'on', false)")
+
+                cur.execute("SELECT code FROM permission_catalog")
+                catalog = {row[0] for row in cur.fetchall()}
+
+                cur.execute(
+                    """
+                    SELECT rp.permission_code
+                    FROM role_permissions rp
+                    JOIN roles r ON r.id = rp.role_id
+                    WHERE r.id = %s
+                    """,
+                    (dead_role_id,),
+                )
+                dead_role_codes = {row[0] for row in cur.fetchall()}
+
+                cur.execute(
+                    """
+                    SELECT rp.permission_code
+                    FROM role_permissions rp
+                    JOIN roles r ON r.id = rp.role_id
+                    WHERE r.name = 'Gym Owner' AND r.deleted_at IS NULL
+                    """
+                )
+                owner_codes = {row[0] for row in cur.fetchall()}
+        finally:
+            conn.close()
+    finally:
+        _drop_database(temp_db)
+
+    assert catalog == _EXPECTED_GYM_CODES | _EXPECTED_PLATFORM_CODES
+    assert len(_EXPECTED_GYM_CODES) == 15
+    for code in DEAD_CODES_0023:
+        assert code not in catalog, f"dead code {code} survived 0023 in catalog"
+        assert code not in dead_role_codes, f"dead grant {code} survived on seeded role"
+        assert code not in owner_codes, f"dead grant {code} survived on Gym Owner"
+
+
+def _seed_dead_code_grants(dbname: str) -> uuid.UUID:
+    """At the 0022 head, re-add the 3 soon-to-be-dead catalog codes and a gym
+    role holding them; return the role id."""
+    conn = _connect(dbname, _DB_USER, _DB_PASSWORD)
+    try:
+        conn.autocommit = False
+        with conn.cursor() as cur:
+            cur.execute("SELECT set_config('app.platform_scope', 'on', false)")
+
+            for code in DEAD_CODES_0023:
+                module, description = _DEAD_MODULE_DESCRIPTIONS[code]
+                cur.execute(
+                    """
+                    INSERT INTO permission_catalog (code, module, description)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (code) DO NOTHING
+                    """,
+                    (code, module, description),
+                )
+
+            role_id = uuid.uuid4()
+            cur.execute(
+                """
+                INSERT INTO roles
+                    (id, tenant_id, name, description, is_system, is_editable,
+                     is_active, version)
+                VALUES (%s, %s, %s, %s, false, true, true, 1)
+                """,
+                (
+                    role_id,
+                    _GYM_TENANT_ID,
+                    "Dead Codes Holder",
+                    "Seeded role holding codes retired by 0023",
+                ),
+            )
+            for code in DEAD_CODES_0023:
+                cur.execute(
+                    """
+                    INSERT INTO role_permissions
+                        (id, role_id, permission_code, branch_scope)
+                    VALUES (%s, %s, %s, 'all')
+                    """,
+                    (uuid.uuid4(), role_id, code),
+                )
+        conn.commit()
+        return role_id
+    finally:
+        conn.close()
 
 
 @pytest.fixture(autouse=True)

@@ -5,6 +5,7 @@ import {
   CAPABILITIES,
   capabilityIsAvailable,
   manageIsOn,
+  MODULE_LABELS,
   moduleLabel,
   toggleManage,
   toggleView,
@@ -13,6 +14,14 @@ import {
 
 const MEMBERS = ["members.manage", "members.view"];
 const BILLING = ["billing.manage", "billing.view"];
+
+test("catalog shape: notifications is view-only, reports is gone", () => {
+  assert.ok(!("reports" in MODULE_LABELS));
+  assert.ok(
+    MODULE_LABELS["notifications"] !== undefined,
+    "notifications module label kept",
+  );
+});
 
 test("every module exposes exactly view and manage", () => {
   assert.deepEqual([...CAPABILITIES], ["view", "manage"]);
@@ -46,7 +55,7 @@ test("view is locked while manage is on", () => {
 });
 
 test("modules missing a capability report it unavailable", () => {
-  assert.equal(capabilityIsAvailable(["reports.view"], "manage"), false);
+  assert.equal(capabilityIsAvailable(["tenancy.view"], "manage"), false);
   assert.equal(capabilityIsAvailable(["members.view"], "manage"), false);
   assert.equal(capabilityIsAvailable(MEMBERS, "view"), true);
 });

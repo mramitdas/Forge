@@ -530,12 +530,19 @@ async def test_permission_matrix_notifications(client, gym_a):
     finally:
         await client.delete(f"/api/v1/employees/{emp_id}", headers=o)
 
-    headers, _role_id, emp_id, o = await make_employee(client, gym_a, ["notifications.manage"])
-    try:
-        read = await client.get("/api/v1/notifications", headers=headers)
-        assert read.status_code == 200, read.text  # manage implies view
-    finally:
-        await client.delete(f"/api/v1/employees/{emp_id}", headers=o)
+    # notifications.manage was retired: creating a role with it must 422.
+    owner = await login(client, _OWNER_EMAIL, _OWNER_PASSWORD)
+    oheaders = _headers(owner["access_token"])
+    dead_role = await client.post(
+        "/api/v1/permissions/roles",
+        headers=oheaders,
+        json={
+            "name": f"Matrix {_next('role')}",
+            "permission_codes": ["notifications.manage"],
+            "branch_scope": "all",
+        },
+    )
+    assert dead_role.status_code == 422, dead_role.text
 
 
 async def test_permission_matrix_identity(client, gym_a):
