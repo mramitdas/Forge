@@ -37,7 +37,7 @@ from app.modules.billing.models import Invoice, InvoiceLine, Payment
 from app.modules.billing.service import _next_invoice_number
 from app.modules.expenses.models import Expense
 from app.modules.identity.models import Credential, Role, User
-from app.modules.identity.service import assign_role
+from app.modules.identity.service import assign_role, create_role
 from app.modules.members.models import Member
 from app.modules.membership.models import Subscription
 from app.modules.membership.service import create_plan
@@ -47,7 +47,32 @@ from sqlalchemy import select
 
 GENDER_MAP = {"M": "Male", "F": "Female"}
 METHOD_MAP = {"cash": "cash", "online": "upi"}
-STAFF_ROLE_MAP = {"sub-owner": "Branch Manager", "staff": "Receptionist"}
+# Two-tier catalog (migration 0022): manage implies view, so .manage roles
+# omit the matching .view code.
+STAFF_ROLE_SPECS = {
+    "Sub Owner": {
+        "description": "Operating manager (imported from GMS sub-owner)",
+        "codes": [
+            "members.manage",
+            "membership.manage",
+            "billing.manage",
+            "expenses.manage",
+            "attendance.manage",
+            "tenancy.manage",
+            "identity.view",
+        ],
+    },
+    "Staff": {
+        "description": "Front-desk staff (imported from GMS trainer/receptionist)",
+        "codes": [
+            "members.view",
+            "membership.view",
+            "billing.view",
+            "attendance.view",
+            "expenses.view",
+        ],
+    },
+}
 NOW = datetime.now(UTC)
 
 
@@ -321,14 +346,39 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
                     f"{pay_count} payments"
                 )
 
-                # ── 6. Staff: app_management + app_trainer → role templates ──
+                # ── 6. Staff: app_management + app_trainer → two-tier roles ──
+                async def _ensure_role(name: str) -> uuid.UUID:
+                    role_id = await session.scalar(
+                        select(Role.id).where(
+                            Role.tenant_id == gym_id,
+                            Role.name == name,
+                            Role.deleted_at.is_(None),
+                        )
+                    )
+                    if role_id is not None:
+                        return role_id
+                    spec = STAFF_ROLE_SPECS[name]
+                    role = await create_role(
+                        session,
+                        tenant_id=gym_id,
+                        name=name,
+                        description=spec["description"],
+                        permission_codes=spec["codes"],
+                        branch_scope="all",
+                    )
+                    print(f"created role {name!r} ({len(spec['codes'])} codes)")
+                    return role.id
+
+                staff_role_ids = {
+                    name: await _ensure_role(name) for name in STAFF_ROLE_SPECS
+                }
                 staff_rows = [
                     (
                         managers,
-                        lambda r: STAFF_ROLE_MAP.get(r["role"], "Receptionist"),
+                        lambda r: "Sub Owner" if r["role"] == "sub-owner" else "Staff",
                         "management",
                     ),
-                    (trainers, lambda r: "Trainer", "trainer"),
+                    (trainers, lambda r: "Staff", "trainer"),
                 ]
                 created_staff = 0
                 synthesized = []
@@ -343,16 +393,12 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
                         if existing is not None:
                             continue
                         role_name = role_for(r)
-                        role_id = await session.scalar(
-                            select(Role.id).where(
-                                Role.tenant_id == gym_id,
-                                Role.name == role_name,
-                                Role.deleted_at.is_(None),
+                        role_id = staff_role_ids.get(role_name)
+                        if role_id is None:  # pragma: no cover — roles pre-created above
+                            raise SystemExit(
+                                f"role {role_name!r} could not be resolved for {email}; "
+                                "aborting rather than silently skipping staff"
                             )
-                        )
-                        if role_id is None:
-                            print(f"role {role_name!r} not found, skipping {email}")
-                            continue
                         user = User(
                             tenant_id=gym_id,
                             email=email,
