@@ -139,6 +139,14 @@ export interface PageOut<T> {
   page_size: number;
 }
 
+export interface ExpenseYearOut {
+  monthly: Record<string, number>;
+  total: number;
+  expenses: ExpenseOut[];
+  page: number;
+  page_size: number;
+}
+
 export interface SubscriptionOut {
   id: string;
   member_id: string;

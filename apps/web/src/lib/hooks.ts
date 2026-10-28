@@ -23,6 +23,7 @@ import type {
   EmployeeOut,
   EmployeeUpdateData,
   ExpenseOut,
+  ExpenseYearOut,
   GymOut,
   GymOwnerOut,
   GymSettingsOut,
@@ -440,17 +441,35 @@ export function useMemberDetail(id: string): {
   }, [memberQ.data, memberQ.isLoading, memberQ.isError, ctxQ, subsQ.data, subsQ.isLoading, subsQ.isError, timelineQ.data, timelineQ.isLoading, timelineQ.isError, id]);
 }
 
-export function useSubscriptionsData(): {
+export function useSubscriptionsPage(params: { page: number; pageSize: number }): {
   subs: Subscription[];
+  total: number;
   isLoading: boolean;
   isError: boolean;
 } {
+  const can = useCan();
   const q = useQuery({
-    queryKey: ["subscriptions"],
-    queryFn: () => fetchPaged<SubscriptionOut>("/plans/subscriptions"),
+    queryKey: ["subscriptions", "page", params],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      });
+      return apiFetch<PageOut<SubscriptionOut>>(`/plans/subscriptions?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    enabled: can("membership.view"),
   });
   return useMemo(
-    () => ({ subs: (q.data ?? []).map(toUiSubscription), isLoading: q.isLoading, isError: q.isError }),
+    () => {
+      const page = q.data ?? { items: [] as SubscriptionOut[], total: 0 };
+      return {
+        subs: page.items.map(toUiSubscription),
+        total: page.total ?? page.items.length,
+        isLoading: q.isLoading,
+        isError: q.isError,
+      };
+    },
     [q.data, q.isLoading, q.isError],
   );
 }
@@ -574,49 +593,37 @@ export function useInvoiceSummary(year?: number): {
   return { summary: q.data, isLoading: q.isLoading, isError: q.isError };
 }
 
-export function useExpensesData(): {
+export function useExpensesYearPage(params: { year: number; page: number; pageSize: number }): {
   expenses: ExpenseOut[];
-  isLoading: boolean;
-  isError: boolean;
-} {
-  const can = useCan();
-  const q = useQuery({
-    queryKey: ["expenses"],
-    queryFn: () => fetchPaged<ExpenseOut>("/expenses"),
-    enabled: can("expenses.view"),
-  });
-  return useMemo(
-    () => ({ expenses: q.data ?? [], isLoading: q.isLoading, isError: q.isError }),
-    [q.data, q.isLoading, q.isError],
-  );
-}
-
-export function useExpensesPage(params: { page: number; pageSize: number }): {
-  expenses: ExpenseOut[];
+  monthly: Record<string, number>;
   total: number;
   isLoading: boolean;
   isError: boolean;
 } {
   const can = useCan();
   const q = useQuery({
-    queryKey: ["expenses", "page", params],
+    queryKey: ["expenses", "year-page", params],
     queryFn: () => {
       const sp = new URLSearchParams({
+        year: String(params.year),
         page: String(params.page),
         page_size: String(params.pageSize),
       });
-      return apiFetch<PageOut<ExpenseOut>>(`/expenses?${sp.toString()}`);
+      return apiFetch<ExpenseYearOut>(`/expenses?${sp.toString()}`);
     },
     placeholderData: keepPreviousData,
     enabled: can("expenses.view"),
   });
-  const page = q.data ?? { items: [] as ExpenseOut[], total: 0 };
-  return {
-    expenses: page.items,
-    total: page.total ?? page.items.length,
-    isLoading: q.isLoading,
-    isError: q.isError,
-  };
+  return useMemo(
+    () => ({
+      expenses: q.data?.expenses ?? [],
+      monthly: q.data?.monthly ?? {},
+      total: q.data?.total ?? 0,
+      isLoading: q.isLoading,
+      isError: q.isError,
+    }),
+    [q.data, q.isLoading, q.isError],
+  );
 }
 
 export function useCreateExpense() {
@@ -707,6 +714,49 @@ export function useNotificationsData(): {
       isLoading: q.isLoading || unreadQ.isLoading,
       isError: q.isError || unreadQ.isError,
     }),
+    [q.data, q.isLoading, q.isError, unreadQ.data, unreadQ.isLoading, unreadQ.isError],
+  );
+}
+
+export function useNotificationsPage(params: { page: number; pageSize: number }): {
+  notifications: Notification[];
+  total: number;
+  unread: number;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
+  const enabled = can("notifications.view");
+  const q = useQuery({
+    queryKey: ["notifications", "page", params],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      });
+      return apiFetch<PageOut<NotificationOut>>(`/notifications?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    enabled,
+  });
+  const unreadQ = useQuery({
+    queryKey: ["notifications", "unread"],
+    queryFn: () => apiFetch<{ count: number }>("/notifications/unread-count"),
+    staleTime: 0,
+    enabled,
+  });
+  return useMemo(
+    () => {
+      const page = q.data ?? { items: [] as NotificationOut[], total: 0 };
+      return {
+        notifications: page.items.map(toUiNotification),
+        total: page.total ?? page.items.length,
+        unread: unreadQ.data?.count ?? 0,
+        isLoading: q.isLoading || unreadQ.isLoading,
+        isError: q.isError || unreadQ.isError,
+      };
+    },
     [q.data, q.isLoading, q.isError, unreadQ.data, unreadQ.isLoading, unreadQ.isError],
   );
 }
@@ -1266,26 +1316,33 @@ export function useDeleteRole() {
   });
 }
 
-export function useEmployees(): {
+export function useEmployeesPage(params: { page: number; pageSize: number }): {
   employees: EmployeeOut[];
+  total: number;
   isLoading: boolean;
   isError: boolean;
 } {
   const can = useCan();
   const q = useQuery({
-    queryKey: ["employees"],
-    queryFn: () => fetchPaged<EmployeeOut>("/employees"),
+    queryKey: ["employees", "page", params],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      });
+      return apiFetch<PageOut<EmployeeOut>>(`/employees?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
     enabled: can("identity.view"),
     retry: false,
   });
-  return useMemo(
-    () => ({
-      employees: q.data ?? [],
-      isLoading: q.isLoading,
-      isError: q.isError,
-    }),
-    [q.data, q.isLoading, q.isError],
-  );
+  const page = q.data ?? { items: [] as EmployeeOut[], total: 0 };
+  return {
+    employees: page.items,
+    total: page.total ?? page.items.length,
+    isLoading: q.isLoading,
+    isError: q.isError,
+  };
 }
 
 export function useCreateEmployee() {
