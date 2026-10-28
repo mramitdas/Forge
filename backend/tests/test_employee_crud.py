@@ -254,6 +254,26 @@ async def test_assign_role_and_cross_tenant_mismatch(client, gym_a, gym_b):
         await client.delete(f"/api/v1/employees/{emp_id}", headers=oheaders_a)
 
 
+async def test_login_rejected_after_delete(client, gym_a):
+    oheaders = await _owner_headers(client, _OWNER_A_EMAIL)
+    email = f"crud-login-{_next('emp')}@example.com"
+    created = await _create_employee(
+        client, oheaders, email, password=_STRONG_PASSWORD
+    )
+    emp_id = created["id"]
+    deleted = await client.delete(f"/api/v1/employees/{emp_id}", headers=oheaders)
+    assert deleted.status_code == 204, deleted.text
+    # authenticate() joins Credential with `User.deleted_at.is_(None)`, so the
+    # soft-deleted user is invisible to login and never even reaches the
+    # password check: the response is 401 INVALID_CREDENTIALS.
+    refusal = await client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": _STRONG_PASSWORD},
+    )
+    assert refusal.status_code == 401, refusal.text
+    assert refusal.json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+
 async def test_view_only_cannot_write(client, gym_a):
     oheaders = await _owner_headers(client, _OWNER_A_EMAIL)
     role = await _create_role(
