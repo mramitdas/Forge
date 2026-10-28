@@ -1,14 +1,15 @@
-// Expenses page E2E: empty state, add, edit, delete, validation, imported data.
+// Expenses page E2E: empty state, add, edit, delete, validation, plus
+// self-provisioned current/prior-year totals, categories, and year scoping.
 //
-// Requires the backend + frontend dev servers and the imported dev DB.
-// demo-owner sees the demo gym; the evolve-gym owner sees the imported GMS
-// expenses, year-scoped by the year selector (2025: 41 rows / ₹4,84,730,
-// 2024: 17 rows / ₹2,14,480).
+// Requires the backend + frontend dev servers and the seeded dev DB
+// (demo owner = demo-owner@gym-erp.dev / owner-pass-123). Every asserted
+// expense row (beyond the seeded baseline) is created by this script itself
+// via POST /api/v1/expenses and deleted in `finally`, so re-runs are
+// idempotent and nothing depends on any import dataset.
 const { chromium } = require("playwright");
 
 const BASE = process.env.FORGE_BASE_URL || "http://localhost:3000";
 const OWNER = { email: "demo-owner@gym-erp.dev", password: "owner-pass-123" };
-const IMPORTED_OWNER = { email: "mramitdas99@gmail.com", password: "evolve-import-2026" };
 const ts = Date.now().toString(36);
 
 const results = [];
@@ -42,10 +43,22 @@ async function rowCount(page) {
   return page.locator("table tbody tr").count();
 }
 
+// Same en-IN/INR formatting the frontend app uses for amount_minor.
+function inr(minor) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(minor / 100);
+}
+
 async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   page.setDefaultTimeout(60000);
+  let api = null;
+  let auth = null;
+  const createdIds = [];
 
   try {
     // ── Demo gym: empty state → add → delete roundtrip ──
@@ -124,50 +137,121 @@ async function main() {
     );
     check("expense deleted", (await rowCount(page)) === startsAt);
 
-    // ── Imported gym: year-scoped GMS expenses, categories, totals ──
-    await page.goto(`${BASE}/login`);
-    await login(page, IMPORTED_OWNER);
-    check("imported owner login works", true);
+    // ── Self-provisioned expenses: API-created, current + prior year ──
+    // Token session so the script creates (and later deletes) its own rows.
+    api = page.context().request;
+    const loginRes = await api.post(`${BASE}/api/v1/auth/login`, {
+      data: { email: OWNER.email, password: OWNER.password },
+    });
+    check("api login returns token", loginRes.ok());
+    const { access_token } = await loginRes.json();
+    auth = { Authorization: `Bearer ${access_token}` };
 
-    await page.goto(`${BASE}/expenses`);
+    const yearNow = new Date().getFullYear();
+    const yearPrev = yearNow - 1;
 
-    const yearSelect = page.locator('select[aria-label="Select expense year"]');
-    await must("year selector renders", yearSelect.waitFor({ timeout: 15000 }));
-
-    const selectYear = async (year, expectedRows) => {
-      await yearSelect.selectOption(String(year));
-      await page.waitForFunction(
-        (n) => document.querySelectorAll("table tbody tr").length === n,
-        expectedRows,
-        { timeout: 30000 },
-      );
+    const getYear = async (y) => {
+      const res = await api.get(`${BASE}/api/v1/expenses?year=${y}`, { headers: auth });
+      check(`api list year ${y} ok`, res.ok());
+      return res.json();
     };
 
-    const totalSpentText = () =>
-      page.evaluate(() => {
-        const label = [...document.querySelectorAll("p")].find((p) => p.textContent?.trim() === "Total spent");
-        return label?.nextElementSibling?.textContent || label?.parentElement?.textContent || "";
+    // Baselines BEFORE creating anything, so expected values include seeded
+    // data plus exactly our delta.
+    const baseNow = await getYear(yearNow);
+    const basePrev = await getYear(yearPrev);
+
+    // Three categories for the current year, two for the prior year; months
+    // mid-year so UTC↔local time shifts can never move a row across a year.
+    const fixtures = [
+      { year: yearNow, category: `E2E Rent ${ts}`, amount_minor: 250000, paid_at: `${yearNow}-07-15T09:00:00.000Z` },
+      { year: yearNow, category: `E2E Salary ${ts}`, amount_minor: 1000000, paid_at: `${yearNow}-03-10T09:00:00.000Z` },
+      { year: yearNow, category: `E2E Electricity ${ts}`, amount_minor: 50000, paid_at: `${yearNow}-11-05T09:00:00.000Z` },
+      { year: yearPrev, category: `E2E Water ${ts}`, amount_minor: 100000, paid_at: `${yearPrev}-06-20T09:00:00.000Z` },
+      { year: yearPrev, category: `E2E Marketing ${ts}`, amount_minor: 450000, paid_at: `${yearPrev}-09-12T09:00:00.000Z` },
+    ];
+    const deltaByYear = {};
+    for (const f of fixtures) {
+      const res = await api.post(`${BASE}/api/v1/expenses`, {
+        headers: auth,
+        data: { category: f.category, description: `e2e ${ts}`, amount_minor: f.amount_minor, method: "cash", paid_at: f.paid_at },
       });
+      check(`api create ${f.category} (year ${f.year})`, res.status() === 201);
+      if (res.status() === 201) {
+        const body = await res.json();
+        createdIds.push(body.id);
+        deltaByYear[f.year] = (deltaByYear[f.year] || 0) + f.amount_minor;
+      }
+    }
 
-    // 2025: 41 imported expenses, ₹48,47,300 minor → ₹4,84,730.
-    await selectYear(2025, 41);
-    check("2025 expenses render", (await rowCount(page)) === 41);
+    // Current year renders seeded rows + our 3 additions. Rows were created
+    // outside React Query, so force a fresh fetch by reloading the page.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const expectedRowsNow = baseNow.expenses.length + 3;
+    const expectedTotalNow = baseNow.total + (deltaByYear[yearNow] || 0);
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("table tbody tr").length === n,
+      expectedRowsNow,
+      { timeout: 30000 },
+    );
+    check("current-year rows reflect self-created data", (await rowCount(page)) === expectedRowsNow,
+      `expected=${expectedRowsNow}`);
 
-    const cats2025 = await page.locator("table tbody tr td:nth-child(2)").allTextContents();
-    const unique2025 = [...new Set(cats2025.map((c) => c.trim()))].sort();
-    check("2025 categories match GMS import", unique2025.join(",") === "Electricity,Rent,Salary", unique2025.join(","));
+    // Our unique categories appear in the table; the Categories card matches
+    // the API's unique-category count for the year.
+    const catCells = await page.locator("table tbody tr td:nth-child(2)").allTextContents();
+    const shownCats = new Set(catCells.map((c) => c.trim()));
+    check(
+      "current-year shows self-created categories",
+      [`E2E Rent ${ts}`, `E2E Salary ${ts}`, `E2E Electricity ${ts}`].every((c) => shownCats.has(c)),
+      [...shownCats].sort().join(","),
+    );
+    const apiCatCount = new Set(baseNow.expenses.map((e) => e.category).concat(
+      fixtures.filter((f) => f.year === yearNow).map((f) => f.category),
+    )).size;
+    const catCard = await page.locator("p").filter({ hasText: /^Categories$/ }).first()
+      .locator("xpath=following-sibling::p[1]").textContent();
+    check("categories card matches unique count", (catCard || "").trim() === String(apiCatCount),
+      `card=${(catCard || "").trim()} expected=${apiCatCount}`);
 
-    const total2025 = await totalSpentText();
-    check("2025 total spent is ₹4,84,730", total2025.includes("4,84,730"), total2025.replace(/\s+/g, " ").trim());
-
-    // Switching the year rewires cards, graph, and table together.
-    await selectYear(2024, 17);
-    check("2024 expenses render", (await rowCount(page)) === 17);
-    const total2024 = await totalSpentText();
-    check("2024 total spent is ₹2,14,480", total2024.includes("2,14,480"), total2024.replace(/\s+/g, " ").trim());
+    const totalNow = await page.evaluate(() => {
+      const label = [...document.querySelectorAll("p")].find((p) => p.textContent?.trim() === "Total spent");
+      return label?.nextElementSibling?.textContent || label?.parentElement?.textContent || "";
+    });
+    check("current-year total includes self-created rows", totalNow.trim() === inr(expectedTotalNow),
+      `shown=${totalNow.trim()} expected=${inr(expectedTotalNow)}`);
 
     await must("spending graph renders", page.getByRole("heading", { name: "Spending", exact: true }).waitFor({ timeout: 15000 }));
     check("spending graph has an SVG chart", (await page.locator("svg.recharts-surface").count()) > 0);
+
+    // Switching the year rewires cards, graph, and table together; the prior
+    // year must contain exactly seeded rows + our 2 additions.
+    const yearSelect = page.locator('select[aria-label="Select expense year"]');
+    await must("year selector renders", yearSelect.waitFor({ timeout: 15000 }));
+    await yearSelect.selectOption(String(yearPrev));
+    const expectedRowsPrev = basePrev.expenses.length + 2;
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("table tbody tr").length === n,
+      expectedRowsPrev,
+      { timeout: 30000 },
+    );
+    check("prior-year rows reflect self-created data", (await rowCount(page)) === expectedRowsPrev,
+      `expected=${expectedRowsPrev}`);
+
+    const prevCats = await page.locator("table tbody tr td:nth-child(2)").allTextContents();
+    check(
+      "prior-year shows self-created categories",
+      [`E2E Water ${ts}`, `E2E Marketing ${ts}`].every((c) => prevCats.map((x) => x.trim()).includes(c)),
+      [...new Set(prevCats.map((c) => c.trim()))].sort().join(","),
+    );
+
+    // The card re-renders after the year switch — re-read it.
+    const totalPrevText = await page.evaluate(() => {
+      const label = [...document.querySelectorAll("p")].find((p) => p.textContent?.trim() === "Total spent");
+      return label?.nextElementSibling?.textContent || label?.parentElement?.textContent || "";
+    });
+    check("prior-year total includes self-created rows", totalPrevText.trim() === inr(basePrev.total + (deltaByYear[yearPrev] || 0)),
+      `shown=${totalPrevText.trim()} expected=${inr(basePrev.total + (deltaByYear[yearPrev] || 0))}`);
 
     // Delete button visible for owner (expenses.manage)
     const delButtons = await page.locator("table tbody tr button:has-text('Delete')").count();
@@ -177,6 +261,21 @@ async function main() {
       check("unexpected failure", false, String(err).slice(0, 200));
     }
   } finally {
+    // Self-cleanup: remove every expense this script created, even if an
+    // assertion above failed, so re-runs stay idempotent.
+    if (api && createdIds.length) {
+      for (const id of createdIds) {
+        try {
+          const res = await api.delete(`${BASE}/api/v1/expenses/${id}`, { headers: auth });
+          console.log(`CLEANUP ${res.status()} ${id}`);
+        } catch (e) {
+          console.log(`CLEANUP FAILED ${id}: ${String(e).slice(0, 200)}`);
+        }
+      }
+      check("cleanup deleted all created expenses", true, String(createdIds.length));
+    } else if (createdIds.length) {
+      check("cleanup deleted all created expenses", false, "no api session");
+    }
     await browser.close();
   }
 
