@@ -13,7 +13,7 @@ test.describe("platform settings", () => {
     const email = page.locator("#settings-email");
     await expect(email).toBeDisabled();
     await expect(email).toHaveAttribute("readonly", "");
-    await expect(email).toHaveValue("admin@gym-erp.dev");
+    await expect(email).toHaveValue(process.env.GYM_PLATFORM_ADMIN_EMAIL ?? "");
   });
 
   test("role and permissions sections are absent", async ({ page }) => {

@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     issuer: str = "gym-erp"
 
     platform_tenant_id: str = "00000000-0000-0000-0000-000000000000"
+    platform_admin_email: str = ""
+    platform_admin_password: str = ""
     allowed_origins: list[str] = ["http://localhost:3000"]
     cors_allow_credentials: bool = True
 

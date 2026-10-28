@@ -36,18 +36,43 @@ from app.db.session import get_sessionmaker
 from app.modules.billing.models import Invoice, InvoiceLine, Payment
 from app.modules.billing.service import _next_invoice_number
 from app.modules.expenses.models import Expense
-from app.modules.identity.models import Credential, Role, User
-from app.modules.identity.service import assign_role
+from app.modules.identity.models import Credential, Role, User, UserRole
+from app.modules.identity.service import assign_role, create_role
 from app.modules.members.models import Member
 from app.modules.membership.models import Subscription
 from app.modules.membership.service import create_plan
 from app.modules.tenancy.models import Branch, Gym
 from app.modules.tenancy.service import provision_gym
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 GENDER_MAP = {"M": "Male", "F": "Female"}
 METHOD_MAP = {"cash": "cash", "online": "upi"}
-STAFF_ROLE_MAP = {"sub-owner": "Branch Manager", "staff": "Receptionist"}
+# Two-tier catalog (migration 0022): manage implies view, so .manage roles
+# omit the matching .view code.
+STAFF_ROLE_SPECS = {
+    "Sub Owner": {
+        "description": "Operating manager (imported from GMS sub-owner)",
+        "codes": [
+            "members.manage",
+            "membership.manage",
+            "billing.manage",
+            "expenses.manage",
+            "attendance.manage",
+            "tenancy.manage",
+            "identity.view",
+        ],
+    },
+    "Staff": {
+        "description": "Front-desk staff (imported from GMS trainer/receptionist)",
+        "codes": [
+            "members.view",
+            "membership.view",
+            "billing.view",
+            "attendance.view",
+            "expenses.view",
+        ],
+    },
+}
 NOW = datetime.now(UTC)
 
 
@@ -115,7 +140,7 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
 
     # ── 1. Platform scope: refuse when the import target already exists ──
 
-    async def _provision() -> uuid.UUID:
+    async def _provision() -> tuple[uuid.UUID, uuid.UUID | None, bool]:
         ctx = TenantContext(
             tenant_id=uuid.UUID(settings.platform_tenant_id), platform_scope=True
         )
@@ -129,11 +154,33 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
                         f"gym slug {slug!r} already exists — run `make reset` first "
                         "(imports are all-or-nothing)"
                     )
+                # The unique index uq_users_email_active forbids a second
+                # active account with the owner's email. When that email is
+                # already taken (e.g. it IS the platform admin — same person),
+                # provision with a synthetic owner account and reassign the
+                # Gym Owner role to the existing user in the gym phase.
+                existing_owner_id = await session.scalar(
+                    select(User.id).where(
+                        User.email == owner["email"].lower(),
+                        User.deleted_at.is_(None),
+                    )
+                )
+                owner_email = owner["email"]
+                if existing_owner_id is not None:
+                    owner_email = f"owner-{slug}@legacy.import"
+                    clash = await session.scalar(
+                        select(User.id).where(User.email == owner_email)
+                    )
+                    if clash is not None:
+                        raise SystemExit(
+                            f"owner email {owner['email']!r} already exists and the "
+                            f"synthetic fallback {owner_email!r} is taken too"
+                        )
                 gym = await provision_gym(
                     session,
                     name=g["name"],
                     slug=slug,
-                    owner_email=owner["email"],
+                    owner_email=owner_email,
                     owner_name=_full_name(
                         owner["first_name"], owner["middle_name"], owner["last_name"]
                     ),
@@ -144,19 +191,52 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
                 )
                 gym_id = gym.id
                 await session.commit()
-                print(f"provisioned gym {slug} ({gym_id}) with owner {owner['email']}")
-                return gym_id
+                print(f"provisioned gym {slug} ({gym_id}) with owner {owner_email}")
+                if existing_owner_id is not None:
+                    print(
+                        f"owner email {owner['email']!r} already in use — Gym Owner "
+                        "role will be reassigned to that existing account"
+                    )
+                return gym_id, existing_owner_id, existing_owner_id is not None
         finally:
             reset_tenant_context(token)
 
     async def _gym_scope(gym_id: uuid.UUID):
         return set_tenant_context(TenantContext(tenant_id=gym_id, platform_scope=False))
 
-    async def run_gym_import(gym_id: uuid.UUID) -> None:
+    async def run_gym_import(
+        gym_id: uuid.UUID, existing_owner_id: uuid.UUID | None = None
+    ) -> None:
         token = await _gym_scope(gym_id)
         try:
             async with maker() as session:
                 await session.begin()
+
+                if existing_owner_id is not None:
+                    synth = await session.scalar(
+                        select(User).where(
+                            User.email == f"owner-{slug}@legacy.import",
+                            User.deleted_at.is_(None),
+                        )
+                    )
+                    if synth is None:  # pragma: no cover — provisioned above
+                        raise SystemExit("synthetic owner account missing; aborting")
+                    owner_ur = await session.scalar(
+                        select(UserRole).where(UserRole.user_id == synth.id)
+                    )
+                    if owner_ur is None:  # pragma: no cover
+                        raise SystemExit("synthetic owner has no role; aborting")
+                    session.add(
+                        UserRole(user_id=existing_owner_id, role_id=owner_ur.role_id)
+                    )
+                    await session.execute(
+                        delete(UserRole).where(UserRole.user_id == synth.id)
+                    )
+                    await session.execute(
+                        delete(Credential).where(Credential.user_id == synth.id)
+                    )
+                    synth.deleted_at = NOW
+                    await session.flush()
 
                 # ── 2. Branch (GMS had no branches; one MAIN per address) ──
                 branch = Branch(
@@ -321,14 +401,39 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
                     f"{pay_count} payments"
                 )
 
-                # ── 6. Staff: app_management + app_trainer → role templates ──
+                # ── 6. Staff: app_management + app_trainer → two-tier roles ──
+                async def _ensure_role(name: str) -> uuid.UUID:
+                    role_id = await session.scalar(
+                        select(Role.id).where(
+                            Role.tenant_id == gym_id,
+                            Role.name == name,
+                            Role.deleted_at.is_(None),
+                        )
+                    )
+                    if role_id is not None:
+                        return role_id
+                    spec = STAFF_ROLE_SPECS[name]
+                    role = await create_role(
+                        session,
+                        tenant_id=gym_id,
+                        name=name,
+                        description=spec["description"],
+                        permission_codes=spec["codes"],
+                        branch_scope="all",
+                    )
+                    print(f"created role {name!r} ({len(spec['codes'])} codes)")
+                    return role.id
+
+                staff_role_ids = {
+                    name: await _ensure_role(name) for name in STAFF_ROLE_SPECS
+                }
                 staff_rows = [
                     (
                         managers,
-                        lambda r: STAFF_ROLE_MAP.get(r["role"], "Receptionist"),
+                        lambda r: "Sub Owner" if r["role"] == "sub-owner" else "Staff",
                         "management",
                     ),
-                    (trainers, lambda r: "Trainer", "trainer"),
+                    (trainers, lambda r: "Staff", "trainer"),
                 ]
                 created_staff = 0
                 synthesized = []
@@ -343,16 +448,12 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
                         if existing is not None:
                             continue
                         role_name = role_for(r)
-                        role_id = await session.scalar(
-                            select(Role.id).where(
-                                Role.tenant_id == gym_id,
-                                Role.name == role_name,
-                                Role.deleted_at.is_(None),
+                        role_id = staff_role_ids.get(role_name)
+                        if role_id is None:  # pragma: no cover — roles pre-created above
+                            raise SystemExit(
+                                f"role {role_name!r} could not be resolved for {email}; "
+                                "aborting rather than silently skipping staff"
                             )
-                        )
-                        if role_id is None:
-                            print(f"role {role_name!r} not found, skipping {email}")
-                            continue
                         user = User(
                             tenant_id=gym_id,
                             email=email,
@@ -398,10 +499,18 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
     # One event loop for both phases: the async engine's pool is bound to the
     # loop that created it, so asyncio.run() may only be called once.
     async def _import_all() -> None:
-        await run_gym_import(await _provision())
+        nonlocal owner_reused
+        gym_id, existing_owner_id, owner_reused = await _provision()
+        await run_gym_import(gym_id, existing_owner_id)
 
+    owner_reused = False
     asyncio.run(_import_all())
 
+    pw_note = (
+        f"  staff login password: {temp_password} (must change on first login)\n"
+        if owner_reused
+        else f"  staff/owner login password: {temp_password} (must change on first login)\n"
+    )
     print(
         "\nIMPORT COMPLETE\n"
         f"  gym:      {g['name']} ({slug})\n"
@@ -409,7 +518,7 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
         f"  billing:  {len(memberships)} membership rows -> subscriptions/invoices\n"
         f"  expenses: {len(expense_rows)}\n"
         f"  skipped:  {measurements} measurements (no matching Forge model)\n"
-        f"  staff/owner login password: {temp_password} (must change on first login)\n"
+        f"{pw_note}"
         f"  members have NO login (phone-only records, as in GMS)"
     )
 

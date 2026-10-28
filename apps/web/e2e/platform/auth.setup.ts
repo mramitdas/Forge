@@ -1,6 +1,13 @@
 import { test as setup, expect } from "@playwright/test";
 
-const ADMIN = { email: "admin@gym-erp.dev", password: "admin-pass-123" };
+const ADMIN_EMAIL = process.env.GYM_PLATFORM_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.GYM_PLATFORM_ADMIN_PASSWORD;
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  throw new Error(
+    "GYM_PLATFORM_ADMIN_EMAIL and GYM_PLATFORM_ADMIN_PASSWORD must be set (backend/.env or shell) before running the platform e2e suite.",
+  );
+}
+const ADMIN = { email: ADMIN_EMAIL, password: ADMIN_PASSWORD };
 const AUTH_FILE = "test-results/.auth/admin.json";
 
 setup("authenticate as platform admin", async ({ page }) => {
