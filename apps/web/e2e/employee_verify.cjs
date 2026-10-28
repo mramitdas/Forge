@@ -74,6 +74,20 @@ async function login(page, user) {
       page.getByPlaceholder(/search name, email, phone/i).waitFor({ timeout: 5000 }),
     );
 
+    // The employees list is now only the first server-paged slice (default
+    // 50). Narrow it to the script's own employee via the backend `search`
+    // param before asserting row-level affordances.
+    const searchBox = page.getByPlaceholder(/search name, email, phone/i);
+    await searchBox.fill(`E2E Employee ${ts}`);
+    await must(
+      "search narrows to the created employee row",
+      page.locator("tbody tr", { hasText: `E2E Employee ${ts}` }).first().waitFor({ timeout: 15000 }),
+    );
+    check(
+      "employee search returns exactly the created employee",
+      (await page.locator("tbody tr").count()) === 1,
+    );
+
     await must(
       "row actions present",
       page.getByRole("button", { name: "Edit", exact: true }).first().waitFor({ timeout: 10000 }),

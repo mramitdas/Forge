@@ -15,10 +15,10 @@ const OWNER = { email: "demo-owner@gym-erp.dev", password: "owner-pass-123" };
 const CURRENT_YEAR = new Date().getFullYear();
 const ts = Date.now().toString(36);
 
-// Enough invoices to fill Page 1 (UI page size is 20) and overflow onto
-// Page 2 regardless of any seeded baseline.
-const CREATED = 25;
-const UI_PAGE_SIZE = 20;
+// Enough invoices to fill Page 1 (UI default page size is 50) and overflow
+// onto Page 2 regardless of any seeded baseline.
+const CREATED = 65;
+const UI_PAGE_SIZE = 50;
 const NAME_TOKEN = `e2ebill${ts}`;
 
 const results = [];
@@ -207,6 +207,27 @@ async function main() {
     check("page 2 keeps page size", (await rowCount(page)) === page2Rows, `rows=${await rowCount(page)}`);
     await page.getByRole("button", { name: "Previous", exact: true }).click();
     await must("previous page returns", page.getByText(/^Page 1 of/).waitFor());
+    await waitRows(page, UI_PAGE_SIZE);
+
+    // ── Rows-per-page dropdown: raise to 100, page resets to 1 ──
+    const sizeSelect = page.locator('select[aria-label="Rows per page"]');
+    await must("rows-per-page dropdown renders", sizeSelect.waitFor({ timeout: 10000 }));
+    check("dropdown defaults to 50", (await sizeSelect.inputValue()) === "50");
+    // First leave the page state (go to page 2), then change the size — the
+    // size change must snap back to page 1 with a full 100-row page.
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await must("next page renders again", page.getByText(/^Page 2 of/).waitFor());
+    await sizeSelect.selectOption("100");
+    const expectedPages100 = Math.max(1, Math.ceil(expectedTotal / 100));
+    await must(
+      "size change resets to page 1",
+      page.getByText(`Page 1 of ${expectedPages100}`, { exact: true }).waitFor({ timeout: 15000 }),
+    );
+    const pageSize100 = Math.min(100, expectedTotal);
+    await waitRows(page, pageSize100);
+    check("page 1 keeps the larger size (> 50 rows)", (await rowCount(page)) === pageSize100 && pageSize100 > 50, `rows=${await rowCount(page)}`);
+    await sizeSelect.selectOption("50");
+    await must("dropdown back to 50 restores page 1", page.getByText(`Page 1 of ${expectedPages}`, { exact: true }).waitFor({ timeout: 15000 }));
     await waitRows(page, UI_PAGE_SIZE);
 
     // ── Search: unique member last name narrows to exactly one row ──
