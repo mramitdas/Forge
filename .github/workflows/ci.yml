@@ -33,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
@@ -73,6 +73,8 @@ jobs:
 
       - name: Tests + coverage
         working-directory: backend
+        env:
+          COVERAGE_CORE: sysmon
         run: |
           .venv/bin/python -m pytest -q \
             --cov=app --cov-report=term-missing --cov-fail-under=85
@@ -135,7 +137,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
@@ -151,6 +153,7 @@ jobs:
         run: |
           .venv/bin/alembic upgrade head
           .venv/bin/python -m scripts.seed_dev
+          .venv/bin/python -m scripts.seed_fixtures
 
       - name: Start backend
         working-directory: backend
