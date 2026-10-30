@@ -84,13 +84,21 @@ Environment files are git-ignored; only `*.env.example` files are tracked.
 |------|---------|
 | `backend/.env.example` | Documents every backend variable (`GYM_` prefix). Copy to `backend/.env`. |
 | `backend/.env` | Local/dev settings (Postgres on `127.0.0.1`, dev JWT secret, admin credentials). |
-| `backend/.env.production` | Production settings loaded after `.env` (Supabase URL, prod JWT secret, CORS). Never committed. |
+| `backend/.env.production` | Production settings (Supabase URL, prod JWT secret, CORS). Never committed. |
 | `apps/web/.env.example` | Frontend env; copy to `apps/web/.env.local`. Set `API_BACKEND_URL` when the API is not on `:8000`. |
 
-The backend reads `backend/.env` then `backend/.env.production` (later file
-wins), so `make migrate`, `make seed`, and the dev server all target whichever
-database those files point at. The frontend proxies `/api/*` and `/health/*`
-to `API_BACKEND_URL` (default `http://localhost:8000`) via Next rewrites.
+`GYM_ENVIRONMENT` selects **which env file** the backend loads — set it to the
+filename you want, and only that file is read:
+
+```bash
+make seed                            # default: GYM_ENVIRONMENT=.env (local)
+GYM_ENVIRONMENT=.env.production make seed   # use production values
+```
+
+Process environment variables (e.g. `GYM_DATABASE_URL=...`) still override
+file values, so you can point a single command at any database. The frontend
+proxies `/api/*` and `/health/*` to `API_BACKEND_URL` (default
+`http://localhost:8000`) via Next rewrites.
 
 ## Deployment (Vercel + Supabase)
 

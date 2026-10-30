@@ -1,12 +1,25 @@
+import os
 from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _env_file() -> str:
+    """Pick the env file from `GYM_ENVIRONMENT`.
+
+    Set `GYM_ENVIRONMENT=.env` (default) for local dev or
+    `GYM_ENVIRONMENT=.env.production` to load production values. Any other
+    value (e.g. the `test` marker set by pytest) falls back to `.env`.
+    Process environment variables still override file values.
+    """
+    value = os.environ.get("GYM_ENVIRONMENT", "")
+    return value if value.startswith(".env") else ".env"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=[".env", ".env.production"],
+        env_file=_env_file(),
         env_prefix="GYM_",
         extra="ignore",
     )
