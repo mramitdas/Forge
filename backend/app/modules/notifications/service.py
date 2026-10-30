@@ -85,7 +85,9 @@ async def unread_count(session: AsyncSession, *, user_id: uuid.UUID) -> int:
     ) or 0
 
 
-async def mark_read(session: AsyncSession, *, notification_id: uuid.UUID) -> InAppNotification:
+async def mark_read(
+    session: AsyncSession, *, notification_id: uuid.UUID
+) -> InAppNotification | None:
     notification = await session.get(InAppNotification, notification_id)
     if notification is not None and notification.read_at is None:
         notification.read_at = datetime.now()

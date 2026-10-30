@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
+    AsyncSessionTransaction,
     async_sessionmaker,
     create_async_engine,
 )
@@ -19,7 +20,7 @@ from app.core.tenant import TenantContext, get_tenant_context
 logger = get_logger(__name__)
 
 _engine = None
-_sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_sessionmaker: async_sessionmaker[TenantAwareSession] | None = None
 
 
 def _ssl_connect_args(database_url: str) -> dict:
@@ -56,7 +57,7 @@ def get_engine():
     return _engine
 
 
-def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
+def get_sessionmaker() -> async_sessionmaker[TenantAwareSession]:
     global _sessionmaker
     if _sessionmaker is None:
         _sessionmaker = async_sessionmaker(
@@ -76,7 +77,7 @@ class TenantAwareSession(AsyncSession):
     are consistent for the entire transaction.
     """
 
-    async def begin(self):
+    async def begin(self) -> AsyncSessionTransaction:  # type: ignore[override]
         transaction = await super().begin()
         await self._stamp_tenant()
         return transaction

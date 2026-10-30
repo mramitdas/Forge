@@ -29,6 +29,8 @@ class PaymentResult:
 
 
 class GatewayAdapter(Protocol):
+    name: str
+
     async def capture(self, request: PaymentRequest) -> PaymentResult: ...
 
 

@@ -55,7 +55,7 @@ async def invoice_summary(
     summary = await billing_svc.invoice_summary(
         session, tenant_id=actor.tenant_id, year=year
     )
-    return InvoiceSummaryOut(**summary)
+    return InvoiceSummaryOut.model_validate(summary)
 
 
 @router.get("/{invoice_id}", response_model=InvoiceOut)

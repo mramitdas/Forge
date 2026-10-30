@@ -89,15 +89,16 @@ def create_app() -> FastAPI:
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         request_id = request.headers.get("x-request-id", "")
         detail = to_http_exception(exc).detail
-        detail["error"]["request_id"] = request_id
+        if isinstance(detail, dict):
+            detail["error"]["request_id"] = request_id
         return JSONResponse(status_code=exc.http_status, content=detail)
 
     @app.get("/health/live", include_in_schema=False)
     async def health_live() -> dict:
         return {"status": "ok"}
 
-    @app.get("/health/ready", include_in_schema=False)
-    async def health_ready() -> dict:
+    @app.get("/health/ready", include_in_schema=False, response_model=None)
+    async def health_ready() -> dict | JSONResponse:
         try:
             async with get_engine().connect() as conn:
                 await conn.execute(text("SELECT 1"))

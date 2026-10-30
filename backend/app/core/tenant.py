@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 
 from app.core.errors import UnauthenticatedError
@@ -27,7 +27,7 @@ def require_tenant_context() -> TenantContext:
     return ctx
 
 
-def set_tenant_context(ctx: TenantContext | None) -> TenantContext | None:
+def set_tenant_context(ctx: TenantContext | None) -> Token[TenantContext | None]:
     token = _current.set(ctx)
     return token
 
