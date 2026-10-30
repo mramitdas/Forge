@@ -51,7 +51,8 @@ async def _load_user_with_credential(
         .join(Credential, Credential.user_id == User.id)
         .where(User.email == email.lower(), User.deleted_at.is_(None))
     )
-    return result.first()
+    row = result.first()
+    return (row[0], row[1]) if row is not None else None
 
 
 async def _issue_for_user(
@@ -612,11 +613,11 @@ async def assign_role(session: AsyncSession, *, user_id: uuid.UUID, role_id: uui
     session.add(UserRole(user_id=user_id, role_id=role_id))
 
 
-def seed_catalog(session: AsyncSession) -> None:
+async def seed_catalog(session: AsyncSession) -> None:
     """Idempotently seed the global permission catalog (migration-time helper)."""
     from sqlalchemy import select as sa_select
 
-    existing = set(session.execute(sa_select(PermissionCatalog.code)).scalars())
+    existing = set((await session.execute(sa_select(PermissionCatalog.code))).scalars())
     for item in PERMISSIONS:
         if item["code"] not in existing:
             session.add(

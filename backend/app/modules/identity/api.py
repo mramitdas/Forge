@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ForbiddenError
+from app.core.errors import ForbiddenError, NotFoundError
 from app.core.security import generate_temporary_password
 from app.db.session import get_platform_session
 from app.deps import Actor, get_actor_context, get_session_for_actor, require_permission
@@ -125,6 +125,8 @@ async def me(
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> MeOut:
     user = await session.get(User, actor.user_id)
+    if user is None:
+        raise NotFoundError("User not found", code="NOT_FOUND")
     return await _me_payload(session, actor, user)
 
 

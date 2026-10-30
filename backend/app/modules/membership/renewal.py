@@ -32,7 +32,7 @@ async def _handle_due_subscription(session: AsyncSession, sub: Subscription) -> 
     plan = await session.get(MembershipPlan, sub.plan_id)
     renew = sub.auto_renew and plan is not None and plan.is_active and plan.deleted_at is None
 
-    if renew:
+    if renew and plan is not None:
         duration_months = plan.duration_months or BILLING_PERIOD_MONTHS.get(
             plan.billing_period, 1
         )

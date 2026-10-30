@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     @property
     def is_platform_scope(self) -> bool:
-        return self.platform_tenant_id
+        return bool(self.platform_tenant_id)
 
 
 @lru_cache
