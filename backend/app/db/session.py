@@ -28,8 +28,16 @@ def _ssl_connect_args(database_url: str) -> dict:
     default SSL context; local dev URLs without the flag stay plain."""
     query = parse_qs(urlparse(database_url).query)
     mode = (query.get("ssl") or query.get("sslmode") or [""])[0].lower()
-    if mode in ("require", "verify-ca", "verify-full", "prefer"):
+    if mode in ("verify-ca", "verify-full"):
         return {"ssl": ssl.create_default_context()}
+    if mode in ("require", "prefer"):
+        # libpq "require" encrypts but does not verify the CA chain. Managed
+        # poolers (e.g. Supabase Supavisor) present a self-signed chain that
+        # strict verification rejects; honour the documented semantics.
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return {"ssl": ctx}
     return {}
 
 
