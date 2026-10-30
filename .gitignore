@@ -2,6 +2,7 @@
 .claude
 .gemini
 .opencode
+.superpowers
 
 # IDE and Editors
 **/.idea/
