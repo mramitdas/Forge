@@ -102,20 +102,6 @@ def create_app() -> FastAPI:
         response.headers["x-response-time-ms"] = str(elapsed_ms)
         structlog.contextvars.unbind_contextvars("request_id", "path")
 
-        # Cache-Control for read-heavy, infrequently-changing GET endpoints
-        if (
-            request.method == "GET"
-            and response.status_code == 200
-            and "cache-control" not in response.headers
-        ):
-            path = request.url.path
-            if path.endswith("/tiers") or "/subscriptions/tiers" in path:
-                response.headers["cache-control"] = "public, max-age=300"
-            elif path.endswith("/auth/me"):
-                response.headers["cache-control"] = "private, max-age=30"
-            elif "/platform/" in path:
-                response.headers["cache-control"] = "public, max-age=60"
-
         return response
 
     @app.exception_handler(AppError)
