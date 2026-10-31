@@ -204,3 +204,49 @@ jobs:
       - name: Backend logs
         if: failure()
         run: cat /tmp/backend.log /tmp/frontend.log || true
+
+  deploy-backend:
+    name: Deploy backend (Vercel)
+    needs: [backend, frontend, e2e]
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/prod' && 'production' || 'staging' }}
+    if: |
+      github.ref == 'refs/heads/stag' ||
+      github.ref == 'refs/heads/prod'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Deploy backend to Vercel
+        working-directory: backend
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }} vercel deploy --prod --yes --project backend --scope mramitdas-projects
+          else
+            VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }} vercel deploy --yes --project backend --scope mramitdas-projects
+          fi
+
+  deploy-frontend:
+    name: Deploy frontend (Vercel)
+    needs: [backend, frontend, e2e]
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/prod' && 'production' || 'staging' }}
+    if: |
+      github.ref == 'refs/heads/stag' ||
+      github.ref == 'refs/heads/prod'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Deploy frontend to Vercel
+        working-directory: apps/web
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }} vercel deploy --prod --yes --project web --scope mramitdas-projects
+          else
+            VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }} vercel deploy --yes --project web --scope mramitdas-projects
+          fi
