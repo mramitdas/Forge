@@ -68,7 +68,7 @@ export default function InvoiceDetailPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                {cancellable && can("billing.invoices.view") && (
+                {cancellable && can("billing.view") && (
                   <Button variant="secondary" className="text-red hover:text-red" onClick={() => setVoidOpen(true)}>
                     Cancel invoice
                   </Button>

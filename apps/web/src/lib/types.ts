@@ -108,6 +108,7 @@ export interface InvoiceSummaryOut {
   outstanding_minor: number;
   collected_minor: number;
   overdue_minor: number;
+  monthly?: Record<string, number>;
 }
 
 export interface CheckInOut {
@@ -134,6 +135,14 @@ export interface ExpenseOut {
 export interface PageOut<T> {
   items: T[];
   total: number | null;
+  page: number;
+  page_size: number;
+}
+
+export interface ExpenseYearOut {
+  monthly: Record<string, number>;
+  total: number;
+  expenses: ExpenseOut[];
   page: number;
   page_size: number;
 }
@@ -303,4 +312,36 @@ export interface PermissionOut {
   code: string;
   module: string;
   description: string;
+}
+
+export interface EmployeeOut {
+  id: string;
+  email: string;
+  full_name: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  is_active: boolean;
+  is_platform: boolean;
+  created_at: string;
+  role_ids: string[];
+  role_names: string[];
+}
+
+export interface EmployeeCreatedOut extends EmployeeOut {
+  temporary_password: string;
+}
+
+export interface EmployeeFormData {
+  email: string;
+  full_name: string;
+  phone: string | null;
+  role_ids: string[];
+}
+
+export interface EmployeeUpdateData {
+  full_name?: string;
+  phone?: string | null;
+  is_active?: boolean;
+  role_ids?: string[];
 }

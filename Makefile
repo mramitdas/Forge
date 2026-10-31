@@ -2,7 +2,7 @@ PY := .venv/bin/python
 RUFF := .venv/bin/ruff
 ALEMBIC := .venv/bin/alembic
 
-.PHONY: db-up db-init db-psql migrate migrate-downgrade seed reset test test-backend test-web lint fmt dev web help e2e e2e-ui e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses e2e-all
+.PHONY: db-up db-init db-psql migrate migrate-downgrade seed seed-fixtures reset test test-backend test-web lint fmt dev web help e2e e2e-ui e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses e2e-employees e2e-billing e2e-all
 
 help:
 	@echo "Targets:"
@@ -10,7 +10,8 @@ help:
 	@echo "  db-init      create the gym role and the gym_erp / gym_erp_test databases"
 	@echo "  db-psql      open psql shell as gym role"
 	@echo "  migrate      run alembic upgrade head on dev DB"
-	@echo "  seed         seed dev DB (platform user, demo gym, branch, plans)"
+	@echo "  seed         seed dev DB (platform admin only, from env)"
+	@echo "  seed-fixtures seed demo fixtures (demo gym, owner, plans, branch)"
 	@echo "  reset        wipe ALL dev data, re-migrate, re-seed (single-shot cleanup)"
 	@echo "  test         run backend (pytest -q) + web unit tests (npm test)"
 	@echo "  test-backend run backend test suite (pytest -q)"
@@ -27,7 +28,9 @@ help:
 	@echo "  e2e-roles    run role_visibility house e2e script"
 	@echo "  e2e-frontdesk run frontdesk house e2e script"
 	@echo "  e2e-expenses run expenses house e2e script"
-	@echo "  e2e-all      platform suite + all six house scripts, sequential"
+	@echo "  e2e-billing  run billing house e2e script"
+	@echo "  e2e-employees run employee house e2e script"
+	@echo "  e2e-all      platform suite + all house scripts, sequential"
 
 # Starts a local Postgres cluster however this machine happens to manage it.
 # Debian/Ubuntu ship pg_ctlcluster; macOS via Homebrew uses brew services.
@@ -61,6 +64,9 @@ migrate-downgrade:
 
 seed:
 	cd backend && $(PY) -m scripts.seed_dev
+
+seed-fixtures:
+	cd backend && $(PY) -m scripts.seed_fixtures
 
 reset:
 	cd backend && bash scripts/reset_dev.sh
@@ -97,22 +103,28 @@ e2e-ui:
 
 # House-style scripts are single-process (inherently 1 worker) and share one
 # dev DB — always run them sequentially, never in parallel.
-e2e-gym:
+e2e-gym: seed-fixtures
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/gym_ops_verify.cjs
 
-e2e-plans:
+e2e-plans: seed-fixtures
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/plans_verify.cjs
 
-e2e-member:
+e2e-member: seed-fixtures
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/member_account_verify.cjs
 
-e2e-roles:
+e2e-roles: seed-fixtures
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/role_visibility_verify.cjs
 
-e2e-frontdesk:
+e2e-frontdesk: seed-fixtures
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/frontdesk_verify.cjs
 
-e2e-expenses:
+e2e-expenses: seed-fixtures
 	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/expenses_verify.cjs
 
-e2e-all: e2e e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses
+e2e-employees: seed-fixtures
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/employee_verify.cjs
+
+e2e-billing: seed-fixtures
+	cd apps/web && NODE_PATH="$$(npm root -g)" node e2e/billing_verify.cjs
+
+e2e-all: seed-fixtures e2e e2e-gym e2e-plans e2e-member e2e-roles e2e-frontdesk e2e-expenses e2e-billing e2e-employees

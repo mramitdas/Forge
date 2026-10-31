@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import uuid
+
+from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
+from app.db.session import get_sessionmaker
+from app.kernel.pagination import OffsetPagination
+from app.modules.expenses.service import list_expenses
+
 from tests.helpers import login, provision_gym
 
 
@@ -40,17 +47,24 @@ async def test_list_expenses_offset_pagination_is_stable_for_tied_paid_at(
         for _, expense_id in sorted(seeded, key=lambda pair: pair, reverse=True)
     ]
 
+    maker = get_sessionmaker()
+    tenant_id = uuid.UUID(str(gym["id"]))
+    token_ctx = set_tenant_context(TenantContext(tenant_id=tenant_id))
     paged_ids: list[str] = []
-    for page in (1, 2, 3):
-        response = await client.get(
-            "/api/v1/expenses",
-            headers=headers,
-            params={"page": page, "page_size": 2},
-        )
-        assert response.status_code == 200, response.text
-        body = response.json()
-        assert body["total"] == 6
-        paged_ids.extend(item["id"] for item in body["items"])
+    try:
+        async with maker() as session:
+            await session.begin()
+            for page in (1, 2, 3):
+                rows, total = await list_expenses(
+                    session,
+                    tenant_id=tenant_id,
+                    pagination=OffsetPagination(page=page, page_size=2),
+                )
+                assert total == 6
+                paged_ids.extend(str(row.id) for row in rows)
+            await session.rollback()
+    finally:
+        reset_tenant_context(token_ctx)
 
     # Full coverage: every seeded expense appears exactly once across pages.
     assert len(paged_ids) == 6

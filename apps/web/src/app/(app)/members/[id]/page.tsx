@@ -306,7 +306,7 @@ export default function MemberDetailPage() {
                 >
                   <Avatar name={member.name} size="lg" src={member.avatarPath ? avatarUrl(member.id) : null} />
                 </button>
-                {can("members.update") && (
+                {can("members.manage") && (
                   <button
                     type="button"
                     onClick={() => fileInput?.click()}
@@ -362,7 +362,7 @@ export default function MemberDetailPage() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {can("members.update") && (
+                {can("members.manage") && (
                   <Button variant="secondary" onClick={openEdit}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
@@ -370,18 +370,18 @@ export default function MemberDetailPage() {
                     Edit
                   </Button>
                 )}
-                {can("members.update") &&
+                {can("members.manage") &&
                   (member.isActive ? (
                     <Button variant="secondary" onClick={() => toggleActive(false)}>Disable</Button>
                   ) : (
                     <Button variant="secondary" onClick={() => toggleActive(true)}>Enable</Button>
                   ))}
-                {can("members.checkin") && (
+                {can("members.manage") && (
                   <Button onClick={checkInNow} disabled={checkin.isPending}>
                     {checkin.isPending ? "Checking in…" : "Check in"}
                   </Button>
                 )}
-                {can("members.delete") && (
+                {can("members.manage") && (
                   <Button variant="secondary" className="text-red hover:text-red" onClick={() => setDeleteOpen(true)}>
                     Delete
                   </Button>
@@ -423,7 +423,7 @@ export default function MemberDetailPage() {
                   </div>
                   <span className="text-[16px] font-semibold">{inr(sub.price)}</span>
                 </div>
-                {sub.status === "pending" && can("membership.subscriptions.activate") && (
+                {sub.status === "pending" && can("membership.manage") && (
                   <Button className="w-full" onClick={activateSub}>
                     Activate subscription
                   </Button>
@@ -663,7 +663,7 @@ export default function MemberDetailPage() {
             <div className="mx-auto flex h-48 w-48 items-center justify-center overflow-hidden rounded-full">
               <img src={avatarUrl(member.id)} alt={member.name} className="h-full w-full object-cover" />
             </div>
-            {can("members.update") && (
+            {can("members.manage") && (
               <div className="flex justify-center gap-2">
                 <Button type="button" variant="secondary" onClick={captureFromCamera}>Retake</Button>
                 <Button type="button" variant="secondary" onClick={() => fileInput?.click()}>Upload new</Button>
@@ -675,7 +675,7 @@ export default function MemberDetailPage() {
             <div className="mx-auto flex h-48 w-48 items-center justify-center overflow-hidden rounded-full bg-fill">
               <Avatar name={member?.name ?? "?"} size="lg" />
             </div>
-            {can("members.update") && (
+            {can("members.manage") && (
               <div className="flex justify-center gap-2">
                 <Button type="button" variant="secondary" onClick={captureFromCamera}>Capture</Button>
                 <Button type="button" variant="secondary" onClick={() => fileInput?.click()}>Upload</Button>

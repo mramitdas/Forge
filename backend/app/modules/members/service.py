@@ -160,8 +160,8 @@ async def delete_member(
             )
         ).all()
         for row in rows:
-            row.deleted_at = member.deleted_at
-            row.deleted_by = actor_id
+            row.deleted_at = member.deleted_at  # type: ignore[attr-defined]
+            row.deleted_by = actor_id  # type: ignore[attr-defined]
 
     # Check-ins have no soft delete; drop them outright so attendance feeds
     # stop rendering orphans ("Unknown member") after the member is gone.

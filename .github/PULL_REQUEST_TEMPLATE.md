@@ -11,7 +11,11 @@
 
 ## Verification
 
-- [ ] `make lint` and `make test` pass
+- [ ] `make lint` passes (backend)
+- [ ] `make test-backend` passes
 - [ ] `npx tsc --noEmit` passes
+- [ ] `npm run test` passes
 - [ ] `npm run build` passes
-- [ ] `node e2e/platform_admin_verify.cjs` passes (required if shared UI files changed)
+- [ ] Platform admin or shared-UI change → `make e2e` plus affected house
+      script(s) (`make e2e-gym`, etc.) run sequentially
+- [ ] CI checks green: `Backend lint + tests` and `Frontend build`

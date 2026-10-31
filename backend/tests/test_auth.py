@@ -23,8 +23,8 @@ async def test_login_and_me(client, gym_a):
     me = response.json()
     assert str(me["tenant_id"]) == str(gym_a["id"])
     assert me["is_platform"] is False
-    assert "members.create" in me["permissions"]
-    assert "billing.payments.capture" in me["permissions"]
+    assert "members.manage" in me["permissions"]
+    assert "billing.manage" in me["permissions"]
     assert me["branches"] == []
 
 
@@ -109,8 +109,8 @@ async def test_permission_catalog_and_roles(client, gym_a):
     response = await client.get("/api/v1/permissions", headers=headers)
     assert response.status_code == 200
     codes = {p["code"] for p in response.json()}
-    assert len(codes) >= 25
-    assert {"members.create", "attendance.checkin", "roles.manage"} <= codes
+    assert len(codes) >= 24
+    assert {"members.manage", "attendance.manage", "identity.manage"} <= codes
 
     response = await client.get("/api/v1/permissions/roles", headers=headers)
     assert response.status_code == 200
@@ -124,7 +124,7 @@ async def test_permission_catalog_and_roles(client, gym_a):
         json={
             "name": "Front Desk",
             "description": "Reception staff",
-            "permission_codes": ["members.view", "attendance.checkin"],
+            "permission_codes": ["members.view", "attendance.manage"],
             "branch_scope": "all",
         },
     )
@@ -143,6 +143,36 @@ async def test_permission_catalog_and_roles(client, gym_a):
         },
     )
     assert response.status_code == 422
+
+    # Two-tier semantics: manage implies view in the effective permission set.
+    manage_only = await client.post(
+        "/api/v1/permissions/roles",
+        headers=headers,
+        json={
+            "name": "Manage Only",
+            "permission_codes": ["members.manage"],
+            "branch_scope": "all",
+        },
+    )
+    assert manage_only.status_code == 201, manage_only.text
+    employee = await client.post(
+        "/api/v1/employees",
+        headers=headers,
+        json={
+            "email": "manage-only@example.com",
+            "full_name": "Manage Only",
+            "password": "Manage-Only-123!",
+            "role_ids": [manage_only.json()["id"]],
+        },
+    )
+    assert employee.status_code == 201, employee.text
+    emp_tokens = await login(client, "manage-only@example.com", "Manage-Only-123!")
+    me = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {emp_tokens['access_token']}"},
+    )
+    assert me.status_code == 200
+    assert {"members.manage", "members.view"} <= set(me.json()["permissions"])
 
 
 async def test_update_me_profile(client, gym_a):

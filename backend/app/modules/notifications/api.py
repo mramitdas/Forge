@@ -3,13 +3,15 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import NotFoundError
 from app.deps import Actor, get_session_for_actor, require_permission
+from app.kernel.pagination import OffsetPagination
 from app.modules.notifications.service import (
     NotificationOut,
+    NotificationPageOut,
     list_for_user,
     mark_all_read,
     mark_read,
@@ -19,13 +21,23 @@ from app.modules.notifications.service import (
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
-@router.get("", response_model=list[NotificationOut])
+@router.get("", response_model=NotificationPageOut)
 async def list_notifications(
     actor: Annotated[Actor, Depends(require_permission("notifications.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
-) -> list[NotificationOut]:
-    rows = await list_for_user(session, user_id=actor.user_id)
-    return [NotificationOut.model_validate(n) for n in rows]
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=1000),
+) -> NotificationPageOut:
+    pagination = OffsetPagination(page=page, page_size=page_size)
+    rows, total = await list_for_user(
+        session, user_id=actor.user_id, pagination=pagination
+    )
+    return NotificationPageOut(
+        items=[NotificationOut.model_validate(n) for n in rows],
+        total=total,
+        page=pagination.page,
+        page_size=pagination.page_size,
+    )
 
 
 @router.get("/unread-count", response_model=dict)

@@ -50,8 +50,8 @@ async function main() {
     const createForm = page.locator("form").last();
     await createForm.locator("input").first().fill(PLAN_NAME);
     // Leave slug blank → should auto-generate from name (no branch → name only).
-    await createForm.locator('input[placeholder*="150000"]').fill("125000");
-    await createForm.locator('input[placeholder="0"]').fill("5000");
+    await createForm.locator('input[aria-label="Price (₹)"]').fill("1250");
+    await createForm.locator('input[placeholder="0"]').fill("50");
     await createForm.getByRole("button", { name: /create plan/i }).click();
     await must("plan created and visible", page.getByText(PLAN_NAME, { exact: true }).waitFor({ timeout: 15000 }));
 

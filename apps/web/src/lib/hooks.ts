@@ -18,7 +18,12 @@ import {
 import type {
   BranchOut,
   CheckInOut,
+  EmployeeCreatedOut,
+  EmployeeFormData,
+  EmployeeOut,
+  EmployeeUpdateData,
   ExpenseOut,
+  ExpenseYearOut,
   GymOut,
   GymOwnerOut,
   GymSettingsOut,
@@ -81,7 +86,7 @@ export function useBranches(): {
   const branchesQ = useQuery({
     queryKey: ["branches"],
     queryFn: () => apiFetch<BranchOut[]>("/branches"),
-    enabled: can("tenancy.branches.view"),
+    enabled: can("tenancy.view"),
   });
   const membersQ = useQuery({
     queryKey: ["members", "all"],
@@ -246,18 +251,18 @@ export function useMemberCtx(): {
   });
   const subsQ = useQuery({
     queryKey: ["subscriptions"],
-    queryFn: () => apiFetch<SubscriptionOut[]>("/plans/subscriptions"),
-    enabled: can("membership.subscriptions.view"),
+    queryFn: () => fetchPaged<SubscriptionOut>("/plans/subscriptions"),
+    enabled: can("membership.view"),
   });
   const checkinsQ = useQuery({
     queryKey: ["checkins", "all"],
     queryFn: () => fetchPaged<CheckInOut>("/checkin"),
-    enabled: can("attendance.records.view"),
+    enabled: can("attendance.view"),
   });
   const invoicesQ = useQuery({
     queryKey: ["invoices", "ctx"],
     queryFn: () => apiFetch<PageOut<InvoiceOut>>("/invoices?page_size=200"),
-    enabled: can("billing.invoices.view"),
+    enabled: can("billing.view"),
   });
 
   return useMemo(
@@ -400,8 +405,10 @@ export function useMemberDetail(id: string): {
   const subsQ = useQuery({
     queryKey: ["subscriptions", id],
     queryFn: () =>
-      apiFetch<SubscriptionOut[]>(`/plans/subscriptions?member_id=${id}`),
-    enabled: !!id && can("membership.subscriptions.view"),
+      apiFetch<PageOut<SubscriptionOut>>(
+        `/plans/subscriptions?member_id=${id}&page_size=1000`,
+      ),
+    enabled: !!id && can("membership.view"),
   });
   const timelineQ = useQuery({
     queryKey: ["member", id, "timeline"],
@@ -414,7 +421,7 @@ export function useMemberDetail(id: string): {
     const invoices = ctxQ.ctx.invoices
       .filter((i) => i.member_id === id)
       .map(toUiInvoice);
-    const subs = (subsQ.data ?? []).map(toUiSubscription);
+    const subs = (subsQ.data?.items ?? []).map(toUiSubscription);
     return {
       member: m ? toUiMember(m, ctxQ.ctx) : null,
       subs,
@@ -434,17 +441,42 @@ export function useMemberDetail(id: string): {
   }, [memberQ.data, memberQ.isLoading, memberQ.isError, ctxQ, subsQ.data, subsQ.isLoading, subsQ.isError, timelineQ.data, timelineQ.isLoading, timelineQ.isError, id]);
 }
 
-export function useSubscriptionsData(): {
+export function useSubscriptionsPage(params: {
+  page: number;
+  pageSize: number;
+  status?: string;
+}): {
   subs: Subscription[];
+  total: number;
   isLoading: boolean;
   isError: boolean;
 } {
+  const can = useCan();
   const q = useQuery({
-    queryKey: ["subscriptions"],
-    queryFn: () => apiFetch<SubscriptionOut[]>("/plans/subscriptions"),
+    queryKey: ["subscriptions", "page", params],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      });
+      if (params.status && params.status !== "all") {
+        sp.set("status", params.status);
+      }
+      return apiFetch<PageOut<SubscriptionOut>>(`/plans/subscriptions?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    enabled: can("membership.view"),
   });
   return useMemo(
-    () => ({ subs: (q.data ?? []).map(toUiSubscription), isLoading: q.isLoading, isError: q.isError }),
+    () => {
+      const page = q.data ?? { items: [] as SubscriptionOut[], total: 0 };
+      return {
+        subs: page.items.map(toUiSubscription),
+        total: page.total ?? page.items.length,
+        isLoading: q.isLoading,
+        isError: q.isError,
+      };
+    },
     [q.data, q.isLoading, q.isError],
   );
 }
@@ -458,23 +490,42 @@ export function useTenantTier(): {
   const q = useQuery({
     queryKey: ["tenant-tier"],
     queryFn: () => apiFetch<TenantTierOut>("/subscriptions/tier"),
-    enabled: can("membership.subscriptions.view"),
+    enabled: can("membership.view"),
   });
   return { tier: q.data, isLoading: q.isLoading, isError: q.isError };
 }
 
-export function useCheckins(): { items: CheckinRecord[]; isLoading: boolean; isError: boolean } {
+export function useCheckins(params?: { page?: number; pageSize?: number }): {
+  items: CheckinRecord[];
+  total: number;
+  isLoading: boolean;
+  isError: boolean;
+} {
   const can = useCan();
   const q = useQuery({
-    queryKey: ["checkins", "all"],
-    queryFn: () => fetchPaged<CheckInOut>("/checkin"),
-    enabled: can("attendance.records.view"),
+    queryKey: params
+      ? ["checkins", "page", params]
+      : ["checkins", "all"],
+    queryFn: () => {
+      if (params) {
+        const sp = new URLSearchParams({
+          page: String(params.page ?? 1),
+          page_size: String(params.pageSize ?? 50),
+        });
+        return apiFetch<PageOut<CheckInOut>>(`/checkin?${sp.toString()}`);
+      }
+      return fetchPaged<CheckInOut>("/checkin").then(
+        (items) => ({ items, total: items.length }) as PageOut<CheckInOut>,
+      );
+    },
+    placeholderData: params ? keepPreviousData : undefined,
+    enabled: can("attendance.view"),
   });
   const ctxQ = useMemberCtx();
   const branchesQ = useQuery({
     queryKey: ["branches"],
     queryFn: () => apiFetch<BranchOut[]>("/branches"),
-    enabled: can("tenancy.branches.view"),
+    enabled: can("tenancy.view"),
   });
 
   return useMemo(() => {
@@ -484,10 +535,16 @@ export function useCheckins(): { items: CheckinRecord[]; isLoading: boolean; isE
     const branchNames = new Map(
       (branchesQ.data ?? []).map((b) => [b.id, b.name]),
     );
-    const items = (q.data ?? []).map((c) =>
+    const page = q.data ?? { items: [] as CheckInOut[], total: 0 };
+    const items = page.items.map((c) =>
       toUiCheckin(c, memberNames, branchNames),
     );
-    return { items, isLoading: q.isLoading, isError: q.isError || ctxQ.isError || branchesQ.isError };
+    return {
+      items,
+      total: page.total ?? page.items.length,
+      isLoading: q.isLoading,
+      isError: q.isError || ctxQ.isError || branchesQ.isError,
+    };
   }, [q.data, q.isLoading, q.isError, ctxQ.members, ctxQ.isError, branchesQ.data, branchesQ.isError]);
 }
 
@@ -495,6 +552,7 @@ export function useInvoicesPage(params: {
   page: number;
   pageSize: number;
   search?: string;
+  year?: number;
 }): {
   invoices: Invoice[];
   total: number;
@@ -510,10 +568,11 @@ export function useInvoicesPage(params: {
         page_size: String(params.pageSize),
       });
       if (params.search) sp.set("q", params.search);
+      if (params.year) sp.set("year", String(params.year));
       return apiFetch<PageOut<InvoiceOut>>(`/invoices?${sp.toString()}`);
     },
     placeholderData: keepPreviousData,
-    enabled: can("billing.invoices.view"),
+    enabled: can("billing.view"),
   });
   const page = q.data ?? { items: [] as InvoiceOut[], total: 0 };
   return {
@@ -524,63 +583,54 @@ export function useInvoicesPage(params: {
   };
 }
 
-export function useInvoiceSummary(): {
+export function useInvoiceSummary(year?: number): {
   summary: InvoiceSummaryOut | undefined;
   isLoading: boolean;
   isError: boolean;
 } {
   const can = useCan();
   const q = useQuery({
-    queryKey: ["invoices", "summary"],
-    queryFn: () => apiFetch<InvoiceSummaryOut>("/invoices/summary"),
-    enabled: can("billing.invoices.view"),
+    queryKey: ["invoices", "summary", year],
+    queryFn: () =>
+      apiFetch<InvoiceSummaryOut>(
+        year ? `/invoices/summary?year=${year}` : "/invoices/summary",
+      ),
+    enabled: can("billing.view"),
   });
   return { summary: q.data, isLoading: q.isLoading, isError: q.isError };
 }
 
-export function useExpensesData(): {
+export function useExpensesYearPage(params: { year: number; page: number; pageSize: number }): {
   expenses: ExpenseOut[];
-  isLoading: boolean;
-  isError: boolean;
-} {
-  const can = useCan();
-  const q = useQuery({
-    queryKey: ["expenses"],
-    queryFn: () => fetchPaged<ExpenseOut>("/expenses"),
-    enabled: can("expenses.view"),
-  });
-  return useMemo(
-    () => ({ expenses: q.data ?? [], isLoading: q.isLoading, isError: q.isError }),
-    [q.data, q.isLoading, q.isError],
-  );
-}
-
-export function useExpensesPage(params: { page: number; pageSize: number }): {
-  expenses: ExpenseOut[];
+  monthly: Record<string, number>;
   total: number;
   isLoading: boolean;
   isError: boolean;
 } {
   const can = useCan();
   const q = useQuery({
-    queryKey: ["expenses", "page", params],
+    queryKey: ["expenses", "year-page", params],
     queryFn: () => {
       const sp = new URLSearchParams({
+        year: String(params.year),
         page: String(params.page),
         page_size: String(params.pageSize),
       });
-      return apiFetch<PageOut<ExpenseOut>>(`/expenses?${sp.toString()}`);
+      return apiFetch<ExpenseYearOut>(`/expenses?${sp.toString()}`);
     },
     placeholderData: keepPreviousData,
     enabled: can("expenses.view"),
   });
-  const page = q.data ?? { items: [] as ExpenseOut[], total: 0 };
-  return {
-    expenses: page.items,
-    total: page.total ?? page.items.length,
-    isLoading: q.isLoading,
-    isError: q.isError,
-  };
+  return useMemo(
+    () => ({
+      expenses: q.data?.expenses ?? [],
+      monthly: q.data?.monthly ?? {},
+      total: q.data?.total ?? 0,
+      isLoading: q.isLoading,
+      isError: q.isError,
+    }),
+    [q.data, q.isLoading, q.isError],
+  );
 }
 
 export function useCreateExpense() {
@@ -654,7 +704,7 @@ export function useNotificationsData(): {
   const enabled = can("notifications.view");
   const q = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => apiFetch<NotificationOut[]>("/notifications"),
+    queryFn: () => fetchPaged<NotificationOut>("/notifications"),
     staleTime: 0,
     enabled,
   });
@@ -671,6 +721,49 @@ export function useNotificationsData(): {
       isLoading: q.isLoading || unreadQ.isLoading,
       isError: q.isError || unreadQ.isError,
     }),
+    [q.data, q.isLoading, q.isError, unreadQ.data, unreadQ.isLoading, unreadQ.isError],
+  );
+}
+
+export function useNotificationsPage(params: { page: number; pageSize: number }): {
+  notifications: Notification[];
+  total: number;
+  unread: number;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
+  const enabled = can("notifications.view");
+  const q = useQuery({
+    queryKey: ["notifications", "page", params],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      });
+      return apiFetch<PageOut<NotificationOut>>(`/notifications?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    enabled,
+  });
+  const unreadQ = useQuery({
+    queryKey: ["notifications", "unread"],
+    queryFn: () => apiFetch<{ count: number }>("/notifications/unread-count"),
+    staleTime: 0,
+    enabled,
+  });
+  return useMemo(
+    () => {
+      const page = q.data ?? { items: [] as NotificationOut[], total: 0 };
+      return {
+        notifications: page.items.map(toUiNotification),
+        total: page.total ?? page.items.length,
+        unread: unreadQ.data?.count ?? 0,
+        isLoading: q.isLoading || unreadQ.isLoading,
+        isError: q.isError || unreadQ.isError,
+      };
+    },
     [q.data, q.isLoading, q.isError, unreadQ.data, unreadQ.isLoading, unreadQ.isError],
   );
 }
@@ -1136,7 +1229,7 @@ export function useGymSettings(): {
     queryKey: ["settings"],
     queryFn: () => apiFetch<GymSettingsOut>("/settings"),
     retry: false,
-    enabled: can("tenancy.settings.manage"),
+    enabled: can("tenancy.manage"),
   });
   return useMemo(
     () => ({ settings: q.data ?? null, isLoading: q.isLoading, isError: q.isError }),
@@ -1226,6 +1319,82 @@ export function useDeleteRole() {
       apiFetch<void>(`/permissions/roles/${roleId}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roles"] });
+    },
+  });
+}
+
+export function useEmployeesPage(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+}): {
+  employees: EmployeeOut[];
+  total: number;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const can = useCan();
+  const q = useQuery({
+    queryKey: ["employees", "page", params],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      });
+      const q = params.search?.trim();
+      if (q) {
+        sp.set("search", q);
+      }
+      return apiFetch<PageOut<EmployeeOut>>(`/employees?${sp.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+    enabled: can("identity.view"),
+    retry: false,
+  });
+  const page = q.data ?? { items: [] as EmployeeOut[], total: 0 };
+  return {
+    employees: page.items,
+    total: page.total ?? page.items.length,
+    isLoading: q.isLoading,
+    isError: q.isError,
+  };
+}
+
+export function useCreateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: EmployeeFormData) =>
+      apiFetch<EmployeeCreatedOut>("/employees", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+export function useUpdateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { userId: string; body: EmployeeUpdateData }) =>
+      apiFetch<EmployeeOut>(`/employees/${args.userId}`, {
+        method: "PATCH",
+        body: JSON.stringify(args.body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+}
+
+export function useDeleteEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiFetch<void>(`/employees/${userId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
     },
   });
 }

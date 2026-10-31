@@ -98,13 +98,34 @@ class CreateEmployeeRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=200)
     phone: str | None = None
-    password: str = Field(min_length=8, max_length=128)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
     role_ids: list[uuid.UUID] = []
 
     @field_validator("full_name")
     @classmethod
     def normalize_name(cls, v: str) -> str:
         return v.strip()
+
+
+class EmployeeOut(UserOut):
+    role_ids: list[uuid.UUID] = []
+    role_names: list[str] = []
+
+
+class EmployeeCreatedOut(EmployeeOut):
+    temporary_password: str
+
+
+class EmployeeUpdateRequest(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    phone: str | None = None
+    is_active: bool | None = None
+    role_ids: list[uuid.UUID] | None = None
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_name(cls, v: str | None) -> str | None:
+        return v.strip() if isinstance(v, str) else v
 
 
 class CreateRoleRequest(BaseModel):
@@ -131,3 +152,10 @@ class UpdateRoleRequest(BaseModel):
     description: str | None = None
     permission_codes: list[str] = Field(default_factory=list)
     is_active: bool | None = None
+
+
+class EmployeePageOut(BaseModel):
+    items: list[EmployeeOut]
+    total: int | None
+    page: int
+    page_size: int

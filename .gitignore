@@ -2,6 +2,7 @@
 .claude
 .gemini
 .opencode
+.superpowers
 
 # IDE and Editors
 **/.idea/
@@ -106,8 +107,8 @@
 
 # Environment and secrets
 **/.env
-**/.env.local
-**/.env.*.local
+**/.env.*
+!**/.env.example
 *.pem
 *.key
 
@@ -177,3 +178,9 @@
 
 # Runtime uploads (member avatars, media)
 backend/media/
+.vercel
+
+# Coverage artifacts
+**/.coverage
+**/.coverage.*
+**/htmlcov/

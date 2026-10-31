@@ -111,14 +111,14 @@ async function main() {
     await page.goto(`${BASE}/roles`);
     await settle(page);
     await page.getByRole("heading", { name: "Gym Owner", exact: true }).waitFor({ timeout: 15000 });
-    await must("roles: page renders role catalog cards", page.getByRole("heading", { name: "Receptionist", exact: true }).waitFor({ timeout: 15000 }));
+    await must("roles: owner card renders", page.getByRole("heading", { name: "Gym Owner", exact: true }).waitFor({ timeout: 15000 }));
 
     const ownerCard = page
       .locator("div.glass", { has: page.getByRole("heading", { name: "Gym Owner", exact: true }) })
       .first();
     await ownerCard.getByText("Locked", { exact: true }).waitFor({ timeout: 10000 });
     await page.getByRole("heading", { name: "Gym Owner", exact: true }).click();
-    await must("roles: Gym Owner expands to read-only permission pills", ownerCard.locator('[aria-label="members read on"]').waitFor({ timeout: 10000 }));
+    await must("roles: Gym Owner expands to read-only permission pills", ownerCard.locator('[aria-label="members view on"]').waitFor({ timeout: 10000 }));
 
     // Card headers stay button-free (actions live outside the role=button
     // header region) — regression check for nested-button issues.
@@ -135,8 +135,8 @@ async function main() {
     const roleModal = page.locator("div.fixed.inset-0"); // Modal root, unique while open
     await roleModal.getByPlaceholder("Front Desk Lead").fill(ROLE_NAME);
     await roleModal.getByPlaceholder("Optional").fill("E2E custom role");
-    await roleModal.getByRole("button", { name: "members read off" }).click();
-    await roleModal.getByRole("button", { name: "notifications read off" }).click();
+    await roleModal.getByRole("button", { name: "members view off" }).click();
+    await roleModal.getByRole("button", { name: "notifications view off" }).click();
     await roleModal.getByRole("button", { name: /^Create role \(/ }).click();
     await must("roles: custom role created via UI form", page.getByText(`Created ${ROLE_NAME}`).waitFor({ timeout: 15000 }));
 
@@ -162,24 +162,22 @@ async function main() {
 
     // Duplicate names must be blocked client-side (backend has NO uniqueness
     // check — POST would silently 201 a second identical role).
-    await modal3.getByPlaceholder("Front Desk Lead").fill("Receptionist");
+    await modal3.getByPlaceholder("Front Desk Lead").fill(ROLE_NAME);
     await modal3.getByRole("button", { name: /^Create role \(/ }).click();
     await must("roles: duplicate role name blocked", page.getByText("Could not create role").waitFor({ timeout: 10000 }));
     await modal3.getByRole("button", { name: "Cancel" }).click();
 
-    // Permission edit goes through the Edit modal (pills + per-module details).
+    // Permission edit goes through the Edit modal (two switches per module).
     await roleCard.getByRole("button", { name: "Edit", exact: true }).click();
     const editModal = page.locator("div.fixed.inset-0");
-    await editModal.locator('[data-module="reports"]').getByRole("button", { name: "Details" }).click();
-    await editModal.getByRole("switch", { name: "reports.view" }).click();
+    await editModal.locator('[data-module="attendance"]').getByRole("button", { name: "attendance view off" }).click();
     await editModal.getByRole("button", { name: /^Save changes \(/ }).click();
     await must("roles: custom role permission edit saves via UI", roleCard.getByText("3 permissions", { exact: true }).waitFor({ timeout: 15000 }));
 
-    // Restore: remove reports.view through the same Edit modal.
+    // Restore: remove attendance.view through the same Edit modal.
     await roleCard.getByRole("button", { name: "Edit", exact: true }).click();
     const restoreModal = page.locator("div.fixed.inset-0");
-    await restoreModal.locator('[data-module="reports"]').getByRole("button", { name: "Details" }).click();
-    await restoreModal.getByRole("switch", { name: "reports.view" }).click();
+    await restoreModal.locator('[data-module="attendance"]').getByRole("button", { name: "attendance view on" }).click();
     await restoreModal.getByRole("button", { name: /^Save changes \(/ }).click();
     await must("roles: permission edit restores", roleCard.getByText("2 permissions", { exact: true }).waitFor({ timeout: 15000 }));
 
@@ -192,8 +190,8 @@ async function main() {
     await must("settings: page renders profile / role pills / branch access", page.getByText("Branch access", { exact: true }).waitFor({ timeout: 15000 }));
     // R/W/U/D pills render and are non-interactive (owner has members.view,
     // so the members/read pill is always ON).
-    const readPill = page.locator('[aria-label="members read on"]').first();
-    await must("settings: permission pills render read=on for members", readPill.waitFor({ timeout: 15000 }));
+    const readPill = page.locator('[aria-label="members view on"]').first();
+    await must("settings: permission pills render view=on for members", readPill.waitFor({ timeout: 15000 }));
     await must("settings: permission pills are aria-disabled", (await readPill.getAttribute("aria-disabled")) === "true");
 
     const crossSwitch = page.getByRole("switch", { name: "Cross-branch access" });

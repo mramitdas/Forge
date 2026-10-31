@@ -97,7 +97,9 @@ async def test_full_slice_member_to_checkin(client, gym_a):
         params={"member_id": member["id"]},
     )
     assert subs.status_code == 200
-    subscription = next(s for s in subs.json() if s["status"] == "active")
+    subscription = next(
+        s for s in subs.json()["items"] if s["status"] == "active"
+    )
     assert subscription["plan_id"] == plan["id"]
 
     invoices = await client.get("/api/v1/invoices", headers=_headers(token))
@@ -228,7 +230,7 @@ async def test_outbox_dispatches_payment_notification(client, dispatcher, gym_a)
     notifications = await client.get(
         "/api/v1/notifications", headers=_headers(token)
     )
-    titles = {n["title"] for n in notifications.json()}
+    titles = {n["title"] for n in notifications.json()["items"]}
     assert "Payment received" in titles
 
     # Dispatcher is idempotent: running again delivers nothing new.

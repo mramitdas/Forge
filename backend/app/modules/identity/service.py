@@ -51,7 +51,8 @@ async def _load_user_with_credential(
         .join(Credential, Credential.user_id == User.id)
         .where(User.email == email.lower(), User.deleted_at.is_(None))
     )
-    return result.first()
+    row = result.first()
+    return (row[0], row[1]) if row is not None else None
 
 
 async def _issue_for_user(
@@ -336,6 +337,10 @@ async def get_effective_permissions(
             perms[rp.permission_code] = branches
         elif branches is not None and existing is not None:
             existing.update(branches)
+    # Gym capabilities are two-tier: manage always includes view.
+    for code in list(perms):
+        if code.endswith(".manage") and not code.startswith("platform."):
+            perms.setdefault(code[: -len(".manage")] + ".view", perms[code])
     return perms
 
 
@@ -442,7 +447,7 @@ async def delete_role(
     )
     if assignments:
         raise ConflictError(
-            f"Role is assigned to {assignments} user(s) and cannot be deleted",
+            f"This role is assigned to {assignments} employee(s) and cannot be deleted",
             code="ROLE_IN_USE",
         )
     role.deleted_at = datetime.now(UTC)
@@ -510,24 +515,109 @@ async def create_employee(
         )
         for role in roles:
             session.add(UserRole(user_id=user.id, role_id=role.id))
+        # Flush before returning: autoflush=False means the pre-commit
+        # employee_roles() SELECT in the API layer would otherwise see no
+        # assignment rows and the 201 body would report empty roles.
+        await session.flush()
     return user
+
+
+async def employee_roles(
+    session: AsyncSession, *, tenant_id: uuid.UUID, user_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[Role]]:
+    """Map user_id → active tenant roles for the given employees."""
+    if not user_ids:
+        return {}
+    rows = await session.execute(
+        select(UserRole.user_id, Role)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(
+            UserRole.user_id.in_(user_ids),
+            Role.tenant_id == tenant_id,
+            Role.deleted_at.is_(None),
+        )
+    )
+    mapping: dict[uuid.UUID, list[Role]] = {}
+    for user_id, role in rows.all():
+        mapping.setdefault(user_id, []).append(role)
+    return mapping
+
+
+async def update_employee(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    full_name: str | None = None,
+    phone: str | None = None,
+    is_active: bool | None = None,
+    role_ids: list[uuid.UUID] | None = None,
+) -> User:
+    user = await session.scalar(
+        select(User).where(
+            User.id == user_id, User.tenant_id == tenant_id, User.deleted_at.is_(None)
+        )
+    )
+    if user is None:
+        raise NotFoundError("Employee not found", code="NOT_FOUND")
+    if full_name is not None:
+        user.full_name = full_name
+        user.first_name, user.last_name = split_full_name(full_name)
+    if phone is not None:
+        user.phone = phone or None
+    if is_active is not None:
+        user.is_active = is_active
+    if role_ids is not None:
+        existing = await session.scalars(select(UserRole).where(UserRole.user_id == user_id))
+        for assignment in existing:
+            await session.delete(assignment)
+        if role_ids:
+            roles = await session.scalars(
+                select(Role).where(
+                    Role.id.in_(role_ids),
+                    Role.tenant_id == tenant_id,
+                    Role.deleted_at.is_(None),
+                )
+            )
+            for role in roles:
+                session.add(UserRole(user_id=user.id, role_id=role.id))
+    await session.flush()
+    return user
+
+
+async def delete_employee(
+    session: AsyncSession, *, tenant_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID
+) -> None:
+    if user_id == actor_id:
+        raise ConflictError("You cannot delete your own account", code="SELF_DELETE")
+    user = await session.scalar(
+        select(User).where(
+            User.id == user_id, User.tenant_id == tenant_id, User.deleted_at.is_(None)
+        )
+    )
+    if user is None:
+        raise NotFoundError("Employee not found", code="NOT_FOUND")
+    user.is_active = False
+    user.deleted_at = datetime.now(UTC)
+    await session.flush()
 
 
 async def assign_role(session: AsyncSession, *, user_id: uuid.UUID, role_id: uuid.UUID) -> None:
     user = await session.get(User, user_id)
     role = await session.get(Role, role_id)
+    # Tenant RLS filters session.get() by the actor's tenant, so a foreign
+    # tenant's user or role resolves to None and surfaces 404 NOT_FOUND —
+    # the designed cross-tenant behavior (pinned by test_employee_crud).
     if user is None or role is None:
         raise NotFoundError("User or role not found", code="NOT_FOUND")
-    if user.tenant_id != role.tenant_id:
-        raise ConflictError("Cross-tenant role assignment", code="TENANT_MISMATCH")
     session.add(UserRole(user_id=user_id, role_id=role_id))
 
 
-def seed_catalog(session: AsyncSession) -> None:
+async def seed_catalog(session: AsyncSession) -> None:
     """Idempotently seed the global permission catalog (migration-time helper)."""
     from sqlalchemy import select as sa_select
 
-    existing = set(session.execute(sa_select(PermissionCatalog.code)).scalars())
+    existing = set((await session.execute(sa_select(PermissionCatalog.code))).scalars())
     for item in PERMISSIONS:
         if item["code"] not in existing:
             session.add(

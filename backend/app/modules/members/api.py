@@ -46,11 +46,11 @@ router = APIRouter(prefix="/members", tags=["members"])
 @router.post("", response_model=MemberOut, status_code=201)
 async def create(
     body: MemberCreate,
-    actor: Annotated[Actor, Depends(require_permission("members.create"))],
+    actor: Annotated[Actor, Depends(require_permission("members.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> MemberOut:
     perms = await get_effective_permissions(session, actor.user_id)
-    assert_branch_in_scope(perms, "members.create", body.branch_id)
+    assert_branch_in_scope(perms, "members.manage", body.branch_id)
     member = await create_member(
         session,
         tenant_id=actor.tenant_id,
@@ -81,7 +81,7 @@ async def list_members_endpoint(
     actor: Annotated[Actor, Depends(require_permission("members.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     search: str | None = None,
     status: str | None = None,
     branch_id: uuid.UUID | None = None,
@@ -117,7 +117,7 @@ async def detail(
 async def update(
     member_id: uuid.UUID,
     body: MemberUpdate,
-    actor: Annotated[Actor, Depends(require_permission("members.update"))],
+    actor: Annotated[Actor, Depends(require_permission("members.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> MemberOut:
     data = body.model_dump(exclude_unset=True)
@@ -134,7 +134,7 @@ async def update(
 @router.delete("/{member_id}", status_code=204)
 async def remove(
     member_id: uuid.UUID,
-    actor: Annotated[Actor, Depends(require_permission("members.delete"))],
+    actor: Annotated[Actor, Depends(require_permission("members.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await delete_member(
@@ -149,7 +149,7 @@ async def remove(
 async def upload_avatar(
     member_id: uuid.UUID,
     file: Annotated[UploadFile, File(description="Image file")],
-    actor: Annotated[Actor, Depends(require_permission("members.update"))],
+    actor: Annotated[Actor, Depends(require_permission("members.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> dict:
     await get_member(session, member_id)
