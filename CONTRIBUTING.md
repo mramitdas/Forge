@@ -10,20 +10,27 @@ routes, or data contract. If a change requires touching it, open an issue first.
 
 After any change to shared files the panel depends on
 (`components/ui.tsx`, `components/skeleton*.tsx`, `lib/hooks.ts`,
-`lib/api.ts`, `(app)/layout.tsx`), run the regression gate:
+`lib/api.ts`, `(app)/layout.tsx`), run the platform e2e suite and the
+affected house scripts:
 
 ```bash
-cd apps/web && NODE_PATH="$(npm root -g)" node e2e/platform_admin_verify.cjs
+make e2e               # full platform Playwright suite (workers=1)
+make e2e-gym           # plus any house script for your domain
 ```
 
-All 22 checks must pass.
+All regression gates must pass 100%.
 
 ## Development
 
-- Backend: Python 3.11, FastAPI + SQLAlchemy async. Run `make lint` and `make test`.
+- Backend: Python 3.11+, FastAPI + SQLAlchemy async. Run `make lint`
+  (ruff) and `make test-backend` (pytest, 90% coverage gate).
 - Frontend: Next.js 15, client components only, TanStack Query for data.
-  Run `npx tsc --noEmit` and `npm run build` before opening a PR.
-- Migrations: Alembic revisions in `backend/alembic/versions/`; apply with `make migrate`.
+  Run `npx tsc --noEmit`, `npm run test`, and `npm run build` before
+  opening a PR.
+- Migrations: Alembic revisions in `backend/alembic/versions/`; apply with
+  `make migrate`.
+- Code quality: mypy (`mypy app`), ESLint (`npm run lint`); pre-commit
+  hooks run ruff and repo hygiene checks.
 
 ## Pull requests
 
