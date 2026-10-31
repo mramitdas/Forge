@@ -87,12 +87,17 @@ Environment files are git-ignored; only `*.env.example` files are tracked.
 | `backend/.env.production` | Production settings (Supabase URL, prod JWT secret, CORS). Never committed. |
 | `apps/web/.env.example` | Frontend env; copy to `apps/web/.env.local`. Set `API_BACKEND_URL` when the API is not on `:8000`. |
 
-`GYM_ENVIRONMENT` selects **which env file** the backend loads — set it to the
-filename you want, and only that file is read:
+`GYM_ENV_FILE` selects **which env file** the backend loads (default `.env`);
+set it to `.env.production` to load production values. `GYM_ENVIRONMENT` sets
+the deployment stage (`development`/`test`/`production`) and, for backwards
+compatibility, still accepts a filename which is translated to the matching
+stage. Only one env file is read; process environment variables still override
+file values:
 
 ```bash
-make seed                            # default: GYM_ENVIRONMENT=.env (local)
-GYM_ENVIRONMENT=.env.production make seed   # use production values
+make seed                                                    # .env (local dev)
+GYM_ENV_FILE=.env.production make seed   # production values
+GYM_ENVIRONMENT=production make seed             # stage only (file still .env)
 ```
 
 Process environment variables (e.g. `GYM_DATABASE_URL=...`) still override
@@ -120,15 +125,17 @@ a standard Next.js Vercel project. Both are deployed independently.
    `api/index.py` Mangum handler serves the FastAPI app; `vercel.json` builds it
    with `@vercel/python` and routes every path to it. Set env vars in the Vercel
    project (at minimum `GYM_DATABASE_URL`, `GYM_ENVIRONMENT=production`,
-   `GYM_JWT_HMAC_SECRET`, `GYM_PLATFORM_ADMIN_*`, `GYM_ALLOWED_ORIGINS`).
+   `GYM_JWT_HMAC_SECRET` (≥32 chars) or an ES256 keypair,
+   `GYM_PLATFORM_ADMIN_*`, `GYM_ALLOWED_ORIGINS`). Production startup fails
+   fast if signing material or the database URL looks like local dev values.
 
 3. **Frontend project** — deploy from `apps/web/` (`vercel deploy --prod`). Set
    `API_BACKEND_URL` to the backend project URL so the `/api` and `/health`
    rewrites target it.
 
 Health probes: `GET /health/live` (process up) and `GET /health/ready`
-(database reachable). The first request after a cold start may briefly report
-`/health/ready` as `503` while the pooler connection warms up.
+(database reachable). Startup attempts a best-effort database warm-up so the
+first request rarely pays a cold-start penalty.
 
 ## Tests & lint
 

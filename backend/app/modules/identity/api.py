@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.errors import ForbiddenError, NotFoundError
+from app.core.ratelimit import enforce_auth_limit
 from app.core.security import generate_temporary_password
 from app.db.session import get_platform_session
 from app.deps import Actor, get_actor_context, get_session_for_actor, require_permission
@@ -53,6 +55,13 @@ async def login(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_platform_session)],
 ) -> TokenResponse:
+    settings = get_settings()
+    enforce_auth_limit(
+        request,
+        "login",
+        settings.auth_rate_limit_per_minute,
+        settings.auth_rate_limit_window_seconds,
+    )
     return await identity_svc.authenticate(
         session,
         email=str(body.email),
@@ -68,6 +77,13 @@ async def refresh(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_platform_session)],
 ) -> TokenResponse:
+    settings = get_settings()
+    enforce_auth_limit(
+        request,
+        "refresh",
+        settings.auth_rate_limit_per_minute,
+        settings.auth_rate_limit_window_seconds,
+    )
     return await identity_svc.refresh_tokens(
         session,
         refresh_token=body.refresh_token,
