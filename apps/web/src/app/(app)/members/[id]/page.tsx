@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -660,8 +661,14 @@ export default function MemberDetailPage() {
       >
         {member?.avatarPath ? (
           <div className="space-y-4">
-            <div className="mx-auto flex h-48 w-48 items-center justify-center overflow-hidden rounded-full">
-              <img src={avatarUrl(member.id)} alt={member.name} className="h-full w-full object-cover" />
+            <div className="mx-auto relative flex h-48 w-48 items-center justify-center overflow-hidden rounded-full">
+              <Image
+                src={avatarUrl(member.id)}
+                alt={member.name}
+                fill
+                sizes="(48px)"
+                className="h-full w-full object-cover"
+              />
             </div>
             {can("members.manage") && (
               <div className="flex justify-center gap-2">

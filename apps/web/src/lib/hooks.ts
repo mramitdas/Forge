@@ -63,15 +63,26 @@ export function byId<T extends { id: string }>(list: T[]): Map<string, T> {
 }
 
 async function fetchPaged<T>(path: string, maxPages = 20): Promise<T[]> {
-  const out: T[] = [];
   const pageSize = 100;
-  for (let page = 1; page <= maxPages; page++) {
-    const res = await apiFetch<PageOut<T>>(
-      `${path}${path.includes("?") ? "&" : "?"}page=${page}&page_size=${pageSize}`,
-    );
-    out.push(...res.items);
-    if (!res.total || res.total <= out.length) break;
-  }
+  // Fetch page 1 first to get total, then fetch remaining pages in parallel.
+  const first = await apiFetch<PageOut<T>>(
+    `${path}${path.includes("?") ? "&" : "?"}page=1&page_size=${pageSize}`,
+  );
+  const out: T[] = [...first.items];
+  const total = first.total ?? 0;
+  if (total <= out.length) return out;
+  const remainingPages = Math.ceil(total / pageSize);
+  const pagesToFetch = Math.min(remainingPages - 1, maxPages - 1);
+  if (pagesToFetch <= 0) return out;
+  const results = await Promise.all(
+    Array.from({ length: pagesToFetch }, (_, i) => {
+      const page = i + 2;
+      return apiFetch<PageOut<T>>(
+        `${path}${path.includes("?") ? "&" : "?"}page=${page}&page_size=${pageSize}`,
+      );
+    }),
+  );
+  for (const r of results) out.push(...r.items);
   return out;
 }
 
@@ -87,11 +98,13 @@ export function useBranches(): {
     queryKey: ["branches"],
     queryFn: () => apiFetch<BranchOut[]>("/branches"),
     enabled: can("tenancy.view"),
+    staleTime: 5 * 60_000, // branches change infrequently
   });
   const membersQ = useQuery({
     queryKey: ["members", "all"],
     queryFn: () => fetchPaged<MemberOut>("/members"),
     enabled: can("members.view"),
+    staleTime: 2 * 60_000,
   });
 
   return useMemo(() => {
@@ -113,6 +126,7 @@ export function usePlans(): { plans: Plan[]; isLoading: boolean; isError: boolea
   const q = useQuery({
     queryKey: ["plans"],
     queryFn: () => apiFetch<PlanOut[]>("/plans"),
+    staleTime: 5 * 60_000, // plans change infrequently
   });
   return useMemo(
     () => ({ plans: (q.data ?? []).map(toUiPlan), isLoading: q.isLoading, isError: q.isError }),
@@ -491,6 +505,7 @@ export function useTenantTier(): {
     queryKey: ["tenant-tier"],
     queryFn: () => apiFetch<TenantTierOut>("/subscriptions/tier"),
     enabled: can("membership.view"),
+    staleTime: 5 * 60_000,
   });
   return { tier: q.data, isLoading: q.isLoading, isError: q.isError };
 }
@@ -1109,6 +1124,7 @@ export function usePlatformTiers(): {
   const q = useQuery({
     queryKey: ["platform", "tiers"],
     queryFn: () => apiFetch<SubscriptionTierOut[]>("/platform/tiers"),
+    staleTime: 5 * 60_000,
   });
   return useMemo(
     () => ({ tiers: q.data ?? [], isLoading: q.isLoading, isError: q.isError }),
