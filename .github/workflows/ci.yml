@@ -28,7 +28,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -86,7 +86,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -132,7 +132,7 @@ jobs:
       GYM_PLATFORM_ADMIN_PASSWORD: Ci-Admin-123!
       GYM_ALLOWED_ORIGINS: '["http://localhost:3000"]'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -214,7 +214,7 @@ jobs:
       github.ref == 'refs/heads/stag' ||
       github.ref == 'refs/heads/prod'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Vercel CLI
         run: npm i -g vercel@latest
@@ -237,7 +237,7 @@ jobs:
       github.ref == 'refs/heads/stag' ||
       github.ref == 'refs/heads/prod'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Vercel CLI
         run: npm i -g vercel@latest
