@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
@@ -85,15 +87,21 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.add_middleware(GZipMiddleware, minimum_size=512)
+
     @app.middleware("http")
     async def request_context(request: Request, call_next):
         request_id = request.headers.get("x-request-id", uuid.uuid4().hex[:16])
         import structlog
 
         structlog.contextvars.bind_contextvars(request_id=request_id, path=request.url.path)
+        start = time.perf_counter()
         response = await call_next(request)
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
         response.headers["x-request-id"] = request_id
+        response.headers["x-response-time-ms"] = str(elapsed_ms)
         structlog.contextvars.unbind_contextvars("request_id", "path")
+
         return response
 
     @app.exception_handler(AppError)

@@ -48,9 +48,10 @@ def get_engine():
         settings = get_settings()
         _engine = create_async_engine(
             settings.database_url,
-            pool_size=10,
-            max_overflow=20,
-            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=False,
+            pool_recycle=1800,
             echo=False,
             connect_args=_ssl_connect_args(settings.database_url),
         )
@@ -89,17 +90,17 @@ class TenantAwareSession(AsyncSession):
         # Always write both settings, even when the caller has no context. A GUC
         # created by set_config resets to '' (not NULL) after the transaction, and
         # pooled connections would otherwise feed a stale value (or a stale
-        # platform_scope) into the next request's RLS policy.
-        if tenant_id is not None:
-            await self.execute(
-                text("SELECT set_config('app.tenant_id', :v, true)"),
-                {"v": str(tenant_id)},
-            )
-        else:
-            await self.execute(text("SELECT set_config('app.tenant_id', '', true)"))
+        # platform_scope) into the next request's RLS policy. Both GUCs are set in
+        # a single round-trip to cut per-transaction latency on pooled connections.
         await self.execute(
-            text("SELECT set_config('app.platform_scope', :v, true)"),
-            {"v": "on" if platform_scope else "off"},
+            text(
+                "SELECT set_config('app.tenant_id', :v1, true), "
+                "set_config('app.platform_scope', :v2, true)"
+            ),
+            {
+                "v1": str(tenant_id) if tenant_id is not None else "",
+                "v2": "on" if platform_scope else "off",
+            },
         )
 
 

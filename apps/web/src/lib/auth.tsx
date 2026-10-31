@@ -19,8 +19,28 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const ME_CACHE_KEY = "forge_me";
+
+function getCachedMe(): MeOut | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(ME_CACHE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as MeOut;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedMe(data: MeOut | null) {
+  if (typeof window === "undefined") return;
+  if (data) sessionStorage.setItem(ME_CACHE_KEY, JSON.stringify(data));
+  else sessionStorage.removeItem(ME_CACHE_KEY);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [me, setMe] = useState<MeOut | null>(null);
+  const [me, setMe] = useState<MeOut | null>(() => getCachedMe());
   const [loading, setLoading] = useState(true);
   const [mustChange, setMustChange] = useState(false);
 
@@ -38,9 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await apiFetch<MeOut>("/auth/me");
       setMe(data);
+      setCachedMe(data);
       if (data.must_change) setMustChange(true);
     } catch {
       setMe(null);
+      setCachedMe(null);
     } finally {
       setLoading(false);
     }
@@ -79,11 +101,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (tokens.must_change) {
       setMustChange(true);
       setMe(null);
+      setCachedMe(null);
       setLoading(false);
       return null;
     }
     const data = await apiFetch<MeOut>("/auth/me");
     setMe(data);
+    setCachedMe(data);
     return data;
   }, []);
 
@@ -103,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("gym_access_token");
     localStorage.removeItem("gym_refresh_token");
     setMe(null);
+    setCachedMe(null);
     setMustChange(false);
   }, []);
 
