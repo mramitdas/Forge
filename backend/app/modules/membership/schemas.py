@@ -73,3 +73,10 @@ class SubscriptionOut(BaseModel):
     currency: str
 
     model_config = {"from_attributes": True}
+
+
+class SubscriptionPageOut(BaseModel):
+    items: list[SubscriptionOut]
+    total: int | None
+    page: int
+    page_size: int

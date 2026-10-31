@@ -13,9 +13,10 @@ from app.modules.expenses.service import (
     ExpenseCreate,
     ExpenseOut,
     ExpenseUpdate,
+    ExpenseYearOut,
     create_expense,
     delete_expense,
-    list_expenses,
+    list_expenses_by_year,
     update_expense,
 )
 
@@ -41,33 +42,21 @@ async def create_expense_route(
     return ExpenseOut.model_validate(expense)
 
 
-@router.get("", response_model=dict)
-async def list_expenses_route(
+@router.get("", response_model=ExpenseYearOut)
+async def list_expenses_by_year_route(
     actor: Annotated[Actor, Depends(require_permission("expenses.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+    year: int | None = Query(None, ge=1970, le=9999),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    category: str | None = None,
-    branch_id: uuid.UUID | None = None,
-    paid_from: datetime | None = None,
-    paid_to: datetime | None = None,
-) -> dict:
+    page_size: int = Query(1000, ge=1, le=1000),
+) -> ExpenseYearOut:
     pagination = OffsetPagination(page=page, page_size=page_size)
-    rows, total = await list_expenses(
-        session,
+    return await list_expenses_by_year(
+        session=session,
         tenant_id=actor.tenant_id,
+        year=year or datetime.now().year,
         pagination=pagination,
-        category=category,
-        branch_id=branch_id,
-        paid_from=paid_from,
-        paid_to=paid_to,
     )
-    return {
-        "items": [ExpenseOut.model_validate(r).model_dump() for r in rows],
-        "total": total,
-        "page": pagination.page,
-        "page_size": pagination.page_size,
-    }
 
 
 @router.patch("/{expense_id}", response_model=ExpenseOut)
@@ -93,3 +82,4 @@ async def delete_expense_route(
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await delete_expense(session, tenant_id=actor.tenant_id, expense_id=expense_id)
+

@@ -3,11 +3,14 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ForbiddenError
+from app.core.config import get_settings
+from app.core.errors import ForbiddenError, NotFoundError
+from app.core.ratelimit import enforce_auth_limit
+from app.core.security import generate_temporary_password
 from app.db.session import get_platform_session
 from app.deps import Actor, get_actor_context, get_session_for_actor, require_permission
 from app.modules.identity import service as identity_svc
@@ -24,6 +27,10 @@ from app.modules.identity.schemas import (
     ChangePasswordRequest,
     CreateEmployeeRequest,
     CreateRoleRequest,
+    EmployeeCreatedOut,
+    EmployeeOut,
+    EmployeePageOut,
+    EmployeeUpdateRequest,
     LoginRequest,
     LogoutRequest,
     MeOut,
@@ -48,6 +55,13 @@ async def login(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_platform_session)],
 ) -> TokenResponse:
+    settings = get_settings()
+    enforce_auth_limit(
+        request,
+        "login",
+        settings.auth_rate_limit_per_minute,
+        settings.auth_rate_limit_window_seconds,
+    )
     return await identity_svc.authenticate(
         session,
         email=str(body.email),
@@ -63,6 +77,13 @@ async def refresh(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_platform_session)],
 ) -> TokenResponse:
+    settings = get_settings()
+    enforce_auth_limit(
+        request,
+        "refresh",
+        settings.auth_rate_limit_per_minute,
+        settings.auth_rate_limit_window_seconds,
+    )
     return await identity_svc.refresh_tokens(
         session,
         refresh_token=body.refresh_token,
@@ -120,6 +141,8 @@ async def me(
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> MeOut:
     user = await session.get(User, actor.user_id)
+    if user is None:
+        raise NotFoundError("User not found", code="NOT_FOUND")
     return await _me_payload(session, actor, user)
 
 
@@ -158,7 +181,7 @@ async def change_password_route(
 
 @roles_router.get("", response_model=list[PermissionOut])
 async def permission_catalog(
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> list[PermissionOut]:
     rows = await session.scalars(select(PermissionCatalog).order_by(PermissionCatalog.code))
@@ -167,7 +190,7 @@ async def permission_catalog(
 
 @roles_router.get("/roles", response_model=list[RoleOut])
 async def list_roles(
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> list[RoleOut]:
     rows = await session.scalars(
@@ -199,7 +222,7 @@ async def list_roles(
 async def update_role(
     role_id: uuid.UUID,
     body: UpdateRoleRequest,
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> RoleOut:
     role = await identity_svc.update_role(
@@ -225,7 +248,7 @@ async def update_role(
 @roles_router.post("/roles", response_model=RoleOut, status_code=201)
 async def create_role(
     body: CreateRoleRequest,
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> RoleOut:
     role = await identity_svc.create_role(
@@ -242,7 +265,7 @@ async def create_role(
 @roles_router.delete("/roles/{role_id}", status_code=204)
 async def delete_role(
     role_id: uuid.UUID,
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await identity_svc.delete_role(
@@ -250,41 +273,122 @@ async def delete_role(
     )
 
 
-@employees_router.post("", response_model=UserOut, status_code=201)
+@employees_router.post("", response_model=EmployeeCreatedOut, status_code=201)
 async def create_employee(
     body: CreateEmployeeRequest,
-    actor: Annotated[Actor, Depends(require_permission("users.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
-) -> UserOut:
+) -> EmployeeCreatedOut:
+    temporary_password = body.password or generate_temporary_password()
     user = await identity_svc.create_employee(
         session,
         tenant_id=actor.tenant_id,
         email=str(body.email),
         full_name=body.full_name,
-        password=body.password,
+        password=temporary_password,
         phone=body.phone,
         role_ids=body.role_ids,
     )
-    return UserOut.model_validate(user)
+    roles = await identity_svc.employee_roles(
+        session, tenant_id=actor.tenant_id, user_ids=[user.id]
+    )
+    role_list = roles.get(user.id, [])
+    return EmployeeCreatedOut(
+        **UserOut.model_validate(user).model_dump(),
+        role_ids=[r.id for r in role_list],
+        role_names=[r.name for r in role_list],
+        temporary_password=temporary_password,
+    )
 
 
-@employees_router.get("", response_model=list[UserOut])
+@employees_router.get("", response_model=EmployeePageOut)
 async def list_employees(
-    actor: Annotated[Actor, Depends(require_permission("users.view"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.view"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
-) -> list[UserOut]:
-    rows = await session.scalars(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=1000),
+    search: str | None = Query(None, max_length=256),
+) -> EmployeePageOut:
+    stmt = (
         select(User)
         .where(User.tenant_id == actor.tenant_id, User.deleted_at.is_(None))
         .order_by(User.full_name)
     )
-    return [UserOut.model_validate(u) for u in rows]
+    q = search.strip() if search else ""
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(
+            or_(User.full_name.ilike(like), User.email.ilike(like))
+        )
+    rows = await session.scalars(stmt)
+    users = list(rows)
+    roles = await identity_svc.employee_roles(
+        session, tenant_id=actor.tenant_id, user_ids=[u.id for u in users]
+    )
+    result: list[EmployeeOut] = []
+    for user in users:
+        role_list = roles.get(user.id, [])
+        if any(role.name == "Gym Owner" for role in role_list):
+            continue
+        result.append(
+            EmployeeOut(
+                **UserOut.model_validate(user).model_dump(),
+                role_ids=[r.id for r in role_list],
+                role_names=[r.name for r in role_list],
+            )
+        )
+    total = len(result)
+    start = (page - 1) * page_size
+    return EmployeePageOut(
+        items=result[start : start + page_size],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@employees_router.patch("/{user_id}", response_model=EmployeeOut)
+async def update_employee(
+    user_id: uuid.UUID,
+    body: EmployeeUpdateRequest,
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> EmployeeOut:
+    user = await identity_svc.update_employee(
+        session,
+        tenant_id=actor.tenant_id,
+        user_id=user_id,
+        full_name=body.full_name,
+        phone=body.phone,
+        is_active=body.is_active,
+        role_ids=body.role_ids,
+    )
+    roles = await identity_svc.employee_roles(
+        session, tenant_id=actor.tenant_id, user_ids=[user.id]
+    )
+    role_list = roles.get(user.id, [])
+    return EmployeeOut(
+        **UserOut.model_validate(user).model_dump(),
+        role_ids=[r.id for r in role_list],
+        role_names=[r.name for r in role_list],
+    )
+
+
+@employees_router.delete("/{user_id}", status_code=204)
+async def delete_employee(
+    user_id: uuid.UUID,
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
+    session: Annotated[AsyncSession, Depends(get_session_for_actor)],
+) -> None:
+    await identity_svc.delete_employee(
+        session, tenant_id=actor.tenant_id, user_id=user_id, actor_id=actor.user_id
+    )
 
 
 @employees_router.post("/assign", status_code=204)
 async def assign_role(
     body: AssignRoleRequest,
-    actor: Annotated[Actor, Depends(require_permission("roles.manage"))],
+    actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
     await identity_svc.assign_role(session, user_id=body.user_id, role_id=body.role_id)

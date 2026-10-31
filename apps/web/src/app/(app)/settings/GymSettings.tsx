@@ -287,7 +287,7 @@ export default function GymSettings() {
         </div>
       </Card>
 
-      {can("tenancy.settings.manage") && (
+      {can("tenancy.manage") && (
         <Async
           loading={settingsLoading}
           error={settingsError}
@@ -414,7 +414,7 @@ export default function GymSettings() {
         <PermissionPills permissions={me?.permissions ?? []} />
       </Card>
 
-      {can("roles.manage") && (
+      {can("identity.manage") && (
         <Card className="flex items-center justify-between p-6">
           <div>
             <p className="text-[14px] font-semibold">Danger zone</p>

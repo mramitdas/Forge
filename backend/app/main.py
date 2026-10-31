@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.core.config import get_settings
+from app.core.config import get_settings, validate_runtime_settings
 from app.core.errors import AppError, to_http_exception
 from app.core.logging import configure_logging, get_logger
 from app.db.session import get_engine
@@ -41,10 +42,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     register_handlers()
     dispatcher = Dispatcher()
     settings = get_settings()
+    validate_runtime_settings(settings)
+
+    # Warm up the connection pool so the first request never pays a cold-start
+    # penalty (and 503). Best-effort: never blocks startup.
+    try:
+        async with asyncio.timeout(3):
+            async with get_engine().connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        logger.info("database warm-up complete")
+    except Exception as exc:
+        logger.warning("database warm-up skipped", error=str(exc))
+
     tasks = []
     if not settings.debug:
-        import asyncio
-
         tasks.append(asyncio.create_task(dispatcher.run_forever(settings.outbox_poll_interval_seconds)))
         logger.info("outbox dispatcher started")
         renewal_worker = start_renewal_worker()
@@ -89,15 +100,16 @@ def create_app() -> FastAPI:
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         request_id = request.headers.get("x-request-id", "")
         detail = to_http_exception(exc).detail
-        detail["error"]["request_id"] = request_id
+        if isinstance(detail, dict):
+            detail["error"]["request_id"] = request_id
         return JSONResponse(status_code=exc.http_status, content=detail)
 
     @app.get("/health/live", include_in_schema=False)
     async def health_live() -> dict:
         return {"status": "ok"}
 
-    @app.get("/health/ready", include_in_schema=False)
-    async def health_ready() -> dict:
+    @app.get("/health/ready", include_in_schema=False, response_model=None)
+    async def health_ready() -> dict | JSONResponse:
         try:
             async with get_engine().connect() as conn:
                 await conn.execute(text("SELECT 1"))

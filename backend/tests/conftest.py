@@ -12,6 +12,7 @@ TEST_DB_URL = "postgresql+asyncpg://gym:gym_dev_pass@127.0.0.1:5432/gym_erp_test
 os.environ.setdefault("GYM_DATABASE_URL", TEST_DB_URL)
 os.environ.setdefault("GYM_ENVIRONMENT", "test")
 os.environ.setdefault("GYM_DEBUG", "true")
+os.environ.setdefault("GYM_AUTH_RATE_LIMIT_PER_MINUTE", "10000")
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.security import create_access_token, hash_password  # noqa: E402

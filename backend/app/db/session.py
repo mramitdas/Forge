@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
+    AsyncSessionTransaction,
     async_sessionmaker,
     create_async_engine,
 )
@@ -19,7 +20,7 @@ from app.core.tenant import TenantContext, get_tenant_context
 logger = get_logger(__name__)
 
 _engine = None
-_sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_sessionmaker: async_sessionmaker[TenantAwareSession] | None = None
 
 
 def _ssl_connect_args(database_url: str) -> dict:
@@ -28,8 +29,16 @@ def _ssl_connect_args(database_url: str) -> dict:
     default SSL context; local dev URLs without the flag stay plain."""
     query = parse_qs(urlparse(database_url).query)
     mode = (query.get("ssl") or query.get("sslmode") or [""])[0].lower()
-    if mode in ("require", "verify-ca", "verify-full", "prefer"):
+    if mode in ("verify-ca", "verify-full"):
         return {"ssl": ssl.create_default_context()}
+    if mode in ("require", "prefer"):
+        # libpq "require" encrypts but does not verify the CA chain. Managed
+        # poolers (e.g. Supabase Supavisor) present a self-signed chain that
+        # strict verification rejects; honour the documented semantics.
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return {"ssl": ctx}
     return {}
 
 
@@ -48,7 +57,7 @@ def get_engine():
     return _engine
 
 
-def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
+def get_sessionmaker() -> async_sessionmaker[TenantAwareSession]:
     global _sessionmaker
     if _sessionmaker is None:
         _sessionmaker = async_sessionmaker(
@@ -68,7 +77,7 @@ class TenantAwareSession(AsyncSession):
     are consistent for the entire transaction.
     """
 
-    async def begin(self):
+    async def begin(self) -> AsyncSessionTransaction:  # type: ignore[override]
         transaction = await super().begin()
         await self._stamp_tenant()
         return transaction

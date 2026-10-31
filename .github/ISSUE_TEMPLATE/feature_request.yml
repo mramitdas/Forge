@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest an idea or improvement
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this solve? Who is affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Backend / API
+        - Frontend / UI
+        - Database / migrations
+        - Auth
+        - Deployment / infra
+        - Docs / tooling
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: frozen
+    attributes:
+      label: Frozen surface
+      options:
+        - label: This does not touch the platform admin console (frozen for v1)

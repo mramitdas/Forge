@@ -1,0 +1,386 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T14:52:54Z",
+  "title": "Design System: Forge",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "displayName": "Periwinkle Signal",
+        "role": "primary",
+        "canonical": "#aab2ff",
+        "tonalRamp": [
+          "oklch(28% 0.08 265)",
+          "oklch(38% 0.11 265)",
+          "oklch(48% 0.14 265)",
+          "oklch(58% 0.15 265)",
+          "oklch(70% 0.13 265)",
+          "oklch(80% 0.10 265)",
+          "oklch(89% 0.07 265)",
+          "oklch(95% 0.04 265)"
+        ]
+      },
+      "accent-hover": {
+        "displayName": "Periwinkle Signal (hover)",
+        "role": "primary-state",
+        "canonical": "#bcc3ff"
+      },
+      "accent-ink": {
+        "displayName": "Midnight Ink",
+        "role": "on-primary",
+        "canonical": "#0f1224"
+      },
+      "accent-soft": {
+        "displayName": "Periwinkle Wash",
+        "role": "primary-soft",
+        "canonical": "rgba(170,178,255,0.16)"
+      },
+      "canvas": {
+        "displayName": "Midnight Graphite",
+        "role": "background",
+        "canonical": "#15161d",
+        "tonalRamp": [
+          "oklch(15% 0.008 265)",
+          "oklch(20% 0.010 265)",
+          "oklch(30% 0.012 265)",
+          "oklch(45% 0.014 265)",
+          "oklch(60% 0.012 265)",
+          "oklch(75% 0.010 265)",
+          "oklch(88% 0.008 265)",
+          "oklch(96% 0.005 265)"
+        ]
+      },
+      "surface": {
+        "displayName": "Elevated Surface",
+        "role": "surface",
+        "canonical": "#1d1e27",
+        "tonalRamp": [
+          "oklch(18% 0.009 265)",
+          "oklch(22% 0.010 265)",
+          "oklch(32% 0.012 265)",
+          "oklch(46% 0.013 265)",
+          "oklch(61% 0.011 265)",
+          "oklch(76% 0.009 265)",
+          "oklch(89% 0.007 265)",
+          "oklch(97% 0.004 265)"
+        ]
+      },
+      "panel": {
+        "displayName": "Glass Panel",
+        "role": "surface-glass",
+        "canonical": "rgba(28,29,38,0.72)",
+        "tonalRamp": [
+          "oklch(18% 0.009 265)",
+          "oklch(22% 0.010 265)",
+          "oklch(32% 0.012 265)",
+          "oklch(46% 0.013 265)",
+          "oklch(61% 0.011 265)",
+          "oklch(76% 0.009 265)",
+          "oklch(89% 0.007 265)",
+          "oklch(97% 0.004 265)"
+        ]
+      },
+      "ink": {
+        "displayName": "Ink",
+        "role": "text-primary",
+        "canonical": "#f0f1f7",
+        "tonalRamp": [
+          "oklch(20% 0.010 265)",
+          "oklch(30% 0.010 265)",
+          "oklch(42% 0.010 265)",
+          "oklch(55% 0.010 265)",
+          "oklch(68% 0.008 265)",
+          "oklch(78% 0.006 265)",
+          "oklch(90% 0.004 265)",
+          "oklch(96% 0.002 265)"
+        ]
+      },
+      "ink-soft": {
+        "displayName": "Ink Soft",
+        "role": "text-secondary",
+        "canonical": "#b8bacb"
+      },
+      "ink-faint": {
+        "displayName": "Ink Faint",
+        "role": "text-muted",
+        "canonical": "#8a8ca0"
+      },
+      "line": {
+        "displayName": "Hairline",
+        "role": "border",
+        "canonical": "rgba(255,255,255,0.09)"
+      },
+      "success": {
+        "displayName": "Signal Green",
+        "role": "semantic-success",
+        "canonical": "#4fd7a0",
+        "tonalRamp": [
+          "oklch(25% 0.06 160)",
+          "oklch(35% 0.09 160)",
+          "oklch(45% 0.11 160)",
+          "oklch(55% 0.12 160)",
+          "oklch(68% 0.11 160)",
+          "oklch(78% 0.08 160)",
+          "oklch(88% 0.05 160)",
+          "oklch(95% 0.03 160)"
+        ]
+      },
+      "warning": {
+        "displayName": "Signal Amber",
+        "role": "semantic-warning",
+        "canonical": "#ffb54a",
+        "tonalRamp": [
+          "oklch(28% 0.06 70)",
+          "oklch(38% 0.09 72)",
+          "oklch(48% 0.12 74)",
+          "oklch(58% 0.13 75)",
+          "oklch(70% 0.12 75)",
+          "oklch(80% 0.09 75)",
+          "oklch(89% 0.06 75)",
+          "oklch(95% 0.03 75)"
+        ]
+      },
+      "danger": {
+        "displayName": "Signal Red",
+        "role": "semantic-danger",
+        "canonical": "#ff7a70",
+        "tonalRamp": [
+          "oklch(25% 0.08 25)",
+          "oklch(35% 0.11 25)",
+          "oklch(45% 0.14 25)",
+          "oklch(55% 0.15 25)",
+          "oklch(68% 0.14 25)",
+          "oklch(78% 0.10 25)",
+          "oklch(88% 0.06 25)",
+          "oklch(95% 0.03 25)"
+        ]
+      },
+      "info": {
+        "displayName": "Signal Blue",
+        "role": "semantic-info",
+        "canonical": "#7ab0ff"
+      },
+      "canvas-light": {
+        "displayName": "Cool Porcelain",
+        "role": "background-light",
+        "canonical": "#f2f3f8"
+      },
+      "surface-light": {
+        "displayName": "Porcelain Surface",
+        "role": "surface-light",
+        "canonical": "#ffffff"
+      },
+      "ink-light": {
+        "displayName": "Graphite Ink",
+        "role": "text-primary-light",
+        "canonical": "#1f2130"
+      },
+      "accent-light": {
+        "displayName": "Daylight Periwinkle",
+        "role": "primary-light",
+        "canonical": "#7b87f2"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Wordmark and short page, section, and modal titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Table cells, form values, descriptions, and prose."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, captions, and the uppercase kicker used for shell section labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card-rest",
+        "value": "0 8px 24px rgba(0,0,0,0.4)",
+        "purpose": "Glass panels resting against the canvas."
+      },
+      {
+        "name": "action-glow",
+        "value": "0 1px 12px rgba(170,178,255,0.4)",
+        "purpose": "Primary button glow; light mode uses 32% periwinkle."
+      },
+      {
+        "name": "toast",
+        "value": "0 12px 40px rgba(0,0,0,0.4)",
+        "purpose": "Floating status at the bottom center."
+      },
+      {
+        "name": "modal",
+        "value": "0 25px 50px -12px rgba(0,0,0,0.25)",
+        "purpose": "Strongest lift, paired with an opaque surface."
+      }
+    ],
+    "motion": [
+      {
+        "name": "fast-state",
+        "value": "150ms cubic-bezier(0.25,0.46,0.45,0.94)",
+        "purpose": "Hover, focus, and active color/scale feedback."
+      },
+      {
+        "name": "modal-in",
+        "value": "220ms cubic-bezier(0.25,0.46,0.45,0.94)",
+        "purpose": "Modal scale-and-fade entrance."
+      },
+      {
+        "name": "toast-in",
+        "value": "250ms cubic-bezier(0.25,0.46,0.45,0.94)",
+        "purpose": "Bottom-center toast rise."
+      },
+      {
+        "name": "content-in",
+        "value": "280ms cubic-bezier(0.25,0.46,0.45,0.94)",
+        "purpose": "Page content fade-up; disabled under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "2xl",
+        "value": "1536px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single accent action per screen: solid Periwinkle Signal, Midnight Ink label, soft glow.",
+      "html": "<button class=\"ds-btn ds-btn--primary\">Add expense</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 16px;border:1px solid transparent;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:background 150ms cubic-bezier(0.25,0.46,0.45,0.94),transform 150ms cubic-bezier(0.25,0.46,0.45,0.94)}\n.ds-btn--primary{background:var(--color-accent,#aab2ff);color:var(--color-accent-ink,#0f1224);box-shadow:0 1px 12px var(--color-glow,rgba(170,178,255,0.4))}\n.ds-btn--primary:hover{background:var(--color-accent-hover,#bcc3ff)}\n.ds-btn--primary:active{transform:scale(0.98)}\n.ds-btn--primary:focus-visible{outline:2px solid var(--color-accent,#aab2ff);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Translucent, hairlined companion to the primary action for adjacent choices such as export.",
+      "html": "<button class=\"ds-btn ds-btn--secondary\">Export</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 16px;border:1px solid transparent;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:background 150ms cubic-bezier(0.25,0.46,0.45,0.94)}\n.ds-btn--secondary{background:var(--color-fill,rgba(255,255,255,0.06));color:var(--color-ink,#f0f1f7);border-color:var(--color-line-strong,rgba(255,255,255,0.15));backdrop-filter:blur(12px)}\n.ds-btn--secondary:hover{background:var(--color-fill-strong,rgba(255,255,255,0.1))}\n.ds-btn--secondary:focus-visible{outline:2px solid var(--color-accent,#aab2ff);outline-offset:2px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Quiet row-level action with no fill until hover; secondary and tertiary table actions.",
+      "html": "<button class=\"ds-btn ds-btn--ghost\">Edit</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 16px;border:1px solid transparent;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:background 150ms cubic-bezier(0.25,0.46,0.45,0.94),color 150ms cubic-bezier(0.25,0.46,0.45,0.94)}\n.ds-btn--ghost{background:transparent;color:var(--color-ink-soft,#b8bacb)}\n.ds-btn--ghost:hover{background:var(--color-fill,rgba(255,255,255,0.06));color:var(--color-ink,#f0f1f7)}\n.ds-btn--ghost:focus-visible{outline:2px solid var(--color-accent,#aab2ff);outline-offset:2px}"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "36px field with glass fill, hairline border, and a periwinkle focus ring.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-label\">Amount (INR)</span><input class=\"ds-input\" value=\"12500\" /></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:6px;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif}\n.ds-label{font-size:12px;font-weight:500;color:var(--color-ink-soft,#b8bacb)}\n.ds-input{height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--color-line,rgba(255,255,255,0.09));background:var(--color-panel,rgba(28,29,38,0.72));color:var(--color-ink,#f0f1f7);font-family:inherit;font-size:13px;font-weight:400;outline:none;transition:border-color 150ms ease,box-shadow 150ms ease}\n.ds-input:focus{border-color:var(--color-accent,#aab2ff);box-shadow:0 0 0 2px var(--color-accent-soft,rgba(170,178,255,0.16))}"
+    },
+    {
+      "name": "Glass Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The primary container: translucent panel, hairline border, top edge highlight, ambient shadow.",
+      "html": "<article class=\"ds-card\"><div class=\"ds-card__row\"><span class=\"ds-kicker\">EXPENSES</span><span class=\"ds-badge\">Paid</span></div><p class=\"ds-card__amount\">₹4,84,730</p><p class=\"ds-card__meta\">FY 2025 · 41 records</p></article>",
+      "css": ".ds-card{padding:20px;border-radius:16px;background:var(--color-panel,rgba(28,29,38,0.72));border:1px solid var(--color-line,rgba(255,255,255,0.09));border-top-color:rgba(255,255,255,0.35);box-shadow:0 8px 24px var(--color-shadow,rgba(0,0,0,0.4));backdrop-filter:blur(20px) saturate(1.4);color:var(--color-ink,#f0f1f7);font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif}\n.ds-card__row{display:flex;align-items:center;justify-content:space-between}\n.ds-kicker{font-size:10.5px;font-weight:700;letter-spacing:0.18em;color:var(--color-ink-faint,#8a8ca0)}\n.ds-card__amount{margin:10px 0 2px;font-size:26px;font-weight:600;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}\n.ds-card__meta{margin:0;font-size:12px;color:var(--color-ink-soft,#b8bacb)}\n.ds-badge{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:var(--color-green-soft,rgba(79,215,160,0.16));color:var(--color-green,#4fd7a0);font-size:11px;font-weight:600;line-height:1.6}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Tonal pill with a current-color dot at 70% opacity; status is carried by color plus label.",
+      "html": "<span class=\"ds-badge\"><span class=\"ds-dot\"></span>Active</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:var(--color-green-soft,rgba(79,215,160,0.16));color:var(--color-green,#4fd7a0);font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;font-size:11px;font-weight:600;line-height:1.6}\n.ds-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:0.7}"
+    },
+    {
+      "name": "Active Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "The one accented navigation row: solid periwinkle, ink label, glow, trailing count.",
+      "html": "<a class=\"ds-nav\" href=\"#\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\"><path d=\"M6 4h12v16l-3-2-3 2-3-2-3 2V4Z\"/><path d=\"M9 9h6M9 13h4\"/></svg>Expenses<span class=\"ds-nav__count\">41</span></a>",
+      "css": ".ds-nav{display:inline-flex;align-items:center;gap:10px;width:212px;height:34px;padding:0 10px;border-radius:10px;background:var(--color-accent,#aab2ff);color:var(--color-accent-ink,#0f1224);font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 14px var(--color-glow,rgba(170,178,255,0.4))}\n.ds-nav svg{width:15px;height:15px;flex:none}\n.ds-nav__count{margin-left:auto;font-size:11px;font-weight:600;opacity:0.7}\n.ds-nav:hover{background:var(--color-accent-hover,#bcc3ff)}\n.ds-nav:focus-visible{outline:2px solid var(--color-accent,#aab2ff);outline-offset:2px}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented",
+      "description": "Compact view switcher inside a translucent track; selected segment uses the opaque panel.",
+      "html": "<div class=\"ds-seg\" role=\"tablist\" aria-label=\"Expense status\"><button class=\"ds-seg__item is-active\" role=\"tab\" aria-selected=\"true\">All</button><button class=\"ds-seg__item\" role=\"tab\" aria-selected=\"false\">Paid</button><button class=\"ds-seg__item\" role=\"tab\" aria-selected=\"false\">Due</button></div>",
+      "css": ".ds-seg{display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:var(--color-fill,rgba(255,255,255,0.06));font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif}\n.ds-seg__item{height:28px;padding:0 12px;border:0;border-radius:6px;background:transparent;color:var(--color-ink-faint,#8a8ca0);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}\n.ds-seg__item.is-active{background:var(--color-panel-strong,#1d1e27);color:var(--color-ink,#f0f1f7);box-shadow:0 1px 2px rgba(0,0,0,0.25)}\n.ds-seg__item:focus-visible{outline:2px solid var(--color-accent,#aab2ff);outline-offset:1px}\n.ds-seg__item:hover:not(.is-active){color:var(--color-ink,#f0f1f7)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Instrument Panel",
+    "overview": "Forge should feel like a well-calibrated cockpit for a gym, not a website about one. The workspace is dark by default — Midnight Graphite, periwinkle signals, cool grey type — with a light porcelain mode for daylight. Surfaces are translucent glass over a quiet ambient field of pastel glows, so the chrome recedes and the numbers lead. Density is deliberate: tables, metric tiles, and forms are compact but never crowded, and the eye can always find the primary action.\n\nCalm, exact, quietly premium. Precision shows up in alignment, consistently formatted money, a 4-point spacing scale, and a single accent reserved for action and state. Nothing is decorated to look busy: no ornamental gradients on content, no glow behind text, no card inside a card.\n\nThe system explicitly rejects legacy gym software such as Mindbody: grey form walls, density without hierarchy, and modal-on-modal workflows. Familiarity is the goal — an operator fluent in Linear or a native macOS tool should trust every screen immediately.",
+    "keyCharacteristics": [
+      "Dark-first Midnight Graphite canvas with periwinkle signals and a porcelain light mode.",
+      "Layered glass panels with hairline borders and a 1px top edge highlight.",
+      "Space Grotesk only for the wordmark and short headings; system sans for all operational text.",
+      "One accent: primary action, active navigation, selected state. Never decoration.",
+      "Compact 13px operating type, 4-point spacing, and 8/16px radii."
+    ],
+    "rules": [
+      {
+        "name": "The One Signal Rule",
+        "body": "Periwinkle covers ≤10% of any screen: the primary action, the active nav item, selection, and focus. If two elements compete for it, one is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ambient-Outside Rule",
+        "body": "Pastel glows live behind the canvas and in the primary-action shadow. Never place a glow inside a card, behind text, or on a resting surface.",
+        "section": "colors"
+      },
+      {
+        "name": "The Wordmark-Only Rule",
+        "body": "Space Grotesk is for the wordmark and short headings. Table data, labels, buttons, and body copy always use the system sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The Fixed-Scale Rule",
+        "body": "Product type is fixed px. No clamp() in the app shell; a heading that shrinks in a sidebar is worse, not better.",
+        "section": "typography"
+      },
+      {
+        "name": "The Glass-at-Rest Rule",
+        "body": "Panels are glass at rest. Shadows appear to mark elevation (modal, toast) or action (primary button), never to decorate a flat surface.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put the primary action in a top action row where the eye lands first; routine tasks never hide behind menus.",
+      "Do scope every money and count figure visibly to its period (for example the year selector beside the expense total).",
+      "Do use the 4-point spacing scale (4/8/12/16/20/24) and the radius scale (6/8/10/16/999).",
+      "Do keep Periwinkle Signal at ≤10% of the screen and reserve it for action, active state, and focus.",
+      "Do give every interactive element a visible keyboard focus state; no invisible-focus controls.",
+      "Do keep glass panels at rest and use shadow only for elevation or action."
+    ],
+    "donts": [
+      "Don't reproduce legacy gym software (Mindbody): cluttered, dated, enterprise-heavy screens, with density without hierarchy, grey form walls, or modal-on-modal workflows for routine tasks.",
+      "Don't use gradient text beyond the existing greeting exception; no new background-clip text effects.",
+      "Don't use Space Grotesk in table data, labels, or long copy.",
+      "Don't use clamp() for product type or fluid rem scales in the app shell.",
+      "Don't nest cards, wrap every group in a card, or use a card where spacing and a divider suffice.",
+      "Don't place glows or heavy shadows inside content, behind text, or on resting surfaces.",
+      "Don't use border-left/right stripes, glassmorphism for its own sake, or decorative motion that does not convey state.",
+      "Don't ship a control without hover, focus, active, disabled, and loading states."
+    ]
+  }
+}

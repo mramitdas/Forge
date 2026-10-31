@@ -23,6 +23,8 @@ import {
   useCheckins,
   useMemberCtx,
 } from "@/lib/hooks";
+import { PageSizeSelect } from "@/components/page-size-select";
+import { usePageSize } from "@/lib/use-page-size";
 import { useCan } from "@/lib/permissions";
 import { useInFlight } from "@/lib/inflight";
 
@@ -259,7 +261,11 @@ function QuickCheckinCard() {
 
 function RecentActivity() {
   const [filter, setFilter] = useState<"all" | CheckinResult>("all");
-  const { items: checkins, isLoading, isError } = useCheckins();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("checkins");
+  const { items: checkins, total, isLoading, isError } = useCheckins({ page, pageSize });
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const recent = useMemo(() => {
     if (filter === "all") return checkins;
@@ -300,6 +306,25 @@ function RecentActivity() {
           ))}
           {recent.length === 0 && <EmptyState title="Nothing here yet" />}
         </div>
+        {!isLoading && checkins.length > 0 && (
+          <div className="flex items-center justify-between border-t border-line px-5 py-3">
+            <span className="text-[12px] text-ink-faint">
+              Page {page} of {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <PageSizeSelect
+                value={pageSize}
+                onChange={(n) => { setPageSize(n); setPage(1); }}
+              />
+              <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                Previous
+              </Button>
+              <Button variant="secondary" size="xs" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Async>
     </Card>
   );
@@ -310,7 +335,7 @@ export default function CheckinsPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-5">
       <div className="space-y-6 xl:col-span-2">
-        {can("attendance.checkin") && <QuickCheckinCard />}
+        {can("attendance.manage") && <QuickCheckinCard />}
       </div>
       <div className="xl:col-span-3">
         <RecentActivity />

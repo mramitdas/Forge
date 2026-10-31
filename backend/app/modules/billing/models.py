@@ -56,7 +56,7 @@ class Invoice(TenantRowMixin, AuditMixin, SoftDeleteMixin, Base):
     paid_minor: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Transient holder for invoice lines; populated by billing.get_invoice().
-    lines: Mapped[list[InvoiceLine]] = []  # noqa: RUF012
+    lines: Mapped[list[InvoiceLine]] = []  # type: ignore[assignment]  # noqa: RUF012
 
 
 class InvoiceLine(Base):

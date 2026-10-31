@@ -27,16 +27,19 @@ async def test_owner_can_create_and_list_expenses(client, gym_a, gym_b):
     assert body["amount_minor"] == 250000
     assert body["method"] == "upi"
 
-    listing = await client.get("/api/v1/expenses", headers=headers)
+    listing = await client.get("/api/v1/expenses?year=2026", headers=headers)
     assert listing.status_code == 200, listing.text
     page = listing.json()
-    assert page["total"] == 1
-    assert page["items"][0]["id"] == body["id"]
+    assert page["total"] == 250000
+    assert page["monthly"].get("sep") == 250000
+    assert len(page["expenses"]) == 1
+    assert page["expenses"][0]["id"] == body["id"]
 
     # Tenant isolation: gym B's owner sees none of gym A's expenses.
     other = await _owner_headers(client, "gymb")
-    other_listing = await client.get("/api/v1/expenses", headers=other)
+    other_listing = await client.get("/api/v1/expenses?year=2026", headers=other)
     assert other_listing.json()["total"] == 0
+    assert other_listing.json()["expenses"] == []
 
 
 async def test_expenses_require_gym_permission(client, gym_a):
@@ -81,7 +84,7 @@ async def test_owner_can_delete_expense(client, gym_a):
     assert deleted.status_code == 204, deleted.text
 
     listing = await client.get("/api/v1/expenses", headers=headers)
-    assert all(i["id"] != expense_id for i in listing.json()["items"])
+    assert all(i["id"] != expense_id for i in listing.json()["expenses"])
 
 
 async def test_owner_can_update_expense(client, gym_a):

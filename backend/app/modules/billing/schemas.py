@@ -48,6 +48,7 @@ class InvoiceSummaryOut(BaseModel):
     outstanding_minor: int
     collected_minor: int
     overdue_minor: int
+    monthly: dict[str, int] = {}
 
 
 class PaymentCapture(BaseModel):

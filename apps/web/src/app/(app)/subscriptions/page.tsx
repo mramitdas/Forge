@@ -21,18 +21,27 @@ import {
   useBranches,
   useMemberCtx,
   usePlans,
-  useSubscriptionsData,
+  useSubscriptionsPage,
   useTenantTier,
 } from "@/lib/hooks";
 import { useCan } from "@/lib/permissions";
+import { PageSizeSelect } from "@/components/page-size-select";
+import { usePageSize } from "@/lib/use-page-size";
 
 type Filter = "all" | "active" | "pending" | "expired" | "cancelled";
 
 export default function SubscriptionsPage() {
   const [filter, setFilter] = useState<Filter>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("subscriptions");
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
-  const { subs, isLoading, isError } = useSubscriptionsData();
+  const { subs, total, isLoading, isError } = useSubscriptionsPage({
+    page,
+    pageSize,
+    status: filter === "all" ? undefined : filter,
+  });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const { members: rawMembers } = useMemberCtx();
   const { plans } = usePlans();
   const { branches } = useBranches();
@@ -47,12 +56,13 @@ export default function SubscriptionsPage() {
   const planMap = byId(plans);
   const branchMap = byId(branches);
 
-  const list = useMemo(() => {
-    const sorted = [...subs].sort((a, b) =>
-      a.status === "pending" ? -1 : b.status === "pending" ? 1 : 0,
-    );
-    return filter === "all" ? sorted : sorted.filter((s) => s.status === filter);
-  }, [filter, subs]);
+  const list = useMemo(
+    () =>
+      [...subs].sort((a, b) =>
+        a.status === "pending" ? -1 : b.status === "pending" ? 1 : 0,
+      ),
+    [subs],
+  );
 
   async function activateSub(id: string) {
     const sub = subs.find((s) => s.id === id);
@@ -70,7 +80,7 @@ export default function SubscriptionsPage() {
       <div className="flex items-center justify-between">
         <p className="text-[13px] text-ink-faint">
           <Count loading={isLoading} width="inline-block h-3 w-16">
-            {subs.length} subscriptions
+            {total} subscriptions
           </Count>
         </p>
         <Segmented
@@ -81,11 +91,11 @@ export default function SubscriptionsPage() {
             { value: "expired", label: "Expired" },
           ]}
           value={filter}
-          onChange={setFilter}
+          onChange={(v) => { setFilter(v as Filter); setPage(1); }}
         />
       </div>
 
-      {can("membership.subscriptions.view") && (
+      {can("membership.view") && (
         <Card className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div>
             <p className="kicker">Gym plan</p>
@@ -153,7 +163,7 @@ export default function SubscriptionsPage() {
                     </td>
                     <td className="px-4 py-3 font-medium">{inr(s.price)}</td>
                     <td className="px-5 py-3 text-right">
-                      {s.status === "pending" && can("membership.subscriptions.activate") && (
+                      {s.status === "pending" && can("membership.manage") && (
                         <Button size="xs" onClick={() => activateSub(s.id)}>
                           Activate
                         </Button>
@@ -168,6 +178,25 @@ export default function SubscriptionsPage() {
             </tbody>
           </table>
           {list.length === 0 && <EmptyState title="No subscriptions in this view" />}
+          {list.length > 0 && (
+            <div className="flex items-center justify-between border-t border-line px-5 py-3">
+              <span className="text-[12px] text-ink-faint">
+                Page {page} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <PageSizeSelect
+                  value={pageSize}
+                  onChange={(n) => { setPageSize(n); setPage(1); }}
+                />
+                <Button variant="secondary" size="xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <Button variant="secondary" size="xs" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </Async>
 

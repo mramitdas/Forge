@@ -35,6 +35,8 @@ async function main() {
   let auth = null;
   let renewPlanId = null;
   let upgradePlanId = null;
+  let pagerPlanId = null;
+  const pagerMemberIds = [];
 
   try {
     await page.goto(`${BASE}/login`);
@@ -96,6 +98,75 @@ async function main() {
     ).json();
     upgradePlanId = upgradePlan.id;
 
+    // ── Members pagination: self-provision 65 extra members so page-2
+    // coverage is real under the 50-row default page size ──
+    const baselineRes = await api.get(`${BASE}/api/v1/members?page=1&page_size=1`, { headers: auth });
+    const baselineTotal = (await baselineRes.json()).total ?? 0;
+    const pagerPlan = await (
+      await api.post(`${BASE}/api/v1/plans`, {
+        headers: auth,
+        data: {
+          name: `Pager Plan ${ts}`,
+          slug: `pager-plan-${ts}`,
+          billing_period: "monthly",
+          amount_minor: 50000,
+        },
+      })
+    ).json();
+    pagerPlanId = pagerPlan.id;
+    for (let i = 1; i <= 65; i++) {
+      const res = await api.post(`${BASE}/api/v1/members`, {
+        headers: auth,
+        data: {
+          first_name: "E2E",
+          last_name: `Pg${String(i).padStart(2, "0")}${ts}`,
+          branch_id: branchId,
+          plan_id: pagerPlan.id,
+        },
+      });
+      if (res.status() !== 201) throw new Error(`pager member ${i}: ${res.status()}`);
+      pagerMemberIds.push((await res.json()).id);
+    }
+    // Baseline is read AFTER the main member was created, so it already
+    // includes them — the delta is exactly the 65 pager members.
+    const pagerTotal = baselineTotal + 65;
+    const expectedPagerPages = Math.max(1, Math.ceil(pagerTotal / 50));
+
+    await page.goto(`${BASE}/members`);
+    await page.locator('input[placeholder="Search name, email, phone"]').waitFor({ timeout: 20000 });
+    await must("members page renders total", page.getByText(`${pagerTotal} members`, { exact: true }).waitFor({ timeout: 30000 }));
+    await must("members pagination footer renders", page.getByText(`Page 1 of ${expectedPagerPages}`, { exact: true }).waitFor({ timeout: 15000 }));
+    check("members page 1 keeps default 50 rows", (await page.locator("table tbody tr").count()) === 50);
+
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await must("members page 2 renders", page.getByText(`Page 2 of ${expectedPagerPages}`, { exact: true }).waitFor({ timeout: 15000 }));
+    const membersPage2Rows = Math.min(50, pagerTotal - 50);
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("table tbody tr").length === n,
+      membersPage2Rows,
+      { timeout: 15000 },
+    );
+
+    // Rows-per-page dropdown: raise to 100 — the size change must reset the
+    // view to page 1 and render more than 50 rows.
+    const sizeSelect = page.locator('select[aria-label="Rows per page"]');
+    await must("members rows-per-page dropdown renders", sizeSelect.waitFor({ timeout: 10000 }));
+    check("members dropdown defaults to 50", (await sizeSelect.inputValue()) === "50");
+    await sizeSelect.selectOption("100");
+    await must(
+      "members size change resets to page 1",
+      page.getByText("Page 1 of 1", { exact: true }).waitFor({ timeout: 15000 }),
+    );
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("table tbody tr").length >= n,
+      Math.min(pagerTotal, 100),
+      { timeout: 15000 },
+    );
+    const membersRowsAt100 = await page.locator("table tbody tr").count();
+    check("members page 1 keeps the larger size (> 50 rows)", membersRowsAt100 === Math.min(pagerTotal, 100) && membersRowsAt100 > 50, `rows=${membersRowsAt100}`);
+    await sizeSelect.selectOption("50");
+    await must("members dropdown back to 50 restores pagination", page.getByText(`Page 1 of ${expectedPagerPages}`, { exact: true }).waitFor({ timeout: 15000 }));
+
     await page.goto(`${BASE}/members/${member.id}`);
     await must("member detail renders", page.getByRole("heading", { name: MEMBER_NAME }).waitFor({ timeout: 15000 }));
 
@@ -141,7 +212,7 @@ async function main() {
 
     // Invoice detail page
     await page.goto(`${BASE}/billing`);
-    await page.getByText("Invoices", { exact: true }).waitFor({ timeout: 15000 });
+    await page.getByPlaceholder("Search invoice # or member").waitFor({ timeout: 15000 });
     await page.locator("a", { hasText: /^INV-/ }).first().click();
     await page.waitForURL(/\/billing\/.+/, { timeout: 10000 });
     await must("invoice detail page renders", page.getByText("Line items", { exact: true }).waitFor({ timeout: 10000 }), page.url());
@@ -165,7 +236,17 @@ async function main() {
     }
   } finally {
     if (auth) {
+      for (const id of pagerMemberIds) {
+        try {
+          const res = await api.delete(`${BASE}/api/v1/members/${id}`, { headers: auth });
+          if (res.status() !== 204) console.log(`pager member ${id}: ${res.status()}`);
+        } catch (e) {
+          console.log(`pager member ${id}: ${String(e).slice(0, 200)}`);
+        }
+      }
+      if (pagerMemberIds.length) check("teardown: pager members deleted", true, `${pagerMemberIds.length}`);
       for (const [id, label] of [
+        [pagerPlanId, "Pager Plan"],
         [renewPlanId, "Renew Plan"],
         [upgradePlanId, "Upgrade Plan"],
       ]) {

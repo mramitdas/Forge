@@ -50,6 +50,24 @@ def generate_refresh_token() -> str:
     return secrets.token_urlsafe(48)
 
 
+def generate_temporary_password(length: int = 14) -> str:
+    """Generate a one-time password that satisfies the complexity rules."""
+    lower = "abcdefghijkmnpqrstuvwxyz"
+    upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    digits = "23456789"
+    special = "!@#$%&*"
+    pool = lower + upper + digits + special
+    required = [
+        secrets.choice(upper),
+        secrets.choice(lower),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+    chars = required + [secrets.choice(pool) for _ in range(max(0, length - len(required)))]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
+
+
 def _algorithm(settings) -> str:
     if settings.jwt_private_key and settings.jwt_public_key:
         return settings.jwt_algorithm

@@ -3,7 +3,8 @@
 #
 # Drops every table (all gyms, members, invoices, notifications, throwaway
 # gate-provisioned gyms, walkthrough leftovers, …), re-runs every migration
-# and re-seeds the demo data (platform admin, demo gym, staff, plans).
+# and re-seeds only the platform admin (from env). Demo fixtures are a
+# separate opt-in step: `make seed-fixtures` from the repo root.
 #
 # Usage:  make reset     (from the repo root)   or   ./scripts/reset_dev.sh
 #
@@ -19,7 +20,7 @@ PGPASSWORD=gym_dev_pass psql -h 127.0.0.1 -U gym -d gym_erp -v ON_ERROR_STOP=1 \
 echo "==> rebuilding schema (alembic upgrade head)"
 .venv/bin/alembic upgrade head
 
-echo "==> re-seeding demo data"
+echo "==> re-seeding platform admin (from env)"
 .venv/bin/python -m scripts.seed_dev
 
 echo "==> recreating the (empty) test database"
@@ -29,9 +30,7 @@ psql -d postgres -v ON_ERROR_STOP=1 \
 
 echo
 echo "Reset complete — fresh schema + seed:"
-echo "  platform  admin@gym-erp.dev / admin-pass-123"
-echo "  owner     demo-owner@gym-erp.dev / owner-pass-123"
-echo "  staff     receptionist@ / branch-manager@ / trainer@ (see seed_dev.py)"
+echo "  platform admin seeded from env. Demo fixtures: make seed-fixtures"
 echo
 echo "Sessions created before the reset are invalid (gym ids changed):"
 echo "log out and back in at http://localhost:3000."
