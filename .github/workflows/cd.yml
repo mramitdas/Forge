@@ -1,20 +1,35 @@
 name: CD
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
     branches: [stag, prod]
+    types: [completed]
 
 concurrency:
-  group: cd-${{ github.ref }}
+  group: cd-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
+  ci-green:
+    name: Wait for CI green
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - run: echo "CI passed — deploying ${{ github.event.workflow_run.head_branch }}"
+
   deploy-backend:
     name: Deploy backend (Vercel)
+    needs: ci-green
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/prod' && 'production' || 'staging' }}
+    environment: ${{ github.event.workflow_run.head_branch == 'prod' && 'production' || 'staging' }}
+    if: |
+      github.event.workflow_run.head_branch == 'prod' ||
+      github.event.workflow_run.head_branch == 'stag'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Install Vercel CLI
         run: npm i -g vercel@latest
@@ -22,7 +37,8 @@ jobs:
       - name: Deploy backend to Vercel
         working-directory: backend
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          if [ "$BRANCH" = "prod" ]; then
             VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }} vercel deploy --prod --yes --project backend --scope mramitdas-projects
           else
             VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }} vercel deploy --yes --project backend --scope mramitdas-projects
@@ -30,10 +46,16 @@ jobs:
 
   deploy-frontend:
     name: Deploy frontend (Vercel)
+    needs: ci-green
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/prod' && 'production' || 'staging' }}
+    environment: ${{ github.event.workflow_run.head_branch == 'prod' && 'production' || 'staging' }}
+    if: |
+      github.event.workflow_run.head_branch == 'prod' ||
+      github.event.workflow_run.head_branch == 'stag'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Install Vercel CLI
         run: npm i -g vercel@latest
@@ -41,7 +63,8 @@ jobs:
       - name: Deploy frontend to Vercel
         working-directory: apps/web
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          if [ "$BRANCH" = "prod" ]; then
             VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }} vercel deploy --prod --yes --project web --scope mramitdas-projects
           else
             VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }} vercel deploy --yes --project web --scope mramitdas-projects
