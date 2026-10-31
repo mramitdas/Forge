@@ -235,7 +235,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }
     };
     ping();
-    const id = setInterval(ping, 30000);
+    const id = setInterval(ping, 60000);
     return () => {
       cancelled = true;
       clearInterval(id);

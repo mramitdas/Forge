@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { forwardRef, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
@@ -265,9 +266,12 @@ export function Avatar({
     size === "sm" ? "h-7 w-7 text-[11px]" : size === "lg" ? "h-12 w-12 text-[16px]" : "h-9 w-9 text-[13px]";
   if (src) {
     return (
-      <img
+      <Image
         src={src}
         alt={name}
+        fill
+        sizes="(120px)"
+        priority={size === "lg"}
         className={cn("shrink-0 rounded-full object-cover", dims)}
       />
     );

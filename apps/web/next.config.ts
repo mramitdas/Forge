@@ -4,6 +4,7 @@ import type { NextConfig } from "next";
 // override with API_BACKEND_URL (apps/web/.env.local) when the API lives
 // elsewhere (staging, Supabase-hosted deployment, …).
 const backend = process.env.API_BACKEND_URL ?? "http://localhost:8000";
+const backendHost = new URL(backend).hostname;
 
 const nextConfig: NextConfig = {
   async rewrites() {
@@ -18,6 +19,13 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: backendHost },
+      { protocol: "http", hostname: backendHost },
+    ],
+  },
+  compress: true,
 };
 
 export default nextConfig;
