@@ -104,7 +104,7 @@ def validate_runtime_settings(settings: Settings) -> None:
         )
     if not has_keypair and len(settings.jwt_hmac_secret) < 32:
         raise RuntimeError("GYM_JWT_HMAC_SECRET must be at least 32 characters in production")
-    if "gym_dev_pass" in settings.database_url or "@127.0.0.1" in settings.database_url:
+    if any(host in settings.database_url for host in ("127.0.0.1", "localhost", "::1")):
         raise RuntimeError("Production must not use the local development database URL")
 
 
