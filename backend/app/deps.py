@@ -57,20 +57,24 @@ async def resolve_actor(authorization: str | None) -> Actor:
 
 async def get_actor_context(
     authorization: Annotated[str | None, Header()] = None,
-) -> Actor:
+):
     actor = await resolve_actor(authorization)
     ctx = TenantContext(
         tenant_id=actor.tenant_id,
         platform_scope=actor.is_platform,
     )
-    set_tenant_context(ctx)
-    return actor
+    # Reset after the request so the worker-loop contextvars do not leak.
+    token = set_tenant_context(ctx)
+    try:
+        yield actor
+    finally:
+        reset_tenant_context(token)
 
 
 async def get_actor_from_query_token(
     authorization: Annotated[str | None, Header()] = None,
     token: str | None = None,
-) -> Actor:
+):
     """Actor from the Authorization header, falling back to a `token` query
     param (used for <img> tags that cannot set request headers)."""
     auth = authorization or (f"Bearer {token}" if token else None)
@@ -79,8 +83,11 @@ async def get_actor_from_query_token(
         tenant_id=actor.tenant_id,
         platform_scope=actor.is_platform,
     )
-    set_tenant_context(ctx)
-    return actor
+    token_ctx = set_tenant_context(ctx)
+    try:
+        yield actor
+    finally:
+        reset_tenant_context(token_ctx)
 
 
 async def get_session_for_actor(
