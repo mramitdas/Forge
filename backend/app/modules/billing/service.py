@@ -259,10 +259,10 @@ async def capture_payment(
 
     # Row-lock the invoice before any further checks so no concurrent
     # request can charge the same open invoice.
-    invoice_row = await session.execute(
+    locked = await session.execute(
         select(Invoice).where(Invoice.id == invoice_id).with_for_update()
     )
-    invoice_row = invoice_row.scalar_one_or_none()
+    invoice_row = locked.scalar_one_or_none()
     if invoice_row is None or invoice_row.tenant_id != tenant_id:
         raise NotFoundError("Invoice not found", code="NOT_FOUND")
     if invoice_row.status in ("paid", "void"):
