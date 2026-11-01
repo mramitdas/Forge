@@ -204,6 +204,8 @@ async def update_me(
         user.first_name, user.last_name = split_full_name(user.full_name)
     if email is not None:
         normalized = email.lower()
+        # Only probe cross-tenant uniqueness when the caller asks for a
+        # different email; same email is a no-op even across tenants.
         if normalized != user.email and await _email_taken_elsewhere(
             normalized, exclude_user_id=user.id
         ):
@@ -422,6 +424,9 @@ async def update_role(
     )
     for rp in existing:
         await session.delete(rp)
+    # Flush the deletes first: a single flush would run the re-inserts before
+    # the deletes and trip uq_role_permission_code.
+    await session.flush()
     for code in permission_codes:
         session.add(RolePermission(role_id=role_id, permission_code=code))
     return role

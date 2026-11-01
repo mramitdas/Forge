@@ -49,9 +49,9 @@ def _year_bounds(year: int) -> tuple[datetime, datetime]:
 async def _next_invoice_number(session: AsyncSession, tenant_id: uuid.UUID, now: datetime) -> str:
     year = now.year
     result = await session.execute(
-        select(InvoiceSequence).where(
-            InvoiceSequence.tenant_id == tenant_id, InvoiceSequence.year == year
-        )
+        select(InvoiceSequence)
+        .where(InvoiceSequence.tenant_id == tenant_id, InvoiceSequence.year == year)
+        .with_for_update()
     )
     seq = result.scalar_one_or_none()
     if seq is None:
@@ -68,9 +68,10 @@ async def create_invoice_for_subscription(
 ) -> Invoice:
     now = datetime.now(UTC)
     subtotal = sub.price_minor + entry_fee_minor
+    number = await _next_invoice_number(session, sub.tenant_id, now)
     invoice = Invoice(
         tenant_id=sub.tenant_id,
-        number=await _next_invoice_number(session, sub.tenant_id, now),
+        number=number,
         member_id=sub.member_id,
         branch_id=sub.branch_id,
         subscription_id=sub.id,
@@ -243,10 +244,6 @@ async def capture_payment(
     if method not in PAYMENT_METHODS:
         raise ValidationError("Invalid payment method", code="INVALID_METHOD")
 
-    invoice = await get_invoice(session, invoice_id)
-    if invoice.tenant_id != tenant_id:
-        raise NotFoundError("Invoice not found", code="NOT_FOUND")
-
     # Idempotency first: if this key already succeeded, replay the stored result
     # even when the invoice is now settled.
     existing = await session.execute(
@@ -258,29 +255,40 @@ async def capture_payment(
     )
     prior = existing.scalar_one_or_none()
     if prior is not None and prior.status == "succeeded":
-        return prior, invoice, True
+        return prior, await get_invoice(session, invoice_id), True
 
-    if invoice.status in ("paid", "void"):
+    # Row-lock the invoice before any further checks so no concurrent
+    # request can charge the same open invoice.
+    invoice_row = await session.execute(
+        select(Invoice).where(Invoice.id == invoice_id).with_for_update()
+    )
+    invoice_row = invoice_row.scalar_one_or_none()
+    if invoice_row is None or invoice_row.tenant_id != tenant_id:
+        raise NotFoundError("Invoice not found", code="NOT_FOUND")
+    if invoice_row.status in ("paid", "void"):
         raise ConflictError("Invoice already settled", code="INVOICE_SETTLED")
+
+    number = invoice_row.number
+    total_minor = invoice_row.total_minor
 
     gateway = get_gateway()
     result = await gateway.capture(
         PaymentRequest(
-            amount_minor=invoice.total_minor,
-            currency=invoice.currency,
+            amount_minor=total_minor,
+            currency=invoice_row.currency,
             method=method,
-            description=f"Invoice {invoice.number}",
+            description=f"Invoice {number}",
             idempotency_key=idempotency_key,
-            metadata={"tenant_id": str(tenant_id), "invoice_id": str(invoice.id)},
+            metadata={"tenant_id": str(tenant_id), "invoice_id": str(invoice_row.id)},
         )
     )
 
     payment = Payment(
         tenant_id=tenant_id,
-        invoice_id=invoice.id,
-        member_id=member_id or invoice.member_id,
-        amount_minor=invoice.total_minor,
-        currency=invoice.currency,
+        invoice_id=invoice_row.id,
+        member_id=member_id or invoice_row.member_id,
+        amount_minor=total_minor,
+        currency=invoice_row.currency,
         method=method,
         status=result.status,
         gateway=gateway.name,
@@ -300,8 +308,8 @@ async def capture_payment(
         ) from None
 
     if result.status == "succeeded":
-        invoice.status = "paid"
-        invoice.paid_minor = invoice.total_minor
+        invoice_row.status = "paid"
+        invoice_row.paid_minor = total_minor
         await bus.emit(
             session,
             tenant_id=tenant_id,
@@ -310,7 +318,7 @@ async def capture_payment(
             event_type="billing.payment.succeeded",
             payload={
                 "payment_id": str(payment.id),
-                "invoice_id": str(invoice.id),
+                "invoice_id": str(invoice_row.id),
                 "member_id": str(payment.member_id),
                 "amount_minor": payment.amount_minor,
                 "currency": payment.currency,
@@ -325,12 +333,12 @@ async def capture_payment(
             event_type="billing.payment.failed",
             payload={
                 "payment_id": str(payment.id),
-                "invoice_id": str(invoice.id),
+                "invoice_id": str(invoice_row.id),
                 "member_id": str(payment.member_id),
                 "reason": payment.failure_reason,
             },
         )
-    return payment, await get_invoice(session, invoice.id), False
+    return payment, await get_invoice(session, invoice_row.id), False
 
 
 async def void_invoice(

@@ -82,24 +82,28 @@ class RenewalWorker:
 
     async def run_once(self) -> int:
         now = datetime.now(UTC)
-        maker = get_sessionmaker()
-        async with maker() as session:
-            await session.begin()
-            rows = (
-                await session.execute(
-                    select(Subscription)
-                    .where(
-                        Subscription.status == "active",
-                        Subscription.end_at.is_not(None),
-                        Subscription.end_at <= now,
-                        Subscription.deleted_at.is_(None),
+        token = set_tenant_context(TenantContext(tenant_id=None, platform_scope=True))
+        try:
+            maker = get_sessionmaker()
+            async with maker() as session:
+                await session.begin()
+                rows = (
+                    await session.execute(
+                        select(Subscription)
+                        .where(
+                            Subscription.status == "active",
+                            Subscription.end_at.is_not(None),
+                            Subscription.end_at <= now,
+                            Subscription.deleted_at.is_(None),
+                        )
+                        .order_by(Subscription.end_at.asc())
+                        .limit(self.batch_size)
                     )
-                    .order_by(Subscription.end_at.asc())
-                    .limit(self.batch_size)
-                )
-            ).scalars().all()
-            pending = [(row.id, row.tenant_id) for row in rows]
-            await session.commit()
+                ).scalars().all()
+                pending = [(row.id, row.tenant_id) for row in rows]
+                await session.commit()
+        finally:
+            reset_tenant_context(token)
 
         processed = 0
         for sub_id, tenant_id in pending:
@@ -118,6 +122,7 @@ class RenewalWorker:
                 logger.exception("renewal failed", subscription_id=str(sub_id))
             finally:
                 reset_tenant_context(token)
+
         return processed
 
     async def run_forever(self, interval_seconds: float = 30.0) -> None:

@@ -87,23 +87,28 @@ class Dispatcher:
         self.batch_size = batch_size
 
     async def run_once(self) -> int:
-        maker = get_sessionmaker()
-        async with maker() as session:
-            await session.begin()
-            rows = (
-                await session.execute(
-                    select(OutboxEvent)
-                    .where(OutboxEvent.published_at.is_(None))
-                    .order_by(OutboxEvent.created_at.asc())
-                    .limit(self.batch_size)
-                    .with_for_update(skip_locked=True)
-                )
-            ).scalars().all()
-            pending = [(row.id, row.tenant_id) for row in rows]
-            await session.commit()
-            for event_id, tenant_id in pending:
-                await self._deliver(event_id, tenant_id)
-        return len(pending)
+        """Dequeue up to batch_size undelivered events and deliver them."""
+        token = set_tenant_context(TenantContext(tenant_id=None, platform_scope=True))
+        try:
+            maker = get_sessionmaker()
+            async with maker() as session:
+                await session.begin()
+                rows = (
+                    await session.execute(
+                        select(OutboxEvent)
+                        .where(OutboxEvent.published_at.is_(None))
+                        .order_by(OutboxEvent.created_at.asc())
+                        .limit(self.batch_size)
+                        .with_for_update(skip_locked=True)
+                    )
+                ).scalars().all()
+                pending = [(row.id, row.tenant_id) for row in rows]
+                await session.commit()
+                for event_id, tenant_id in pending:
+                    await self._deliver(event_id, tenant_id)
+            return len(pending)
+        finally:
+            reset_tenant_context(token)
 
     async def _deliver(self, event_id: uuid.UUID, tenant_id: uuid.UUID | None) -> None:
         # The tenant context must be set BEFORE begin(), because begin() stamps the

@@ -151,6 +151,10 @@ class RolePermission(Base):
     branch_scope: Mapped[str] = mapped_column(String(16), default="all", nullable=False)
     branch_ids: Mapped[list[uuid.UUID] | None] = mapped_column(JSON, nullable=True)
 
+    __table_args__ = (
+        UniqueConstraint("role_id", "permission_code", name="uq_role_permission_code"),
+    )
+
     role: Mapped[Role] = relationship(back_populates="permissions")
 
 
