@@ -18,6 +18,7 @@ from sqlalchemy import JSON, DateTime, Integer, String, Text, Uuid, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
 from app.db.base import Base
@@ -96,7 +97,12 @@ class Dispatcher:
                 rows = (
                     await session.execute(
                         select(OutboxEvent)
-                        .where(OutboxEvent.published_at.is_(None))
+                        .where(
+                            OutboxEvent.published_at.is_(None),
+                            # Poison-pill cap: skip events that already hit the
+                            # delivery-attempt limit instead of retrying forever.
+                            OutboxEvent.attempts < get_settings().outbox_max_deliveries,
+                        )
                         .order_by(OutboxEvent.created_at.asc())
                         .limit(self.batch_size)
                         .with_for_update(skip_locked=True)
