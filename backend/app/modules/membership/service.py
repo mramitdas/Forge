@@ -236,10 +236,8 @@ async def create_subscription(
     )
     session.add(sub)
     await session.flush()
-
     # Invoicing lives in the billing module; this is a synchronous cross-module call.
     from app.modules.billing.service import create_invoice_for_subscription
-
     await create_invoice_for_subscription(
         session, sub, entry_fee_minor=plan.entry_fee_minor, tax_rate_bp=plan.tax_rate_bp
     )

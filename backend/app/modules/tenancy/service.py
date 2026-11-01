@@ -172,6 +172,9 @@ async def update_gym(
             raise ConflictError("Tier is disabled", code="TIER_DISABLED")
         previous = gym.tier_code
         gym.tier_code = tier_code
+        # Persist the tier_code change in the DB before applying tier logic so
+        # that _apply_tier reads the correct value from the session.
+        await session.flush()
         await _apply_tier(session, gym)
         await _record_tier_change(
             session,
