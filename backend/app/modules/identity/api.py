@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -320,7 +320,26 @@ async def list_employees(
         stmt = stmt.where(
             or_(User.full_name.ilike(like), User.email.ilike(like))
         )
-    rows = await session.scalars(stmt)
+    # Filter out Gym Owners by role in SQL via NOT EXISTS to avoid loading all
+    # users then filtering in Python.
+    owner_role_id = await session.scalar(
+        select(Role.id).where(Role.name == "Gym Owner", Role.deleted_at.is_(None))
+    )
+    if owner_role_id is not None:
+        stmt = stmt.where(
+            ~exists(select(UserRole.id))
+            .where(UserRole.user_id == User.id, UserRole.role_id == owner_role_id)
+            .correlate(User)
+        )
+    # Count after the owner filter so total matches the paginated set.
+    total = (
+        await session.scalar(select(func.count()).select_from(stmt.subquery()))
+        or 0
+    )
+    offset = (page - 1) * page_size
+    rows = await session.scalars(
+        stmt.offset(offset).limit(page_size)
+    )
     users = list(rows)
     roles = await identity_svc.employee_roles(
         session, tenant_id=actor.tenant_id, user_ids=[u.id for u in users]
@@ -328,8 +347,6 @@ async def list_employees(
     result: list[EmployeeOut] = []
     for user in users:
         role_list = roles.get(user.id, [])
-        if any(role.name == "Gym Owner" for role in role_list):
-            continue
         result.append(
             EmployeeOut(
                 **UserOut.model_validate(user).model_dump(),
@@ -337,10 +354,8 @@ async def list_employees(
                 role_names=[r.name for r in role_list],
             )
         )
-    total = len(result)
-    start = (page - 1) * page_size
     return EmployeePageOut(
-        items=result[start : start + page_size],
+        items=result,
         total=total,
         page=page,
         page_size=page_size,
@@ -391,4 +406,19 @@ async def assign_role(
     actor: Annotated[Actor, Depends(require_permission("identity.manage"))],
     session: Annotated[AsyncSession, Depends(get_session_for_actor)],
 ) -> None:
-    await identity_svc.assign_role(session, user_id=body.user_id, role_id=body.role_id)
+    # Idempotent: skip silently if the assignment already exists.
+    result = await session.execute(
+        select(UserRole.id).where(
+            UserRole.user_id == body.user_id,
+            UserRole.role_id == body.role_id,
+        )
+    )
+    if result.scalar_one_or_none() is not None:
+        return
+    # RLS hides cross-tenant rows: user/role must be visible for the
+    # assignment to be allowed.
+    role = await session.get(Role, body.role_id)
+    user = await session.get(User, body.user_id)
+    if role is None or user is None:
+        raise NotFoundError("Not found", code="NOT_FOUND")
+    session.add(UserRole(user_id=body.user_id, role_id=body.role_id))

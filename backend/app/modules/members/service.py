@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,30 +146,28 @@ async def delete_member(
     actor_name: str | None = None,
 ) -> None:
     member = await get_member(session, member_id)
-    member.deleted_at = datetime.now()
+    member.deleted_at = datetime.now(UTC)
     member.version += 1
 
     # Retire the member's financial records with them so counts, MRR and
     # billing lists never show rows for a member that no longer exists.
+    from sqlalchemy import delete, update
+
+    now = datetime.now(UTC)
     for model in (Subscription, Invoice, Payment):
-        rows = (
-            await session.scalars(
-                select(model).where(
-                    model.member_id == member_id, model.deleted_at.is_(None)
-                )
+        await session.execute(
+            update(model)
+            .where(
+                model.member_id == member_id, model.deleted_at.is_(None)
             )
-        ).all()
-        for row in rows:
-            row.deleted_at = member.deleted_at  # type: ignore[attr-defined]
-            row.deleted_by = actor_id  # type: ignore[attr-defined]
+            .values(deleted_at=now, deleted_by=actor_id)
+        )
 
     # Check-ins have no soft delete; drop them outright so attendance feeds
     # stop rendering orphans ("Unknown member") after the member is gone.
-    check_ins = (
-        await session.scalars(select(CheckIn).where(CheckIn.member_id == member_id))
-    ).all()
-    for row in check_ins:
-        await session.delete(row)
+    await session.execute(
+        delete(CheckIn).where(CheckIn.member_id == member_id)
+    )
 
     session.add(
         MemberTimeline(
