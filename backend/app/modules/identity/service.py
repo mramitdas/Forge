@@ -78,7 +78,7 @@ async def _issue_for_user(
             family_id=family_id or uuid.uuid4(),
             expires_at=datetime.now(UTC) + timedelta(seconds=settings.refresh_token_ttl_seconds),
             created_ip=ip,
-            user_agent=user_agent,
+            user_agent=(user_agent[:256] if user_agent else None),
         )
     )
     return TokenResponse(
