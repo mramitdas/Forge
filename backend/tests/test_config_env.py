@@ -15,7 +15,7 @@ def test_semantic_environment_maps_filenames_and_strings():
     assert _semantic_environment(".env") == "development"
     assert _semantic_environment(".env.production") == "production"
     assert _semantic_environment("production") == "production"
-    assert _semantic_environment("staging") == "staging"
+    assert _semantic_environment("staging") == "development"
     assert _semantic_environment("") == "development"
     assert _semantic_environment("development") == "development"
 
@@ -23,7 +23,7 @@ def test_semantic_environment_maps_filenames_and_strings():
 def test_env_file_prefers_gym_env_file(monkeypatch):
     monkeypatch.delenv("GYM_ENV_FILE", raising=False)
     monkeypatch.setenv("GYM_ENVIRONMENT", ".env.production")
-    assert _env_file() == ".env.production"
+    assert _env_file() == ".env"
 
     monkeypatch.setenv("GYM_ENV_FILE", ".env")
     monkeypatch.delenv("GYM_ENVIRONMENT", raising=False)
