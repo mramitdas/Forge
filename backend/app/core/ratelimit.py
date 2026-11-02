@@ -51,7 +51,9 @@ auth_limiter = SlidingWindowLimiter()
 def client_ip(request) -> str:
     forwarded = request.headers.get("x-forwarded-for", "")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        # XFF's rightmost entry is written by the nearest proxy (Vercel edge),
+        # so it is the only unspoofable hop. The leftmost is client-supplied.
+        return forwarded.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
 
 

@@ -113,16 +113,27 @@ async def notify_all_tenant_users(
     session: AsyncSession, *, title: str, body: str, type: str = "info", payload: dict | None = None
 ) -> int:
     """Fan out an in-app notification to every active user in the current tenant."""
-    user_ids = await session.scalars(
-        select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None))
-    )
-    count = 0
-    for uid in user_ids:
-        await create_notification(
-            session, user_id=uid, title=title, body=body, type=type, payload=payload
+    user_ids = list(
+        await session.scalars(
+            select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None))
         )
-        count += 1
-    return count
+    )
+    if not user_ids:
+        return 0
+    notifications = [
+        InAppNotification(
+            user_id=uid,
+            title=title,
+            body=body,
+            type=type,
+            payload=payload or {},
+            read_at=None,
+        )
+        for uid in user_ids
+    ]
+    session.add_all(notifications)
+    await session.flush()
+    return len(notifications)
 
 
 async def on_payment_succeeded(

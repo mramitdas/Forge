@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -204,6 +204,8 @@ async def update_me(
         user.first_name, user.last_name = split_full_name(user.full_name)
     if email is not None:
         normalized = email.lower()
+        # Only probe cross-tenant uniqueness when the caller asks for a
+        # different email; same email is a no-op even across tenants.
         if normalized != user.email and await _email_taken_elsewhere(
             normalized, exclude_user_id=user.id
         ):
@@ -258,11 +260,11 @@ async def refresh_tokens(
 
 
 async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> None:
-    result = await session.execute(
-        select(RefreshToken).where(RefreshToken.family_id == family_id)
+    await session.execute(
+        update(RefreshToken)
+        .where(RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
     )
-    for record in result.scalars():
-        record.revoked_at = datetime.now(UTC)
 
 
 async def logout(session: AsyncSession, *, refresh_token: str) -> None:
@@ -422,6 +424,9 @@ async def update_role(
     )
     for rp in existing:
         await session.delete(rp)
+    # Flush the deletes first: a single flush would run the re-inserts before
+    # the deletes and trip uq_role_permission_code.
+    await session.flush()
     for code in permission_codes:
         session.add(RolePermission(role_id=role_id, permission_code=code))
     return role
