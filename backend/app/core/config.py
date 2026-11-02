@@ -85,7 +85,7 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.environment in {"production", "prod", "staging", "stag"}
+        return self.environment in {"production", "prod"}
 
 
 def validate_runtime_settings(settings: Settings) -> None:
