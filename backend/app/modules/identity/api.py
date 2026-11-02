@@ -314,6 +314,7 @@ async def list_employees(
         .where(User.tenant_id == actor.tenant_id, User.deleted_at.is_(None))
         .order_by(User.full_name)
     )
+    q = search.strip() if search else ""
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
@@ -330,14 +331,14 @@ async def list_employees(
             .where(UserRole.user_id == User.id, UserRole.role_id == owner_role_id)
             .correlate(User)
         )
-    # Build a CTE that applies ALL filters (search, owner-exclude) once, then
-    # paginate from it. Prevents COUNT-vs-data drift when users change between
-    # the count and the data fetch.
-    cte = stmt.subquery()
-    total = (await session.scalar(select(func.count()).select_from(cte)) or 0)
+    # Count after the owner filter so total matches the paginated set.
+    total = (
+        await session.scalar(select(func.count()).select_from(stmt.subquery()))
+        or 0
+    )
     offset = (page - 1) * page_size
     rows = await session.scalars(
-        select(User).where(User.id.in_(select(User.id).from_(cte))).offset(offset).limit(page_size)
+        stmt.offset(offset).limit(page_size)
     )
     users = list(rows)
     roles = await identity_svc.employee_roles(
