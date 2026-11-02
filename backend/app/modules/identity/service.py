@@ -259,12 +259,13 @@ async def refresh_tokens(
     )
 
 
-async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> None:
-    await session.execute(
+async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> int:
+    result = await session.execute(
         update(RefreshToken)
         .where(RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None))
         .values(revoked_at=datetime.now(UTC))
     )
+    return result.rowcount  # type: ignore[attr-defined]
 
 
 async def logout(session: AsyncSession, *, refresh_token: str) -> None:
