@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from pydantic import BaseModel
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import uuid7
@@ -96,18 +96,16 @@ async def mark_read(
 
 
 async def mark_all_read(session: AsyncSession, *, user_id: uuid.UUID) -> int:
+    now = datetime.now()
     result = await session.execute(
-        select(InAppNotification).where(
+        update(InAppNotification)
+        .where(
             InAppNotification.user_id == user_id,
             InAppNotification.read_at.is_(None),
         )
+        .values(read_at=now)
     )
-    count = 0
-    now = datetime.now()
-    for notification in result.scalars():
-        notification.read_at = now
-        count += 1
-    return count
+    return int(result.rowcount or 0)
 
 
 async def notify_all_tenant_users(
