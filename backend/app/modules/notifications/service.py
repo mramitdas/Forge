@@ -4,9 +4,10 @@ import uuid
 from datetime import datetime
 
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.base import uuid7
 from app.kernel.pagination import OffsetPagination
 from app.modules.billing.models import Invoice
 from app.modules.identity.models import User
@@ -95,45 +96,46 @@ async def mark_read(
 
 
 async def mark_all_read(session: AsyncSession, *, user_id: uuid.UUID) -> int:
+    now = datetime.now()
     result = await session.execute(
-        select(InAppNotification).where(
+        update(InAppNotification)
+        .where(
             InAppNotification.user_id == user_id,
             InAppNotification.read_at.is_(None),
         )
+        .values(read_at=now)
     )
-    count = 0
-    now = datetime.now()
-    for notification in result.scalars():
-        notification.read_at = now
-        count += 1
-    return count
+    return int(result.rowcount or 0)
 
 
 async def notify_all_tenant_users(
     session: AsyncSession, *, title: str, body: str, type: str = "info", payload: dict | None = None
 ) -> int:
     """Fan out an in-app notification to every active user in the current tenant."""
-    user_ids = list(
-        await session.scalars(
+    user_ids = [
+        uid for (uid,) in await session.execute(
             select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None))
         )
-    )
+    ]
     if not user_ids:
         return 0
-    notifications = [
-        InAppNotification(
-            user_id=uid,
-            title=title,
-            body=body,
-            type=type,
-            payload=payload or {},
-            read_at=None,
-        )
-        for uid in user_ids
-    ]
-    session.add_all(notifications)
+    await session.execute(
+        insert(InAppNotification),
+        [
+            {
+                "id": uuid7(),
+                "user_id": uid,
+                "title": title,
+                "body": body,
+                "type": type,
+                "payload": payload or {},
+                "read_at": None,
+            }
+            for uid in user_ids
+        ],
+    )
     await session.flush()
-    return len(notifications)
+    return len(user_ids)
 
 
 async def on_payment_succeeded(

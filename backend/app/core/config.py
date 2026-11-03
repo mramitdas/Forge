@@ -9,31 +9,31 @@ def _env_file() -> str:
     """Pick the env file to load.
 
     `GYM_ENV_FILE` names the file explicitly (e.g. `.env.production`).
-    For backwards compatibility a filename passed via `GYM_ENVIRONMENT`
-    (`.env` / `.env.production`) is honoured too. Any other value (e.g. the
-    `test` marker set by pytest) falls back to `.env`. Process environment
-    variables always override file values.
+    Defaults to `.env`. Process environment variables always override file
+    values.
     """
     explicit = os.environ.get("GYM_ENV_FILE", "")
     if explicit:
         return explicit
-    value = os.environ.get("GYM_ENVIRONMENT", "")
-    return value if value.startswith(".env") else ".env"
+    return ".env"
 
 
 def _semantic_environment(raw: str) -> str:
     """Map `GYM_ENVIRONMENT` to a deployment stage.
 
-    Historically `GYM_ENVIRONMENT` selected the env *file*. That meaning now
-    lives on `GYM_ENV_FILE`; when a filename is still supplied here it is
-    translated to the matching stage so existing deployments keep working.
+    `GYM_ENVIRONMENT` selects the deployment stage (`development`, `test`,
+    `production`). For backwards compatibility a filename like `.env` or
+    `.env.production` is still honoured — the `.env` prefix is stripped and
+    the remainder is used as the stage name.
     """
     name = (raw or "").strip()
     if not name:
         return "development"
-    if name.startswith(".env"):
-        return "production" if "prod" in name else "development"
-    return name
+    if name.startswith(".env."):
+        name = name[5:]
+    elif name == ".env":
+        name = ""
+    return name if name in ("development", "test", "production") else "development"
 
 
 class Settings(BaseSettings):
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.environment in {"production", "prod", "staging", "stag"}
+        return self.environment in {"production", "prod"}
 
 
 def validate_runtime_settings(settings: Settings) -> None:
