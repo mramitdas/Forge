@@ -1,7 +1,7 @@
 import os
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     def _normalize_environment(cls, value: object) -> str:
         return _semantic_environment(str(value) if value is not None else "")
 
+    @model_validator(mode="after")
+    def _shard_index_within_count(self) -> "Settings":
+        if self.outbox_shard_index >= self.outbox_shard_count:
+            raise ValueError("outbox_shard_index must be smaller than outbox_shard_count")
+        return self
+
     database_url: str = Field(
         default="postgresql+asyncpg://gym:gym_dev_pass@127.0.0.1:5432/gym_erp"
     )
@@ -76,6 +82,14 @@ class Settings(BaseSettings):
 
     outbox_poll_interval_seconds: float = 1.0
     outbox_max_deliveries: int = 5
+    # Multi-instance dispatch: each instance handles the aggregate-id shard
+    # `hash % shard_count == shard_index`. Defaults to a single shard, which is
+    # equivalent to today's unpinned behavior.
+    outbox_shard_count: int = Field(default=1, ge=1)
+    outbox_shard_index: int = Field(default=0, ge=0)
+    # A claimed event is invisible to other instances until the lease expires,
+    # so a dead instance's events get reclaimed after this window.
+    outbox_lease_seconds: float = 90.0
     renewal_interval_seconds: float = 30.0
     media_dir: str = "media"
 
