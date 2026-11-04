@@ -15,7 +15,7 @@
   "crons": [
     {
       "path": "/api/v1/system/jobs/tick",
-      "schedule": "0 * * * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }
