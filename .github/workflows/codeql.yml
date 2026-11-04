@@ -10,6 +10,12 @@ on:
 jobs:
   analyze:
     name: Analyze
+    # Push runs on dev/stag/prod already analyze the promotion branches. The
+    # pull_request pass cannot upload SARIF when the head ref is a protected
+    # branch (stag/prod), so promotion PRs skip it and rely on the push run.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.head_ref != 'stag' && github.head_ref != 'prod')
     runs-on: ubuntu-latest
     permissions:
       actions: read

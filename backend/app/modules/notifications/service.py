@@ -105,7 +105,9 @@ async def mark_all_read(session: AsyncSession, *, user_id: uuid.UUID) -> int:
         )
         .values(read_at=now)
     )
-    return int(result.rowcount or 0)
+    # AsyncSession.execute(update) returns CursorResult at runtime, which is
+    # the only Result variant that carries rowcount.
+    return result.rowcount  # type: ignore[attr-defined]
 
 
 async def notify_all_tenant_users(

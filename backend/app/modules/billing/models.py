@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
     text,
@@ -32,6 +33,7 @@ PAYMENT_METHODS = ("card", "upi", "netbanking", "cash", "credit", "wallet")
 
 class Invoice(TenantRowMixin, AuditMixin, SoftDeleteMixin, Base):
     __tablename__ = "invoices"
+    __table_args__ = (UniqueConstraint("tenant_id", "number", name="uq_invoice_tenant_number"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -107,6 +109,9 @@ class Payment(TenantRowMixin, AuditMixin, SoftDeleteMixin, Base):
 
 class InvoiceSequence(Base):
     __tablename__ = "invoice_sequences"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "year", name="uq_invoice_seq_tenant_year"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
