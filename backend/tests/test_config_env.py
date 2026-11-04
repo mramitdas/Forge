@@ -43,12 +43,24 @@ def test_production_strong_hmac_accepted():
             environment="production",
             jwt_hmac_secret="a" * 32,
             database_url="postgresql+asyncpg://postgres:p@supabase.co/postgres",
+            cron_secret="cron-secret-32-a" + "a" * 21,
         )
     )
 
 
 def test_development_never_rejected():
     validate_runtime_settings(Settings(environment="development"))
+
+
+def test_production_missing_cron_secret_rejected():
+    with pytest.raises(RuntimeError):
+        validate_runtime_settings(
+            Settings(
+                environment="production",
+                jwt_hmac_secret="a" * 32,
+                database_url="postgresql+asyncpg://postgres:p@supabase.co/postgres",
+            )
+        )
 
 
 def test_production_dev_db_rejected():
