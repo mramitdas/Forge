@@ -23,8 +23,6 @@ from app.core.security import (
     password_rule_failures,
     verify_password,
 )
-from app.core.tenant import TenantContext, reset_tenant_context, set_tenant_context
-from app.db.session import get_sessionmaker
 from app.modules.identity.models import (
     Credential,
     PermissionCatalog,
@@ -78,7 +76,7 @@ async def _issue_for_user(
             family_id=family_id or uuid.uuid4(),
             expires_at=datetime.now(UTC) + timedelta(seconds=settings.refresh_token_ttl_seconds),
             created_ip=ip,
-            user_agent=user_agent,
+            user_agent=(user_agent[:256] if user_agent else None),
         )
     )
     return TokenResponse(
@@ -150,31 +148,6 @@ async def authenticate(
     )
 
 
-async def _email_taken_elsewhere(email: str, *, exclude_user_id: uuid.UUID) -> bool:
-    """Cross-tenant uniqueness probe for the global login key.
-
-    The request session is stamped with the actor's tenant and `users` has
-    FORCE ROW LEVEL SECURITY, so it cannot see other tenants' rows. The check
-    runs on a short-lived platform-scoped session instead (same pattern as
-    `resolve_actor`), while the UPDATE stays on the request session.
-    """
-    maker = get_sessionmaker()
-    token = set_tenant_context(TenantContext(tenant_id=None, platform_scope=True))
-    try:
-        async with maker() as session:
-            await session.begin()
-            existing = await session.scalar(
-                select(User.id).where(
-                    User.email == email,
-                    User.id != exclude_user_id,
-                    User.deleted_at.is_(None),
-                )
-            )
-            return existing is not None
-    finally:
-        reset_tenant_context(token)
-
-
 async def update_me(
     session: AsyncSession,
     *,
@@ -204,12 +177,12 @@ async def update_me(
         user.first_name, user.last_name = split_full_name(user.full_name)
     if email is not None:
         normalized = email.lower()
-        # Only probe cross-tenant uniqueness when the caller asks for a
-        # different email; same email is a no-op even across tenants.
-        if normalized != user.email and await _email_taken_elsewhere(
-            normalized, exclude_user_id=user.id
-        ):
-            raise ConflictError("User already exists", code="EMAIL_TAKEN")
+        # Cross-tenant collisions (the global login key) cannot be checked here:
+        # users has FORCE ROW LEVEL SECURITY and this request transaction is
+        # already stamped with the actor's tenant, so other tenants' rows are
+        # invisible. The partial index uq_users_email_active enforces global
+        # uniqueness instead — the flush below translates its IntegrityError
+        # into EMAIL_TAKEN.
         user.email = normalized
     try:
         await session.flush()
@@ -259,12 +232,13 @@ async def refresh_tokens(
     )
 
 
-async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> None:
-    await session.execute(
+async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> int:
+    result = await session.execute(
         update(RefreshToken)
         .where(RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None))
         .values(revoked_at=datetime.now(UTC))
     )
+    return result.rowcount  # type: ignore[attr-defined]
 
 
 async def logout(session: AsyncSession, *, refresh_token: str) -> None:

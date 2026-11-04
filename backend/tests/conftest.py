@@ -8,9 +8,13 @@ from pathlib import Path
 import pytest
 
 # Point the app at the test database BEFORE any app module is imported.
+# Force (not setdefault): backend/.env sets GYM_DATABASE_URL to the dev DB and
+# would otherwise win, making fixtures commit fixtures into the dev database.
+# Must stay in sync with _TEST_SYNC_URLS below (psycopg2 needs the sync URL,
+# so it cannot be derived from this asyncpg URL directly).
 TEST_DB_URL = "postgresql+asyncpg://gym:gym_dev_pass@127.0.0.1:5432/gym_erp_test"
-os.environ.setdefault("GYM_DATABASE_URL", TEST_DB_URL)
-os.environ.setdefault("GYM_ENVIRONMENT", "test")
+os.environ["GYM_DATABASE_URL"] = TEST_DB_URL
+os.environ["GYM_ENVIRONMENT"] = "test"
 os.environ.setdefault("GYM_DEBUG", "true")
 os.environ.setdefault("GYM_AUTH_RATE_LIMIT_PER_MINUTE", "10000")
 

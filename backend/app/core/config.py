@@ -1,7 +1,7 @@
 import os
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,31 +9,31 @@ def _env_file() -> str:
     """Pick the env file to load.
 
     `GYM_ENV_FILE` names the file explicitly (e.g. `.env.production`).
-    For backwards compatibility a filename passed via `GYM_ENVIRONMENT`
-    (`.env` / `.env.production`) is honoured too. Any other value (e.g. the
-    `test` marker set by pytest) falls back to `.env`. Process environment
-    variables always override file values.
+    Defaults to `.env`. Process environment variables always override file
+    values.
     """
     explicit = os.environ.get("GYM_ENV_FILE", "")
     if explicit:
         return explicit
-    value = os.environ.get("GYM_ENVIRONMENT", "")
-    return value if value.startswith(".env") else ".env"
+    return ".env"
 
 
 def _semantic_environment(raw: str) -> str:
     """Map `GYM_ENVIRONMENT` to a deployment stage.
 
-    Historically `GYM_ENVIRONMENT` selected the env *file*. That meaning now
-    lives on `GYM_ENV_FILE`; when a filename is still supplied here it is
-    translated to the matching stage so existing deployments keep working.
+    `GYM_ENVIRONMENT` selects the deployment stage (`development`, `test`,
+    `production`). For backwards compatibility a filename like `.env` or
+    `.env.production` is still honoured — the `.env` prefix is stripped and
+    the remainder is used as the stage name.
     """
     name = (raw or "").strip()
     if not name:
         return "development"
-    if name.startswith(".env"):
-        return "production" if "prod" in name else "development"
-    return name
+    if name.startswith(".env."):
+        name = name[5:]
+    elif name == ".env":
+        name = ""
+    return name if name in ("development", "test", "production") else "development"
 
 
 class Settings(BaseSettings):
@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     @classmethod
     def _normalize_environment(cls, value: object) -> str:
         return _semantic_environment(str(value) if value is not None else "")
+
+    @model_validator(mode="after")
+    def _shard_index_within_count(self) -> "Settings":
+        if self.outbox_shard_index >= self.outbox_shard_count:
+            raise ValueError("outbox_shard_index must be smaller than outbox_shard_count")
+        return self
 
     database_url: str = Field(
         default="postgresql+asyncpg://gym:gym_dev_pass@127.0.0.1:5432/gym_erp"
@@ -76,6 +82,16 @@ class Settings(BaseSettings):
 
     outbox_poll_interval_seconds: float = 1.0
     outbox_max_deliveries: int = 5
+    # Multi-instance dispatch: each instance handles the aggregate-id shard
+    # `hash % shard_count == shard_index`. Defaults to a single shard, which is
+    # equivalent to today's unpinned behavior.
+    outbox_shard_count: int = Field(default=1, ge=1)
+    outbox_shard_index: int = Field(default=0, ge=0)
+    # A claimed event is invisible to other instances until the lease expires,
+    # so a dead instance's events get reclaimed after this window.
+    outbox_lease_seconds: float = 90.0
+    # Shared secret for the scheduled jobs tick (serverless deploys).
+    cron_secret: str = ""
     renewal_interval_seconds: float = 30.0
     media_dir: str = "media"
 
@@ -85,7 +101,7 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.environment in {"production", "prod", "staging", "stag"}
+        return self.environment in {"production", "prod"}
 
 
 def validate_runtime_settings(settings: Settings) -> None:
@@ -106,6 +122,10 @@ def validate_runtime_settings(settings: Settings) -> None:
         raise RuntimeError("GYM_JWT_HMAC_SECRET must be at least 32 characters in production")
     if any(host in settings.database_url for host in ("127.0.0.1", "localhost", "::1")):
         raise RuntimeError("Production must not use the local development database URL")
+    if not settings.cron_secret:
+        raise RuntimeError(
+            "Production requires GYM_CRON_SECRET so scheduled jobs cannot be triggered anonymously"
+        )
 
 
 @lru_cache

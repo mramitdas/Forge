@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import extract, func, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,6 +49,14 @@ def _year_bounds(year: int) -> tuple[datetime, datetime]:
 
 async def _next_invoice_number(session: AsyncSession, tenant_id: uuid.UUID, now: datetime) -> str:
     year = now.year
+    # Race-safe first-of-year path: insert the counter row with ON CONFLICT
+    # DO NOTHING (guarded by uq_invoice_seq_tenant_year), then lock it. Two
+    # concurrent creations serialize on the row lock below — no dupe numbers.
+    await session.execute(
+        insert(InvoiceSequence)
+        .values(tenant_id=tenant_id, year=year, last_number=0)
+        .on_conflict_do_nothing(index_elements=["tenant_id", "year"])
+    )
     result = await session.execute(
         select(InvoiceSequence)
         .where(InvoiceSequence.tenant_id == tenant_id, InvoiceSequence.year == year)
