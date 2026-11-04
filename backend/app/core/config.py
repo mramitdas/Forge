@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     # A claimed event is invisible to other instances until the lease expires,
     # so a dead instance's events get reclaimed after this window.
     outbox_lease_seconds: float = 90.0
+    # Shared secret for the scheduled jobs tick (serverless deploys).
+    cron_secret: str = ""
     renewal_interval_seconds: float = 30.0
     media_dir: str = "media"
 
@@ -120,6 +122,10 @@ def validate_runtime_settings(settings: Settings) -> None:
         raise RuntimeError("GYM_JWT_HMAC_SECRET must be at least 32 characters in production")
     if any(host in settings.database_url for host in ("127.0.0.1", "localhost", "::1")):
         raise RuntimeError("Production must not use the local development database URL")
+    if not settings.cron_secret:
+        raise RuntimeError(
+            "Production requires GYM_CRON_SECRET so scheduled jobs cannot be triggered anonymously"
+        )
 
 
 @lru_cache

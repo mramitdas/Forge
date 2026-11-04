@@ -17,6 +17,7 @@ from app.core.errors import AppError, to_http_exception
 from app.core.logging import configure_logging, get_logger
 from app.db.session import get_engine
 from app.deps import reject_if_must_change
+from app.kernel.cron import router as cron_router
 from app.kernel.events import Dispatcher
 from app.modules.attendance.api import router as attendance_router
 from app.modules.billing.api import router as billing_router
@@ -57,7 +58,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("database warm-up skipped", error=str(exc))
 
     tasks = []
-    if not settings.debug:
+    # Production runs jobs from the /system/jobs/tick cron endpoint;
+    # in-process loops only run off-platform (local dev / self-host).
+    if not settings.is_production:
         tasks.append(asyncio.create_task(dispatcher.run_forever(settings.outbox_poll_interval_seconds)))
         logger.info("outbox dispatcher started")
         renewal_worker = start_renewal_worker()
@@ -130,6 +133,7 @@ def create_app() -> FastAPI:
         return {"status": "ready"}
 
     gate = [Depends(reject_if_must_change)]
+    app.include_router(cron_router, prefix=settings.api_prefix)
     app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(roles_router, prefix=settings.api_prefix, dependencies=gate)
     app.include_router(employees_router, prefix=settings.api_prefix, dependencies=gate)
