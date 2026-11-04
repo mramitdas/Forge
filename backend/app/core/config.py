@@ -1,39 +1,35 @@
 import os
 from functools import lru_cache
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _env_file() -> str:
-    """Pick the env file to load.
+    """Pick the env file to load — the one env-setting knob.
 
     `GYM_ENV_FILE` names the file explicitly (e.g. `.env.production`).
     Defaults to `.env`. Process environment variables always override file
-    values.
+    values. The file name suffix also declares the stage (see `_env_stage`).
     """
-    explicit = os.environ.get("GYM_ENV_FILE", "")
-    if explicit:
-        return explicit
-    return ".env"
+    return os.environ.get("GYM_ENV_FILE", "") or ".env"
 
 
-def _semantic_environment(raw: str) -> str:
-    """Map `GYM_ENVIRONMENT` to a deployment stage.
+def _env_stage(env_file: str) -> str:
+    """Deployment stage, inherited from the env file name.
 
-    `GYM_ENVIRONMENT` selects the deployment stage (`development`, `test`,
-    `production`). For backwards compatibility a filename like `.env` or
-    `.env.production` is still honoured — the `.env` prefix is stripped and
-    the remainder is used as the stage name.
+    `.env.production` → production, `.env.test` → test; unqualified names
+    (`.env`, `.env.local`, …) and the unset knob mean development. On hosts
+    without an env file (Vercel), the *value* of GYM_ENV_FILE is all that
+    matters — the file itself never has to exist.
     """
-    name = (raw or "").strip()
-    if not name:
-        return "development"
-    if name.startswith(".env."):
-        name = name[5:]
-    elif name == ".env":
-        name = ""
-    return name if name in ("development", "test", "production") else "development"
+    name = env_file[5:] if env_file.startswith(".env.") else ""
+    return {
+        "production": "production",
+        "prod": "production",
+        "test": "test",
+        "development": "development",
+    }.get(name, "development")
 
 
 class Settings(BaseSettings):
@@ -48,10 +44,13 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/api/v1"
 
-    @field_validator("environment", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _normalize_environment(cls, value: object) -> str:
-        return _semantic_environment(str(value) if value is not None else "")
+    def _derive_environment_from_env_file(cls, data):
+        """Stage comes from GYM_ENV_FILE; an explicit value still wins."""
+        if isinstance(data, dict) and not data.get("environment"):
+            data["environment"] = _env_stage(_env_file())
+        return data
 
     @model_validator(mode="after")
     def _shard_index_within_count(self) -> "Settings":
