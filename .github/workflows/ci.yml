@@ -126,7 +126,6 @@ jobs:
           --health-retries 10
     env:
       GYM_DATABASE_URL: postgresql+asyncpg://gym:gym_dev_pass@localhost:5432/gym_erp
-      GYM_ENVIRONMENT: test
       GYM_JWT_HMAC_SECRET: ci-only-hmac-secret-not-for-production
       GYM_PLATFORM_ADMIN_EMAIL: ci-admin@example.com
       GYM_PLATFORM_ADMIN_PASSWORD: Ci-Admin-123!
