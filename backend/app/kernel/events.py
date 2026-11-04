@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text, Uuid, func, select
+from sqlalchemy import JSON, DateTime, Integer, String, Text, Uuid, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +45,7 @@ class OutboxEvent(Base):
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -82,7 +83,17 @@ bus = EventBus()
 
 
 class Dispatcher:
-    """Polls the outbox and delivers events to handlers in the event's tenant context."""
+    """Polls the outbox and delivers events to handlers in the event's tenant context.
+
+    Safe for N concurrent instances:
+    - Shards are carved by `hash(aggregate_id) % shard_count == shard_index`
+      (Settings.outbox_shard_count/outbox_shard_index), so the same aggregate is
+      always delivered by the same instance — per-aggregate order is preserved.
+    - Claims lease via claimed_at with Settings.outbox_lease_seconds: an event
+      being delivered is invisible to other instances until the lease expires,
+      so a crashed instance's events are reclaimed instead of blocking forever.
+    - SKIP LOCKED stays as defense in depth against claim races.
+    """
 
     def __init__(self, batch_size: int = 100) -> None:
         self.batch_size = batch_size
@@ -91,24 +102,57 @@ class Dispatcher:
         """Dequeue up to batch_size undelivered events and deliver them."""
         token = set_tenant_context(TenantContext(tenant_id=None, platform_scope=True))
         try:
+            settings = get_settings()
             maker = get_sessionmaker()
             async with maker() as session:
                 await session.begin()
+                shard = func.mod(
+                    # hashtext is Postgres-specific, matching this codebase's
+                    # Postgres-only feature set (GIN, text defaults, RLS).
+                    func.abs(func.hashtext(OutboxEvent.aggregate_id.cast(Text))),
+                    settings.outbox_shard_count,
+                )
+                claimable = (
+                    OutboxEvent.published_at.is_(None)
+                    # Poison-pill cap: skip events that already hit the
+                    # delivery-attempt limit instead of retrying forever.
+                    & (OutboxEvent.attempts < settings.outbox_max_deliveries)
+                    # Lease: unclaimed, or a claim older than the lease window
+                    # (its delivering instance crashed or is stuck).
+                    & (
+                        OutboxEvent.claimed_at.is_(None)
+                        | (
+                            OutboxEvent.claimed_at
+                            < text("now() - make_interval(secs => :outbox_lease)")
+                        )
+                    )
+                    # Shard assignment: only this instance's aggregates.
+                    & (shard == settings.outbox_shard_index)
+                )
                 rows = (
                     await session.execute(
                         select(OutboxEvent)
-                        .where(
-                            OutboxEvent.published_at.is_(None),
-                            # Poison-pill cap: skip events that already hit the
-                            # delivery-attempt limit instead of retrying forever.
-                            OutboxEvent.attempts < get_settings().outbox_max_deliveries,
-                        )
+                        .where(claimable)
                         .order_by(OutboxEvent.created_at.asc())
                         .limit(self.batch_size)
-                        .with_for_update(skip_locked=True)
+                        .with_for_update(skip_locked=True),
+                        {"outbox_lease": settings.outbox_lease_seconds},
                     )
                 ).scalars().all()
                 pending = [(row.id, row.tenant_id) for row in rows]
+                if pending:
+                    # Claim before releasing the locks: claimed_at plus the
+                    # attempts bump (attempts counts claims, enforcing the cap)
+                    # must be visible to other instances the moment the
+                    # transaction commits.
+                    await session.execute(
+                        update(OutboxEvent)
+                        .where(OutboxEvent.id.in_([event_id for event_id, _ in pending]))
+                        .values(
+                            claimed_at=func.now(),
+                            attempts=OutboxEvent.attempts + 1,
+                        )
+                    )
                 await session.commit()
                 for event_id, tenant_id in pending:
                     await self._deliver(event_id, tenant_id)
@@ -138,7 +182,6 @@ class Dispatcher:
                         event.payload,
                     )
                 event.published_at = datetime.now(UTC)
-                event.attempts += 1
                 await session.commit()
         except Exception:
             logger.exception(
@@ -149,7 +192,8 @@ class Dispatcher:
                 await fail_session.begin()
                 row = await fail_session.get(OutboxEvent, event_id)
                 if row is not None:
-                    row.attempts += 1
+                    # attempts was bumped at claim time; a failed delivery
+                    # simply leaves the event unpublished for the next cycle.
                     row.last_error = "delivery failed"
                     await fail_session.commit()
         finally:
