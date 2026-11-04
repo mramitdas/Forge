@@ -6,28 +6,38 @@ import pytest
 from app.core.config import (
     Settings,
     _env_file,
-    _semantic_environment,
+    _env_stage,
     validate_runtime_settings,
 )
 
 
-def test_semantic_environment_maps_filenames_and_strings():
-    assert _semantic_environment(".env") == "development"
-    assert _semantic_environment(".env.production") == "production"
-    assert _semantic_environment("production") == "production"
-    assert _semantic_environment("staging") == "development"
-    assert _semantic_environment("") == "development"
-    assert _semantic_environment("development") == "development"
+def test_env_stage_derived_from_filename():
+    assert _env_stage(".env.production") == "production"
+    assert _env_stage(".env.prod") == "production"
+    assert _env_stage(".env.test") == "test"
+    assert _env_stage(".env") == "development"
+    assert _env_stage(".env.local") == "development"
+    assert _env_stage("") == "development"
+
+
+def test_env_stage_is_read_from_gym_env_file(monkeypatch):
+    monkeypatch.setenv("GYM_ENV_FILE", ".env.production")
+    assert Settings().environment == "production"
+
+    monkeypatch.setenv("GYM_ENV_FILE", ".env.local")
+    assert Settings().environment == "development"
+
+    monkeypatch.delenv("GYM_ENV_FILE", raising=False)
+    assert Settings().environment == "development"
+
+    # An explicit environment value always wins over the file name.
+    monkeypatch.setenv("GYM_ENV_FILE", ".env")
+    assert Settings(environment="production").environment == "production"
 
 
 def test_env_file_prefers_gym_env_file(monkeypatch):
-    monkeypatch.delenv("GYM_ENV_FILE", raising=False)
-    monkeypatch.setenv("GYM_ENVIRONMENT", ".env.production")
-    assert _env_file() == ".env"
-
-    monkeypatch.setenv("GYM_ENV_FILE", ".env")
-    monkeypatch.delenv("GYM_ENVIRONMENT", raising=False)
-    assert _env_file() == ".env"
+    monkeypatch.setenv("GYM_ENV_FILE", ".env.production")
+    assert _env_file() == ".env.production"
 
 
 def test_production_weak_hmac_rejected():
@@ -77,4 +87,3 @@ def test_production_dev_db_rejected():
 @pytest.fixture(autouse=True)
 def _no_env_file_pollution(monkeypatch):
     monkeypatch.delenv("GYM_ENV_FILE", raising=False)
-    monkeypatch.delenv("GYM_ENVIRONMENT", raising=False)

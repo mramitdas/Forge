@@ -14,7 +14,10 @@ import pytest
 # so it cannot be derived from this asyncpg URL directly).
 TEST_DB_URL = "postgresql+asyncpg://gym:gym_dev_pass@127.0.0.1:5432/gym_erp_test"
 os.environ["GYM_DATABASE_URL"] = TEST_DB_URL
-os.environ["GYM_ENVIRONMENT"] = "test"
+# Point tests at a settings file that does not exist: no developer-side
+# backend/.env leakage (cron secret, saved brands, JWT keys). The name suffix
+# also derives the "test" stage per app.core.config._env_stage.
+os.environ["GYM_ENV_FILE"] = ".env.test"
 os.environ.setdefault("GYM_DEBUG", "true")
 os.environ.setdefault("GYM_AUTH_RATE_LIMIT_PER_MINUTE", "10000")
 
