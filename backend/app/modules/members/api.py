@@ -145,6 +145,14 @@ async def remove(
     )
 
 
+_AVATAR_SUFFIXES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+
+
 @router.put("/{member_id}/avatar", status_code=200)
 async def upload_avatar(
     member_id: uuid.UUID,
@@ -158,9 +166,8 @@ async def upload_avatar(
     settings = get_settings()
     media_dir = Path(settings.media_dir) / "members"
     media_dir.mkdir(parents=True, exist_ok=True)
-    ext = Path(file.filename or "").suffix.lower() or ".jpg"
-    safe_ext = ext if ext in {".jpg", ".jpeg", ".png", ".webp", ".gif"} else ".jpg"
-    filename = f"{member_id}{safe_ext}"
+    suffix = _AVATAR_SUFFIXES.get((file.content_type or "").split(";")[0].strip().lower(), ".jpg")
+    filename = f"{member_id}{suffix}"
     dest = media_dir / filename
     content = await file.read()
     if not content:
