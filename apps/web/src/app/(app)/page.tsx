@@ -233,7 +233,9 @@ function StatsGrid() {
   const todayAllowed = checkins.filter(
     (c) => c.result === "granted" && c.time.startsWith("Today"),
   ).length;
-  const now = Date.now();
+  // Capture once after mount: Date.now() is impure and must not run during render.
+  const [now, setNow] = useState(0);
+  useEffect(() => setNow(Date.now()), []);
   const DAY = 86_400_000;
   const newThisMonth = rawMembers.filter((m) => {
     const j = m.joined_at ? new Date(m.joined_at).getTime() : 0;
