@@ -272,6 +272,7 @@ export function Avatar({
         fill
         sizes="(120px)"
         priority={size === "lg"}
+        unoptimized
         className={cn("shrink-0 rounded-full object-cover", dims)}
       />
     );
