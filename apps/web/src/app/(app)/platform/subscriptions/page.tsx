@@ -77,12 +77,6 @@ function TierFormModal({
   });
   const [toast, setToast] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    reset(editing);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, target]);
-
   function reset(editing: SubscriptionTierOut | null) {
     setForm({
       code: editing?.code ?? "",
@@ -93,6 +87,13 @@ function TierFormModal({
       max_members: editing?.max_members != null ? String(editing.max_members) : "",
     });
   }
+
+  useEffect(() => {
+    if (!open) return;
+    reset(editing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, target]);
+
 
   function toBody() {
     return {

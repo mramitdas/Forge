@@ -53,6 +53,7 @@ Types: `feat`, `fix`, `chore`, `docs`, `test`. Example: `feat/12-rate-limiting`.
 - Solo maintainer: 0 required approvals. Merge gate is green CI checks + passing PR.
 - CI checks: `Backend lint + tests`, `Frontend build` (both must be green).
 - No secrets or `.env` in the diff. `.env` is git-ignored.
+- Issues: GitHub auto-close (`Closes #N`, ` Fixes #N`, …) only fires when a PR merges into the **default branch** (`prod`). PRs into `dev` use `refs #N` only, and the agent closes the issue explicitly right after its PR merges to `dev`, with a one-line ship summary.
 
 ### PR checklist (all required before merge)
 
@@ -83,6 +84,7 @@ prod ← stag ← dev ← feat/issue branches
 - `dev` → `stag`: PR from `dev` into `stag`.
 - `stag` → `prod`: PR from `stag` into `prod`.
 - Never skip a hop. Never merge `dev` directly into `prod`.
+- **Human-only hops.** The maintainer alone raises and merges promotion PRs (`dev` → `stag`, `stag` → `prod`). Agents do not create, push, or merge promotion branches/PRs, and run no post-promotion environment changes unless asked. Agent scope ends at a feature/issue PR merged into `dev`; after that, the agent reports the ship-ready state and hands over.
 
 ### Branch deletion
 
