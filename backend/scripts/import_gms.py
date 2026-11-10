@@ -111,6 +111,9 @@ def _billing_period(months: int | None) -> str:
     return {1: "monthly", 3: "quarterly", 12: "annual"}.get(months or 1, "monthly")
 
 
+_PW_HINT = "  login password: the temp password passed via --password"
+
+
 def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
     path = Path(sqlite_path)
     if not path.exists():
@@ -507,9 +510,9 @@ def import_gms(sqlite_path: str, temp_password: str, slug: str) -> None:
     asyncio.run(_import_all())
 
     pw_note = (
-        f"  staff login password: {temp_password} (must change on first login)\n"
+        _PW_HINT + " (staff login, must change on first login)\n"
         if owner_reused
-        else f"  staff/owner login password: {temp_password} (must change on first login)\n"
+        else _PW_HINT + " (staff/owner login, must change on first login)\n"
     )
     print(
         "\nIMPORT COMPLETE\n"
