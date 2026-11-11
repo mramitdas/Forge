@@ -1,9 +1,5 @@
-import { Text, View } from "react-native";
+import { SettingsPasswordScreen } from "@/screens/settings-password";
 
-export default function PasswordPlaceholder() {
-  return (
-    <View>
-      <Text>Password</Text>
-    </View>
-  );
+export default function SettingsPasswordRoute() {
+  return <SettingsPasswordScreen />;
 }

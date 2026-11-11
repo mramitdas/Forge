@@ -1,17 +1,18 @@
-"use client";
-
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { StyleSheet, Text, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Stack } from "expo-router";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/auth/auth-context";
 import { formatTime } from "@/lib/money";
-import type { NotificationPageOut, NotificationOut } from "@/lib/types";
+import type { NotificationPageOut } from "@/lib/types";
+import { Empty, ErrorRetry, GroupedList, GroupedRow, RowSkeleton, Screen } from "@/ui";
+import { colors, type as typeStyle } from "@/ui/tokens";
 
 export function NotificationsScreen() {
   const { me } = useAuth();
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ["notifications", "list"],
     queryFn: () => apiFetch<NotificationPageOut>("/notifications?page_size=50"),
     enabled: !!me,
@@ -28,93 +29,82 @@ export function NotificationsScreen() {
   const markRead = useMutation({
     mutationFn: (id: string) => apiFetch(`/notifications/${id}/read`, { method: "POST" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["notifications"] });
+      void qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 
   const markAll = useMutation({
     mutationFn: () => apiFetch("/notifications/mark-all", { method: "POST" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["notifications"] });
+      void qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 
   const unread = unreadQ.data?.count ?? 0;
+  const items = data?.items ?? [];
 
   return (
-    <View style={styles.container}>
-      <View style={styles.head}>
-        <Text style={styles.title}>Notifications</Text>
-        {unread > 0 ? (
-          <TouchableOpacity
-            onPress={() => markAll.mutate()}
-            disabled={markAll.isPending}
-            accessibilityRole="button"
-          >
-            <Text style={styles.markAll}>Mark all read</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      {unread > 0 ? <Text style={styles.unread}>{unread} unread</Text> : null}
-
-      {isLoading ? (
-        <ActivityIndicator size="large" style={styles.loader} />
-      ) : (
-        <FlatList
-          data={data?.items ?? []}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.row, !item.read_at && styles.rowUnread]}
-              onPress={() => {
-                if (!item.read_at) markRead.mutate(item.id);
-              }}
-              accessibilityRole="button"
-            >
-              <View style={styles.rowInfo}>
-                <Text style={styles.rowTitle}>{item.title}</Text>
-                {item.body ? (
-                  <Text style={styles.rowBody} numberOfLines={2}>
-                    {item.body}
+    <>
+      <Stack.Screen
+        options={{
+          title: "Notifications",
+          headerRight:
+            unread > 0
+              ? () => (
+                  <Text
+                    onPress={() => markAll.mutate()}
+                    style={styles.markAll}
+                    accessibilityRole="button"
+                  >
+                    Mark All Read
                   </Text>
-                ) : null}
-                <Text style={styles.rowTime}>{formatTime(item.created_at)}</Text>
-              </View>
-              {!item.read_at ? <View style={styles.dot} /> : null}
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={<Text style={styles.empty}>No notifications.</Text>}
-        />
-      )}
-    </View>
+                )
+              : undefined,
+        }}
+      />
+      <Screen
+        title="Notifications"
+        onRefresh={() => void refetch()}
+        refreshing={isRefetching}
+      >
+        {isError ? (
+          <ErrorRetry onPress={() => void refetch()} />
+        ) : isLoading ? (
+          <GroupedList>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <RowSkeleton key={i} />
+            ))}
+          </GroupedList>
+        ) : items.length === 0 ? (
+          <Empty label="No Notifications" />
+        ) : (
+          <GroupedList>
+            {items.map((item, i) => (
+              <GroupedRow
+                key={item.id}
+                title={item.title}
+                subtitle={item.body ? item.body : formatTime(item.created_at)}
+                leading={!item.read_at ? <View style={styles.dot} /> : <View style={styles.dotSpacer} />}
+                onPress={() => {
+                  if (!item.read_at) markRead.mutate(item.id);
+                }}
+                last={i === items.length - 1}
+              />
+            ))}
+          </GroupedList>
+        )}
+      </Screen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f9fafb", padding: 20 },
-  head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 24, fontWeight: "700", color: "#111827" },
-  markAll: { fontSize: 14, color: "#4f46e5", fontWeight: "500" },
-  unread: { fontSize: 13, color: "#b45309", marginTop: 4, marginBottom: 8 },
-  loader: { marginTop: 32 },
-  list: { paddingBottom: 24 },
-  empty: { textAlign: "center", color: "#9ca3af", marginTop: 32, fontSize: 14 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+  markAll: { ...typeStyle.footnote, color: colors.tint },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.tint,
   },
-  rowUnread: { backgroundColor: "#f9fafb", borderColor: "#c7d2fe" },
-  rowInfo: { flex: 1 },
-  rowTitle: { fontSize: 15, fontWeight: "600", color: "#111827" },
-  rowBody: { fontSize: 13, color: "#6b7280", marginTop: 2 },
-  rowTime: { fontSize: 12, color: "#9ca3af", marginTop: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#4f46e5", marginLeft: 8 },
+  dotSpacer: { width: 8, height: 8 },
 });
