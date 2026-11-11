@@ -1,9 +1,5 @@
-import { Text, View } from "react-native";
+import { MemberDetailScreen } from "@/screens/member-detail";
 
-export default function MemberDetailPlaceholder() {
-  return (
-    <View>
-      <Text>Member</Text>
-    </View>
-  );
+export default function MemberDetailRoute() {
+  return <MemberDetailScreen />;
 }
