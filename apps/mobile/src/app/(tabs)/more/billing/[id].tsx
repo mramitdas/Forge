@@ -1,9 +1,5 @@
-import { Text, View } from "react-native";
+import { InvoiceDetailScreen } from "@/screens/invoice-detail";
 
-export default function InvoiceDetailPlaceholder() {
-  return (
-    <View>
-      <Text>Invoice</Text>
-    </View>
-  );
+export default function InvoiceDetailRoute() {
+  return <InvoiceDetailScreen />;
 }
