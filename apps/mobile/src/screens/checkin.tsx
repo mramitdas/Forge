@@ -90,7 +90,7 @@ export function CheckInScreen() {
         accessibilityRole="button"
       >
         {checkin.isPending ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.surface} />
         ) : (
           <Text style={styles.submitText}>Check In</Text>
         )}

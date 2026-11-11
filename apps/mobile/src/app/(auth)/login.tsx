@@ -79,7 +79,7 @@ export default function LoginScreen() {
         accessibilityRole="button"
       >
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.surface} />
         ) : (
           <Text style={styles.buttonText}>Sign In</Text>
         )}

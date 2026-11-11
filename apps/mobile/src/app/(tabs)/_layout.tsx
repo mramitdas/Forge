@@ -1,9 +1,10 @@
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/auth/auth-context";
+import { TAB_ITEMS } from "@/lib/tab-items";
 import { colors } from "@/ui/tokens";
 
-export const TAB_ITEMS = ["Home", "Members", "Subscriptions", "More"] as const;
+export { TAB_ITEMS };
 
 export default function TabLayout() {
   const { me, loading } = useAuth();
