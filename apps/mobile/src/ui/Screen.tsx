@@ -56,6 +56,7 @@ export function Screen({
         contentContainerStyle={styles.content}
         refreshControl={refresh}
         keyboardShouldPersistTaps="handled"
+        contentInsetAdjustmentBehavior="automatic"
       >
         {heading}
         {children}

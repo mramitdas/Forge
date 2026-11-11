@@ -1,5 +1,5 @@
-import { DashboardScreen } from "@/screens/dashboard";
+import { HomeScreen } from "@/screens/home";
 
 export default function HomeRoute() {
-  return <DashboardScreen />;
+  return <HomeScreen />;
 }
