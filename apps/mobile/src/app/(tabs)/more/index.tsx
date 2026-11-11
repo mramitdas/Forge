@@ -1,9 +1,5 @@
-import { Text, View } from "react-native";
+import { MoreScreen } from "@/screens/more";
 
-export default function MorePlaceholder() {
-  return (
-    <View>
-      <Text>More</Text>
-    </View>
-  );
+export default function MoreRoute() {
+  return <MoreScreen />;
 }
