@@ -1,6 +1,9 @@
 import { Redirect, Tabs } from "expo-router";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/auth/auth-context";
+import { colors } from "@/ui/tokens";
+
+export const TAB_ITEMS = ["Home", "Members", "Subscriptions", "More"] as const;
 
 export default function TabLayout() {
   const { me, loading } = useAuth();
@@ -12,17 +15,17 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#111827",
-        tabBarInactiveTintColor: "#6b7280",
-        tabBarStyle: { backgroundColor: "#f9fafb" },
+        tabBarActiveTintColor: colors.tint,
+        tabBarInactiveTintColor: colors.secondary,
+        tabBarStyle: { backgroundColor: "rgba(249,249,249,0.94)" },
       }}
     >
       <Tabs.Screen
-        name="dashboard"
+        name="home"
         options={{
-          title: "Dashboard",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="chart-bar" size={size} color={color as string} />
+          title: "Home",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color as string} />
           ),
         }}
       />
@@ -30,53 +33,30 @@ export default function TabLayout() {
         name="members"
         options={{
           title: "Members",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account-group" size={size} color={color as string} />
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "people" : "people-outline"} size={size} color={color as string} />
           ),
         }}
       />
       <Tabs.Screen
-        name="checkin"
+        name="subscriptions"
         options={{
-          title: "Check-In",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="calendar-check" size={size} color={color as string} />
+          title: "Subscriptions",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "albums" : "albums-outline"} size={size} color={color as string} />
           ),
         }}
       />
       <Tabs.Screen
-        name="billing"
+        name="more"
         options={{
-          title: "Billing",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="credit-card" size={size} color={color as string} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="expenses"
-        options={{
-          title: "Expenses",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cash-minus" size={size} color={color as string} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: "Notifications",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="bell" size={size} color={color as string} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: "Settings",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog" size={size} color={color as string} />
+          title: "More",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons
+              name={focused ? "ellipsis-horizontal-circle" : "ellipsis-horizontal-circle-outline"}
+              size={size}
+              color={color as string}
+            />
           ),
         }}
       />

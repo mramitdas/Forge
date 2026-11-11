@@ -11,7 +11,7 @@ export default function LoginScreen() {
   const router = useRouter();
 
   if (me) {
-    return <Redirect href="/(tabs)/dashboard" />;
+    return <Redirect href="/(tabs)/home" />;
   }
 
   const handleLogin = async () => {
