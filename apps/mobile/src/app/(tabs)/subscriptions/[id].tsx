@@ -1,9 +1,5 @@
-import { Text, View } from "react-native";
+import { SubscriptionDetailScreen } from "@/screens/subscription-detail";
 
-export default function SubscriptionDetailPlaceholder() {
-  return (
-    <View>
-      <Text>Subscription</Text>
-    </View>
-  );
+export default function SubscriptionDetailRoute() {
+  return <SubscriptionDetailScreen />;
 }
