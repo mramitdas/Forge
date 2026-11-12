@@ -5,6 +5,9 @@ import { AuthProvider, useAuth } from "@/auth/auth-context";
 
 const mockStore = new Map<string, string>();
 
+// jsdom polyfills fetch; keep the original so the swap in test 2 is undone
+const originalFetch = global.fetch;
+
 jest.mock("@/lib/storage", () => ({
   getItem: jest.fn(async (k: string) => mockStore.get(k) ?? null),
   setItem: jest.fn(async (k: string, v: string) => {
@@ -18,6 +21,11 @@ jest.mock("@/lib/storage", () => ({
 beforeEach(() => {
   mockStore.clear();
   jest.clearAllMocks();
+});
+
+afterEach(() => {
+  // test 2 swaps global.fetch; restoring keeps suite order-independent
+  global.fetch = originalFetch;
 });
 
 function Probe() {
