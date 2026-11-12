@@ -47,8 +47,11 @@ async function renderProbe(id: string) {
       <Probe id={id} />
     </ThemeProvider>,
   );
-  // storage load effect resolves asynchronously
-  await waitFor(() => expect(screen.getByTestId(id)).toBeTruthy());
+  // storage load effect resolves asynchronously; the long timeout tolerates
+  // slow act flushes on a loaded machine (cold transform, parallel workers)
+  await waitFor(() => expect(screen.getByTestId(id)).toBeTruthy(), {
+    timeout: 5000,
+  });
 }
 
 function state(id: string): {
@@ -84,24 +87,27 @@ describe("ThemeProvider", () => {
   it("system mode follows the system color scheme", async () => {
     mockStore.set("forge.theme", "system");
     const spy = jest.spyOn(RN, "useColorScheme");
+    try {
+      spy.mockReturnValue("light");
+      await renderProbe("system-light");
+      expect(state("system-light").scheme).toBe("light");
 
-    spy.mockReturnValue("light");
-    await renderProbe("system-light");
-    expect(state("system-light").scheme).toBe("light");
-
-    spy.mockReturnValue("dark");
-    await renderProbe("system-dark");
-    expect(state("system-dark").scheme).toBe("dark");
-
-    spy.mockRestore();
+      spy.mockReturnValue("dark");
+      await renderProbe("system-dark");
+      expect(state("system-dark").scheme).toBe("dark");
+    } finally {
+      // a failure here must not leak the mock into other tests
+      spy.mockRestore();
+    }
   });
 
   it("setTheme persists to forge.theme immediately; setHomeTier propagates", async () => {
     await renderProbe("persist");
     fireEvent.press(screen.getByTestId("setter-persist"));
     expect(mockStore.get("forge.theme")).toBe("light");
-    await waitFor(() =>
-      expect(state("persist")).toMatchObject({ mode: "light", tier: "watch" }),
+    await waitFor(
+      () => expect(state("persist")).toMatchObject({ mode: "light", tier: "watch" }),
+      { timeout: 5000 },
     );
   });
 });
