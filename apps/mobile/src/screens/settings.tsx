@@ -31,6 +31,11 @@ export function SettingsScreen() {
           title="Change Password"
           chevron
           onPress={() => router.push("/(tabs)/more/settings-password")}
+        />
+        <GroupedRow
+          title="Appearance"
+          chevron
+          onPress={() => router.push("/(tabs)/more/settings-appearance")}
           last
         />
       </GroupedList>
