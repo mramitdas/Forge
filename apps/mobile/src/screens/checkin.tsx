@@ -1,12 +1,27 @@
-"use client";
-
-import { useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/auth/auth-context";
 import { formatTime } from "@/lib/money";
-import type { PageOut, MemberOut, CheckInOut } from "@/lib/types";
+import type { CheckInOut, MemberOut, PageOut } from "@/lib/types";
+import {
+  Empty,
+  GroupedList,
+  GroupedRow,
+  Screen,
+  SearchBar,
+  StatusCaption,
+} from "@/ui";
+import { colors, radius, space, type as typeStyle } from "@/ui/tokens";
 
 export function CheckInScreen() {
   const { me } = useAuth();
@@ -33,17 +48,23 @@ export function CheckInScreen() {
     refetchInterval: 15000,
   });
 
+  const membersListQ = useQuery({
+    queryKey: ["members", "list", ""],
+    queryFn: () => apiFetch<PageOut<MemberOut>>("/members?page_size=50"),
+    enabled: !!me,
+  });
+
   const checkin = useMutation({
     mutationFn: (body: { member_id: string; branch_id: string; source: string }) =>
       apiFetch<CheckInOut>("/checkin", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["checkins"] });
-      qc.invalidateQueries({ queryKey: ["members"] });
+      void qc.invalidateQueries({ queryKey: ["checkins"] });
+      void qc.invalidateQueries({ queryKey: ["members"] });
       setMemberId("");
       if (data.result === "allowed") {
-        Alert.alert("Checked in", "Member checked in.");
+        Alert.alert("Checked In", "Member checked in.");
       } else {
-        Alert.alert("Not allowed", data.reason ?? `Result: ${data.result}`);
+        Alert.alert("Not Allowed", data.reason ?? `Result: ${data.result}`);
       }
     },
     onError: (error) => {
@@ -55,136 +76,105 @@ export function CheckInScreen() {
   });
 
   const members = membersQ.data?.items ?? [];
-  const selectedMember = useMemo(
-    () => members.find((m) => m.id === memberId) ?? null,
-    [members, memberId],
-  );
   const recent = recentQ.data?.items ?? [];
   const canSubmit = !!memberId && !!branchId && !checkin.isPending;
+  const memberName = (id: string) =>
+    membersListQ.data?.items.find((m) => m.id === id)?.full_name ?? "Member";
 
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Check In</Text>
-      <Text style={styles.subtitle}>{branch ? `Branch: ${branch.name}` : "No branch assigned"}</Text>
-
-      <TextInput
-        placeholder="Search member"
-        value={search}
-        onChangeText={setSearch}
-        placeholderTextColor="#9ca3af"
-        autoCapitalize="none"
-        style={styles.search}
-        accessibilityLabel="Search member"
-      />
-
-      {selectedMember ? (
-        <View style={styles.selected}>
-          <Text style={styles.selectedName}>{selectedMember.full_name}</Text>
-          <TouchableOpacity onPress={() => setMemberId("")} accessibilityRole="button">
-            <Text style={styles.clear}>Change</Text>
-          </TouchableOpacity>
-        </View>
-      ) : membersQ.isLoading ? (
-        <ActivityIndicator style={styles.loader} />
-      ) : members.length === 0 ? (
-        <Text style={styles.empty}>No members match.</Text>
-      ) : (
-        members.map((m) => (
-          <TouchableOpacity
-            key={m.id}
-            style={styles.row}
-            onPress={() => setMemberId(m.id)}
-            accessibilityRole="button"
-          >
-            <Text style={styles.rowName}>{m.full_name}</Text>
-            <Text style={styles.rowMeta}>{m.status}</Text>
-          </TouchableOpacity>
-        ))
-      )}
-
+  const footer = (
+    <View style={styles.footer}>
       <TouchableOpacity
         disabled={!canSubmit}
-        onPress={() =>
-          checkin.mutate({ member_id: memberId, branch_id: branchId, source: "manual" })
-        }
+        onPress={() => checkin.mutate({ member_id: memberId, branch_id: branchId, source: "manual" })}
         style={[styles.submit, !canSubmit && styles.submitDisabled]}
         accessibilityRole="button"
       >
         {checkin.isPending ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.surface} />
         ) : (
           <Text style={styles.submitText}>Check In</Text>
         )}
       </TouchableOpacity>
+    </View>
+  );
 
-      <Text style={styles.sectionTitle}>Recent check-ins</Text>
-      {recent.length === 0 ? (
-        <Text style={styles.empty}>No check-ins yet.</Text>
-      ) : (
-        recent.map((c) => (
-          <View key={c.id} style={styles.recentRow}>
-            <Text style={styles.recentText}>
-              {c.result} · {formatTime(c.recorded_at)}
-            </Text>
-          </View>
-        ))
-      )}
-    </ScrollView>
+  return (
+    <Screen
+      title="Check In"
+      footer={footer}
+      onRefresh={() => {
+        void membersQ.refetch();
+        void recentQ.refetch();
+      }}
+      refreshing={membersQ.isRefetching || recentQ.isRefetching}
+    >
+      <Text style={styles.kicker}>{branch ? `Branch: ${branch.name}` : "No branch assigned"}</Text>
+      <SearchBar
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search member"
+        accessibilityLabel="Search member"
+      />
+
+      <GroupedList>
+        {membersQ.isLoading ? (
+          <GroupedRow title="Loading…" last />
+        ) : members.length === 0 ? (
+          <Empty label="No members match." />
+        ) : (
+          members.map((m, i) => (
+            <GroupedRow
+              key={m.id}
+              title={m.full_name}
+              subtitle={m.status}
+              trailing={
+                memberId === m.id ? (
+                  <Ionicons name="checkmark" size={20} color={colors.tint} />
+                ) : undefined
+              }
+              onPress={() => setMemberId((cur) => (cur === m.id ? "" : m.id))}
+              last={i === members.length - 1}
+            />
+          ))
+        )}
+      </GroupedList>
+
+      <GroupedList header="RECENTS">
+        {recent.length === 0 ? (
+          <Empty label="No check-ins yet." />
+        ) : (
+          recent.map((c, i) => (
+            <GroupedRow
+              key={c.id}
+              title={memberName(c.member_id)}
+              subtitle={`${c.result} · ${formatTime(c.recorded_at)}`}
+              trailing={<StatusCaption status={c.result} />}
+              last={i === recent.length - 1}
+            />
+          ))
+        )}
+      </GroupedList>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f9fafb" },
-  content: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: "700", color: "#111827" },
-  subtitle: { fontSize: 13, color: "#6b7280", marginTop: 2, marginBottom: 12 },
-  search: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: "#111827",
-    backgroundColor: "#fff",
-    marginBottom: 10,
+  kicker: {
+    ...typeStyle.footnote,
+    paddingHorizontal: space.lg,
+    marginBottom: space.md,
   },
-  loader: { marginTop: 24 },
-  empty: { color: "#9ca3af", marginTop: 16, marginBottom: 8, fontSize: 14 },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+  footer: {
+    padding: space.lg,
+    backgroundColor: colors.canvas,
   },
-  rowName: { fontSize: 15, fontWeight: "500", color: "#111827", flex: 1 },
-  rowMeta: { fontSize: 12, color: "#6b7280" },
-  selected: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#eef2ff",
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 8,
-  },
-  selectedName: { fontSize: 16, fontWeight: "600", color: "#111827" },
-  clear: { fontSize: 14, color: "#4f46e5", fontWeight: "500" },
   submit: {
-    backgroundColor: "#059669",
-    paddingVertical: 16,
-    borderRadius: 10,
+    height: 50,
+    backgroundColor: colors.tint,
+    borderRadius: radius.lg,
     alignItems: "center",
-    marginTop: 12,
+    justifyContent: "center",
   },
   submitDisabled: { opacity: 0.5 },
-  submitText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: "600", color: "#111827", marginTop: 28, marginBottom: 8 },
-  recentRow: { paddingVertical: 6 },
-  recentText: { fontSize: 13, color: "#6b7280" },
+  submitText: { color: colors.surface, fontWeight: "600", fontSize: 17 },
 });

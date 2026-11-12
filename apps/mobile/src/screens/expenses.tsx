@@ -1,211 +1,107 @@
-"use client";
-
-import { useState } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-} from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { StyleSheet, Text, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { Stack, useRouter } from "expo-router";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/auth/auth-context";
-import { formatMoney, formatDate } from "@/lib/money";
-import type { ExpenseYearOut, ExpenseOut } from "@/lib/types";
+import { formatDate, formatMoney } from "@/lib/money";
+import type { ExpenseOut, ExpenseYearOut } from "@/lib/types";
+import { Empty, ErrorRetry, GroupedList, GroupedRow, RowSkeleton, Screen } from "@/ui";
+import { colors, space, type as typeStyle } from "@/ui/tokens";
 
-const CATEGORIES = ["operations", "maintenance", "utilities", "supplies", "other"];
-const METHODS = ["cash", "card", "upi", "netbanking", "credit", "wallet"];
+function titleCase(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function monthLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+function groupByMonth(expenses: ExpenseOut[]) {
+  const groups: { header: string; items: ExpenseOut[] }[] = [];
+  for (const e of expenses) {
+    const header = monthLabel(e.paid_at);
+    const last = groups[groups.length - 1];
+    if (last && last.header === header) last.items.push(e);
+    else groups.push({ header, items: [e] });
+  }
+  return groups;
+}
 
 export function ExpensesScreen() {
   const { me } = useAuth();
-  const qc = useQueryClient();
-  const [category, setCategory] = useState(CATEGORIES[0]);
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [method, setMethod] = useState(METHODS[0]);
+  const router = useRouter();
+  const year = new Date().getFullYear();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ["expenses", "list"],
     queryFn: () => apiFetch<ExpenseYearOut>("/expenses?page_size=50"),
     enabled: !!me,
   });
 
-  const create = useMutation({
-    mutationFn: () =>
-      apiFetch<ExpenseOut>("/expenses", {
-        method: "POST",
-        body: JSON.stringify({
-          category,
-          description: description || null,
-          amount_minor: Math.round(parseFloat(amount || "0") * 100),
-          method,
-          branch_id: me?.branches?.[0]?.id ?? null,
-          paid_at: new Date().toISOString(),
-        }),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      setAmount("");
-      setDescription("");
-      Alert.alert("Expense recorded", "The expense was saved.");
-    },
-    onError: (error: any) => {
-      Alert.alert("Could not save", error?.detail?.error ?? error?.message ?? "Request failed");
-    },
-  });
-
-  const amountValid = parseFloat(amount || "0") > 0;
+  const groups = groupByMonth(data?.expenses ?? []);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Expenses</Text>
-
-      <Text style={styles.label}>Category</Text>
-      <View style={styles.chips}>
-        {CATEGORIES.map((c) => (
-          <TouchableOpacity
-            key={c}
-            onPress={() => setCategory(c)}
-            style={[styles.chip, category === c && styles.chipActive]}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.chipText, category === c && styles.chipTextActive]}>{c}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Amount</Text>
-      <TextInput
-        placeholder="0.00"
-        value={amount}
-        onChangeText={setAmount}
-        keyboardType="decimal-pad"
-        placeholderTextColor="#9ca3af"
-        style={styles.input}
-        accessibilityLabel="Amount"
-      />
-
-      <Text style={styles.label}>Description</Text>
-      <TextInput
-        placeholder="What was this for?"
-        value={description}
-        onChangeText={setDescription}
-        placeholderTextColor="#9ca3af"
-        style={styles.input}
-        accessibilityLabel="Description"
-      />
-
-      <Text style={styles.label}>Method</Text>
-      <View style={styles.chips}>
-        {METHODS.map((m) => (
-          <TouchableOpacity
-            key={m}
-            onPress={() => setMethod(m)}
-            style={[styles.chip, method === m && styles.chipActive]}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.chipText, method === m && styles.chipTextActive]}>{m}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <TouchableOpacity
-        style={[styles.submit, (!amountValid || create.isPending) && styles.submitDisabled]}
-        disabled={!amountValid || create.isPending}
-        onPress={() => create.mutate()}
-        accessibilityRole="button"
-      >
-        {create.isPending ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.submitText}>Record Expense</Text>
-        )}
-      </TouchableOpacity>
-
-      <Text style={styles.sectionTitle}>
-        Recent{data?.total ? ` · ${formatMoney(data.total)}` : ""}
-      </Text>
-      {isLoading ? (
-        <ActivityIndicator style={styles.loader} />
-      ) : (
-        <FlatList
-          data={data?.expenses ?? []}
-          keyExtractor={(item) => item.id}
-          scrollEnabled={false}
-          renderItem={({ item }) => (
-            <View style={styles.row}>
-              <View style={styles.rowInfo}>
-                <Text style={styles.rowTitle}>{item.category}</Text>
-                <Text style={styles.rowMeta} numberOfLines={1}>
-                  {item.description || item.method} · {formatDate(item.paid_at)}
-                </Text>
-              </View>
-              <Text style={styles.rowAmount}>{formatMoney(item.amount_minor, item.currency)}</Text>
+    <>
+      <Stack.Screen
+        options={{
+          title: "Expenses",
+          headerRight: () => (
+            <View style={styles.headerRight}>
+              <Text style={styles.year}>{year}</Text>
+              <Text
+                style={styles.add}
+                onPress={() => router.push("/(tabs)/more/expense-add")}
+                accessibilityRole="button"
+              >
+                Add
+              </Text>
             </View>
-          )}
-          ListEmptyComponent={<Text style={styles.empty}>No expenses recorded.</Text>}
-        />
-      )}
-    </ScrollView>
+          ),
+        }}
+      />
+      <Screen
+        title="Expenses"
+        onRefresh={() => void refetch()}
+        refreshing={isRefetching}
+      >
+        {isError ? (
+          <ErrorRetry onPress={() => void refetch()} />
+        ) : isLoading ? (
+          <GroupedList>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <RowSkeleton key={i} />
+            ))}
+          </GroupedList>
+        ) : groups.length === 0 ? (
+          <Empty label="No Expenses" />
+        ) : (
+          groups.map((g) => (
+            <GroupedList key={g.header} header={g.header.toUpperCase()}>
+              {g.items.map((item, i) => (
+                <GroupedRow
+                  key={item.id}
+                  title={titleCase(item.category)}
+                  subtitle={item.description || formatDate(item.paid_at)}
+                  trailing={
+                    <Text style={styles.amount}>{formatMoney(item.amount_minor, item.currency)}</Text>
+                  }
+                  last={i === g.items.length - 1}
+                />
+              ))}
+            </GroupedList>
+          ))
+        )}
+      </Screen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f9fafb" },
-  content: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: "700", color: "#111827", marginBottom: 16 },
-  label: { fontSize: 13, fontWeight: "600", color: "#6b7280", marginBottom: 6, marginTop: 12 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    backgroundColor: "#fff",
-  },
-  chipActive: { backgroundColor: "#111827", borderColor: "#111827" },
-  chipText: { fontSize: 13, color: "#374151" },
-  chipTextActive: { color: "#fff", fontWeight: "600" },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 15,
-    color: "#111827",
-    backgroundColor: "#fff",
-  },
-  submit: {
-    backgroundColor: "#111827",
-    paddingVertical: 16,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  submitDisabled: { opacity: 0.5 },
-  submitText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: "600", color: "#111827", marginTop: 28, marginBottom: 10 },
-  loader: { marginTop: 20 },
-  empty: { textAlign: "center", color: "#9ca3af", marginTop: 20, fontSize: 14 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  rowInfo: { flex: 1 },
-  rowTitle: { fontSize: 15, fontWeight: "600", color: "#111827" },
-  rowMeta: { fontSize: 12, color: "#6b7280", marginTop: 1 },
-  rowAmount: { fontSize: 15, fontWeight: "700", color: "#111827", marginLeft: 10 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: space.md },
+  year: { ...typeStyle.footnote },
+  add: { ...typeStyle.title, color: colors.tint, fontWeight: "400" },
+  amount: { ...typeStyle.body, color: colors.secondary },
 });

@@ -1,17 +1,26 @@
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, StyleSheet } from "react-native";
 import { useState } from "react";
-import { Redirect, useRouter } from "expo-router";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  StyleSheet,
+} from "react-native";
+import { Redirect } from "expo-router";
 import { useAuth } from "@/auth/auth-context";
+import { GroupedList } from "@/ui/GroupedList";
+import { colors, radius, space, type } from "@/ui/tokens";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const { me, login } = useAuth();
-  const router = useRouter();
 
   if (me) {
-    return <Redirect href="/(tabs)/dashboard" />;
+    return <Redirect href="/(tabs)/home" />;
   }
 
   const handleLogin = async () => {
@@ -36,24 +45,32 @@ export default function LoginScreen() {
         <Text style={styles.subtitle}>Sign in to your gym</Text>
       </View>
 
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="email-address"
-        placeholderTextColor="#9ca3af"
-        style={styles.input}
-      />
-      <TextInput
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        placeholderTextColor="#9ca3af"
-        style={styles.input}
-      />
+      <GroupedList>
+        <View style={styles.field}>
+          <TextInput
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            placeholderTextColor={colors.tertiary}
+            style={styles.input}
+            accessibilityLabel="Email"
+          />
+        </View>
+        <View style={[styles.field, styles.fieldLast]}>
+          <TextInput
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholderTextColor={colors.tertiary}
+            style={styles.input}
+            accessibilityLabel="Password"
+          />
+        </View>
+      </GroupedList>
 
       <TouchableOpacity
         onPress={handleLogin}
@@ -62,7 +79,7 @@ export default function LoginScreen() {
         accessibilityRole="button"
       >
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.surface} />
         ) : (
           <Text style={styles.buttonText}>Sign In</Text>
         )}
@@ -72,29 +89,35 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 24, justifyContent: "center" },
-  header: { marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: "700", color: "#111827" },
-  subtitle: { fontSize: 15, color: "#6b7280", marginTop: 4 },
-  input: {
-    width: "100%",
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 12,
-    fontSize: 16,
-    color: "#111827",
-    backgroundColor: "#fff",
+  container: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    paddingTop: 120,
   },
+  header: {
+    paddingHorizontal: space.lg,
+    marginBottom: space.xxl,
+  },
+  title: { ...type.largeTitle },
+  subtitle: { ...type.footnote, marginTop: space.xs },
+  field: {
+    minHeight: 44,
+    paddingHorizontal: space.lg,
+    justifyContent: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
+  },
+  fieldLast: { borderBottomWidth: 0 },
+  input: { ...type.body, paddingVertical: 10 },
   button: {
-    width: "100%",
-    backgroundColor: "#111827",
-    padding: 16,
-    borderRadius: 8,
+    marginHorizontal: space.lg,
+    marginTop: space.lg,
+    height: 50,
+    backgroundColor: colors.tint,
+    borderRadius: radius.lg,
     alignItems: "center",
-    marginTop: 8,
+    justifyContent: "center",
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  buttonText: { color: colors.surface, fontWeight: "600", fontSize: 17 },
 });

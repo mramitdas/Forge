@@ -21,3 +21,7 @@ export function formatTime(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
+
+export function formatDay(d = new Date()): string {
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}

@@ -148,3 +148,31 @@ export interface NotificationPageOut {
   page: number;
   page_size: number;
 }
+
+export interface PlanOut {
+  id: string;
+  name: string;
+  slug: string;
+  branch_id: string | null;
+  description: string | null;
+  billing_period: string;
+  amount_minor: number;
+  entry_fee_minor: number;
+  tax_rate_bp: number;
+  duration_months: number | null;
+  auto_renew: boolean;
+  is_active: boolean;
+}
+
+export interface SubscriptionOut {
+  id: string;
+  member_id: string;
+  plan_id: string;
+  branch_id: string;
+  status: string;
+  start_at: string;
+  end_at: string | null;
+  auto_renew: boolean;
+  price_minor: number;
+  currency: string;
+}

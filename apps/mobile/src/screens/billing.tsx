@@ -1,45 +1,56 @@
-"use client";
-
 import { useState } from "react";
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/auth/auth-context";
-import { formatMoney, formatDate } from "@/lib/money";
-import type { PageOut, InvoiceOut } from "@/lib/types";
+import { formatDate, formatMoney } from "@/lib/money";
+import type { InvoiceOut, PageOut } from "@/lib/types";
+import {
+  Empty,
+  ErrorRetry,
+  GroupedRow,
+  RowSkeleton,
+  Screen,
+  Segmented,
+  StatusCaption,
+  confirmAction,
+} from "@/ui";
+import { colors, radius, space, type as typeStyle } from "@/ui/tokens";
 
-const STATUS_STYLES: Record<string, { bg: string; fg: string }> = {
-  paid: { bg: "#d1fae5", fg: "#047857" },
-  pending: { bg: "#fef3c7", fg: "#b45309" },
-  overdue: { bg: "#fee2e2", fg: "#b91c1c" },
-  void: { bg: "#f3f4f6", fg: "#4b5563" },
-};
+const SEGMENTS = ["All", "Pending", "Overdue", "Paid"];
+
+export function payInvoice(invoiceId: string) {
+  return apiFetch(`/invoices/${invoiceId}/pay`, {
+    method: "POST",
+    body: JSON.stringify({
+      method: "cash",
+      idempotency_key: `mob-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+    }),
+  });
+}
 
 export function BillingScreen() {
   const { me } = useAuth();
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<string | null>(null);
+  const router = useRouter();
+  const [filter, setFilter] = useState("All");
+  const status = filter === "All" ? null : filter.toLowerCase();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ["invoices", "list", filter],
     queryFn: () =>
       apiFetch<PageOut<InvoiceOut>>(
-        `/invoices?page_size=50${filter ? `&status=${filter}` : ""}`,
+        `/invoices?page_size=50${status ? `&status=${status}` : ""}`,
       ),
     enabled: !!me,
   });
 
   const pay = useMutation({
-    mutationFn: (invoiceId: string) =>
-      apiFetch(`/invoices/${invoiceId}/pay`, {
-        method: "POST",
-        body: JSON.stringify({
-          method: "cash",
-          idempotency_key: `mob-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
-        }),
-      }),
+    mutationFn: payInvoice,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["invoices"] });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
       Alert.alert("Payment captured", "Invoice marked as paid.");
     },
     onError: (error: any) => {
@@ -47,107 +58,94 @@ export function BillingScreen() {
     },
   });
 
-  const filters = [null, "pending", "overdue", "paid"];
+  const items = data?.items ?? [];
+
+  const onPay = async (id: string) => {
+    const ok = await confirmAction({ title: "Record cash payment?", confirm: "Pay" });
+    if (ok) pay.mutate(id);
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Billing</Text>
-
-      <View style={styles.filters}>
-        {filters.map((f) => (
-          <TouchableOpacity
-            key={f ?? "all"}
-            onPress={() => setFilter(f)}
-            style={[styles.filter, filter === f && styles.filterActive]}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-              {f ?? "All"}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {isLoading ? (
-        <ActivityIndicator size="large" style={styles.loader} />
+    <Screen scroll={false} title="Billing">
+      <Segmented values={SEGMENTS} value={filter} onChange={setFilter} />
+      {isError ? (
+        <ErrorRetry onPress={() => void refetch()} />
+      ) : isLoading ? (
+        <View style={styles.group}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <RowSkeleton key={i} />
+          ))}
+        </View>
       ) : (
         <FlatList
-          data={data?.items ?? []}
+          data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-            const s = STATUS_STYLES[item.status] ?? STATUS_STYLES.void;
+          contentInsetAdjustmentBehavior="automatic"
+          refreshing={isRefetching}
+          onRefresh={() => void refetch()}
+          ListEmptyComponent={<Empty label="No Invoices" />}
+          renderItem={({ item, index }) => {
             const outstanding = item.total_minor - item.paid_minor;
-            return (
-              <View style={styles.card}>
-                <View style={styles.cardHead}>
-                  <Text style={styles.number}>{item.number}</Text>
-                  <View style={[styles.badge, { backgroundColor: s.bg }]}>
-                    <Text style={[styles.badgeText, { color: s.fg }]}>{item.status}</Text>
+            const unpaid = outstanding > 0 && item.status !== "paid" && item.status !== "void";
+            const row = (
+              <GroupedRow
+                title={item.number}
+                subtitle={`Due ${formatDate(item.due_date)}`}
+                trailing={
+                  <View style={styles.trailing}>
+                    <Text style={styles.amount}>
+                      {formatMoney(item.status === "paid" ? item.total_minor : outstanding, item.currency)}
+                    </Text>
+                    <StatusCaption status={item.status} />
                   </View>
-                </View>
-                <Text style={styles.amount}>{formatMoney(item.total_minor, item.currency)}</Text>
-                <Text style={styles.meta}>Due {formatDate(item.due_date)}</Text>
-                {outstanding > 0 && item.status !== "void" ? (
-                  <TouchableOpacity
-                    style={styles.payBtn}
-                    onPress={() => pay.mutate(item.id)}
-                    disabled={pay.isPending}
+                }
+                onPress={() => router.push(`/(tabs)/more/billing/${item.id}`)}
+                last={index === items.length - 1}
+              />
+            );
+            if (!unpaid) return row;
+            return (
+              <Swipeable
+                renderRightActions={() => (
+                  <Pressable
+                    onPress={() => void onPay(item.id)}
+                    style={styles.payAction}
                     accessibilityRole="button"
                   >
-                    <Text style={styles.payText}>
-                      {pay.isPending ? "Processing…" : `Pay ${formatMoney(outstanding, item.currency)}`}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
+                    <Text style={styles.payText}>Pay</Text>
+                  </Pressable>
+                )}
+              >
+                {row}
+              </Swipeable>
             );
           }}
-          ListEmptyComponent={<Text style={styles.empty}>No invoices.</Text>}
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f9fafb", padding: 20 },
-  title: { fontSize: 24, fontWeight: "700", color: "#111827", marginBottom: 12 },
-  filters: { flexDirection: "row", gap: 8, marginBottom: 14 },
-  filter: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    backgroundColor: "#fff",
+  list: {
+    marginHorizontal: space.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    overflow: "hidden",
   },
-  filterActive: { backgroundColor: "#111827", borderColor: "#111827" },
-  filterText: { fontSize: 13, color: "#374151", fontWeight: "500" },
-  filterTextActive: { color: "#fff" },
-  loader: { marginTop: 32 },
-  list: { paddingBottom: 24 },
-  empty: { textAlign: "center", color: "#9ca3af", marginTop: 32, fontSize: 14 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+  group: {
+    marginHorizontal: space.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    overflow: "hidden",
   },
-  cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  number: { fontSize: 15, fontWeight: "600", color: "#111827" },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  badgeText: { fontSize: 11, fontWeight: "700" },
-  amount: { fontSize: 20, fontWeight: "700", color: "#111827", marginTop: 6 },
-  meta: { fontSize: 13, color: "#6b7280", marginTop: 2 },
-  payBtn: {
-    marginTop: 12,
-    backgroundColor: "#111827",
-    paddingVertical: 11,
-    borderRadius: 8,
-    alignItems: "center",
+  trailing: { alignItems: "flex-end" },
+  amount: { ...typeStyle.caption, color: colors.label, marginBottom: 2 },
+  payAction: {
+    backgroundColor: colors.green,
+    justifyContent: "center",
+    paddingHorizontal: space.xl,
   },
-  payText: { color: "#fff", fontWeight: "600", fontSize: 14 },
+  payText: { color: colors.surface, fontWeight: "600", fontSize: 17 },
 });
