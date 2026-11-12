@@ -16,6 +16,7 @@ export default function MoreLayout() {
       <Stack.Screen name="notifications" options={{ title: "Notifications", ...largeTitleOptions }} />
       <Stack.Screen name="settings" options={{ title: "Settings", ...largeTitleOptions }} />
       <Stack.Screen name="settings-password" options={{ title: "Password", ...inlineTitleOptions }} />
+      <Stack.Screen name="settings-appearance" options={{ title: "Appearance", ...inlineTitleOptions }} />
     </Stack>
   );
 }
