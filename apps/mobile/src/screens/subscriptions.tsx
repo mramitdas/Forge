@@ -17,17 +17,20 @@ import {
   StatusCaption,
   confirmAction,
 } from "@/ui";
-import { colors, radius, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, radius, space } from "@/ui/theme";
 
 const SEGMENTS = ["All", "Active", "Pending", "Expired", "Cancelled"];
 
 export function SubscriptionsScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const router = useRouter();
   const qc = useQueryClient();
   const [filter, setFilter] = useState("All");
   const status = filter === "All" ? undefined : filter.toLowerCase();
-  const canActivate = me?.permissions.includes("membership.manage") ?? false;
+  const transformed = me?.permissions.includes("membership.manage") ?? false;
 
   const { data, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ["subscriptions", "list", filter],
@@ -74,7 +77,7 @@ export function SubscriptionsScreen() {
       {isError ? (
         <ErrorRetry onPress={() => void refetch()} />
       ) : isLoading ? (
-        <View style={styles.group}>
+        <View style={[styles.group, { backgroundColor: palette.surface, borderRadius: radius.md, overflow: "hidden" as const }]}>
           {Array.from({ length: 8 }).map((_, i) => (
             <RowSkeleton key={i} />
           ))}
@@ -94,7 +97,7 @@ export function SubscriptionsScreen() {
               subtitle={`${planName(item.plan_id)} · ${formatDate(item.start_at)}–${item.end_at ? formatDate(item.end_at) : "open"}`}
               trailing={
                 <View style={styles.trailing}>
-                  {item.status === "pending" && canActivate ? (
+                  {item.status === "pending" && transformed ? (
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation?.();
@@ -102,7 +105,7 @@ export function SubscriptionsScreen() {
                       }}
                       accessibilityRole="button"
                     >
-                      <Text style={styles.activate}>Activate</Text>
+                      <Text style={[t.footnote, styles.activate, { color: palette.accent, fontWeight: "600" as const }]}>Activate</Text>
                     </Pressable>
                   ) : null}
                   <StatusCaption status={item.status} />
@@ -121,16 +124,12 @@ export function SubscriptionsScreen() {
 const styles = StyleSheet.create({
   list: {
     marginHorizontal: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
     overflow: "hidden",
   },
   group: {
     marginHorizontal: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
     overflow: "hidden",
   },
   trailing: { flexDirection: "row", alignItems: "center", gap: space.sm },
-  activate: { ...typeStyle.footnote, color: colors.tint, fontWeight: "600" },
+  activate: {},
 });

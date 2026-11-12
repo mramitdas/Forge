@@ -1,12 +1,18 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { colors, space, type } from "./tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles } from "@/ui/theme";
+import { space } from "@/ui/theme";
 
 export function ErrorRetry({ onPress }: { onPress: () => void }) {
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   return (
     <View style={styles.wrap}>
-      <Text style={styles.msg}>Could not load.</Text>
+      <Text style={[t.footnote, styles.msg]}>Could not load.</Text>
       <TouchableOpacity onPress={onPress} accessibilityRole="button">
-        <Text style={styles.retry}>Try Again</Text>
+        <Text style={[t.footnote, { color: palette.accent, fontWeight: "600" } as const]}>
+          Try Again
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -14,6 +20,5 @@ export function ErrorRetry({ onPress }: { onPress: () => void }) {
 
 const styles = StyleSheet.create({
   wrap: { padding: space.xxl, alignItems: "center" },
-  msg: { ...type.footnote, marginBottom: space.sm },
-  retry: { ...type.footnote, color: colors.tint, fontWeight: "600" },
+  msg: { marginBottom: space.sm },
 });

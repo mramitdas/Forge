@@ -6,11 +6,14 @@ import { useAuth } from "@/auth/auth-context";
 import { formatDate } from "@/lib/money";
 import type { MemberOut } from "@/lib/types";
 import { ErrorRetry, GroupedList, GroupedRow, Screen, StatusCaption } from "@/ui";
-import { colors, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, space } from "@/ui/theme";
 
 export function MemberDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["members", "detail", id],
@@ -30,23 +33,23 @@ export function MemberDetailScreen() {
           <ErrorRetry onPress={() => void refetch()} />
         ) : isLoading || !data ? null : (
           <>
-            <View style={styles.hero}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{letter}</Text>
+            <View style={[styles.hero, { marginBottom: space.lg, marginTop: space.sm }]}>
+              <View style={[styles.avatar, { backgroundColor: palette.surfaceStrong }]}>
+                <Text style={[t.largeTitle, styles.avatarText, { color: palette.label }]}>{letter}</Text>
               </View>
             </View>
             <GroupedList header="CONTACT">
-              <GroupedRow title="Phone" trailing={<Text style={styles.value}>{data.phone || "—"}</Text>} />
-              <GroupedRow title="Email" trailing={<Text style={styles.value}>{data.email || "—"}</Text>} last />
+              <GroupedRow title="Phone" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{data.phone || "—"}</Text>} />
+              <GroupedRow title="Email" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{data.email || "—"}</Text>} last />
             </GroupedList>
             <GroupedList header="STATUS">
               <GroupedRow title="Status" trailing={<StatusCaption status={data.status} />} />
-              <GroupedRow title="Branch" trailing={<Text style={styles.value}>{branchName}</Text>} last />
+              <GroupedRow title="Branch" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{branchName}</Text>} last />
             </GroupedList>
             <GroupedList header="DATES">
               <GroupedRow
                 title="Joined"
-                trailing={<Text style={styles.value}>{formatDate(data.joined_at)}</Text>}
+                trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{formatDate(data.joined_at)}</Text>}
                 last
               />
             </GroupedList>
@@ -58,15 +61,14 @@ export function MemberDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  hero: { alignItems: "center", marginBottom: space.lg, marginTop: space.sm },
+  hero: { alignItems: "center" },
   avatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: colors.gray5,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { ...typeStyle.largeTitle, fontSize: 24 },
-  value: { ...typeStyle.body, color: colors.secondary },
+  avatarText: { fontSize: 24 },
+  value: {},
 });

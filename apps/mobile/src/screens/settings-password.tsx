@@ -5,10 +5,13 @@ import { useAuth } from "@/auth/auth-context";
 import { apiFetch } from "@/lib/api";
 import type { TokenResponse } from "@/lib/types";
 import { GroupedList, Screen } from "@/ui";
-import { colors, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, space } from "@/ui/theme";
 
 export function SettingsPasswordScreen() {
   const { completePasswordChange } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const router = useRouter();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -42,7 +45,7 @@ export function SettingsPasswordScreen() {
           headerRight: () => (
             <Text
               onPress={() => void changePassword()}
-              style={[styles.update, !canUpdate && styles.updateDisabled]}
+              style={[t.title, styles.update, { color: palette.accent, fontWeight: "600" as const }, !canUpdate && { color: palette.tertiary }]}
               accessibilityRole="button"
             >
               Update
@@ -57,8 +60,8 @@ export function SettingsPasswordScreen() {
             value={current}
             onChangeText={setCurrent}
             secureTextEntry
-            placeholderTextColor={colors.tertiary}
-            style={styles.input}
+            placeholderTextColor={palette.tertiary}
+            style={[t.body, styles.input, { color: palette.label }]}
             accessibilityLabel="Current password"
           />
           <TextInput
@@ -66,8 +69,8 @@ export function SettingsPasswordScreen() {
             value={next}
             onChangeText={setNext}
             secureTextEntry
-            placeholderTextColor={colors.tertiary}
-            style={styles.input}
+            placeholderTextColor={palette.tertiary}
+            style={[t.body, styles.input, { color: palette.label }]}
             accessibilityLabel="New password"
           />
         </GroupedList>
@@ -77,12 +80,9 @@ export function SettingsPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  update: { ...typeStyle.title, color: colors.tint, fontWeight: "600" },
-  updateDisabled: { color: colors.tertiary },
+  update: {},
   input: {
-    ...typeStyle.body,
     paddingHorizontal: space.lg,
     paddingVertical: 12,
-    backgroundColor: colors.surface,
   },
 });

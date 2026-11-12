@@ -1,12 +1,15 @@
 import { StyleSheet, View } from "react-native";
-import { colors, radius, space } from "./tokens";
+import { useTheme } from "@/theme/theme-context";
+import { radius, space } from "@/ui/theme";
 
 export function SummaryCardSkeleton() {
-  return <View style={styles.card} />;
+  const { palette } = useTheme();
+  return <View style={[styles.card, { backgroundColor: palette.surfaceStrong }]} />;
 }
 
 export function RowSkeleton() {
-  return <View style={styles.row} />;
+  const { palette } = useTheme();
+  return <View style={[styles.row, { backgroundColor: palette.surfaceStrong }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -14,13 +17,11 @@ const styles = StyleSheet.create({
     height: 88,
     marginHorizontal: space.lg,
     marginBottom: space.md,
-    backgroundColor: colors.gray5,
     borderRadius: radius.md,
     opacity: 0.4,
   },
   row: {
     height: 44,
-    backgroundColor: colors.gray5,
     opacity: 0.4,
   },
 });

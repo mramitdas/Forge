@@ -6,13 +6,16 @@ import { formatDate, formatMoney } from "@/lib/money";
 import { useAuth } from "@/auth/auth-context";
 import type { InvoiceOut, MemberOut, PageOut } from "@/lib/types";
 import { ErrorRetry, GroupedList, GroupedRow, Screen, StatusCaption, confirmAction } from "@/ui";
-import { colors, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles } from "@/ui/theme";
 import { payInvoice } from "@/screens/billing";
 
 export function InvoiceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { me } = useAuth();
   const qc = useQueryClient();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
 
   const listQ = useQuery({
     queryKey: ["invoices", "list", "All"],
@@ -63,26 +66,26 @@ export function InvoiceDetailScreen() {
         ) : !invoice ? null : (
           <>
             <GroupedList header="INVOICE">
-              <GroupedRow title="Number" trailing={<Text style={styles.value}>{invoice.number}</Text>} />
-              <GroupedRow title="Member" trailing={<Text style={styles.value}>{memberName}</Text>} />
+              <GroupedRow title="Number" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{invoice.number}</Text>} />
+              <GroupedRow title="Member" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{memberName}</Text>} />
               <GroupedRow title="Status" trailing={<StatusCaption status={invoice.status} />} last />
             </GroupedList>
             <GroupedList header="DATES">
-              <GroupedRow title="Issued" trailing={<Text style={styles.value}>{formatDate(invoice.issue_date)}</Text>} />
-              <GroupedRow title="Due" trailing={<Text style={styles.value}>{formatDate(invoice.due_date)}</Text>} last />
+              <GroupedRow title="Issued" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{formatDate(invoice.issue_date)}</Text>} />
+              <GroupedRow title="Due" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{formatDate(invoice.due_date)}</Text>} last />
             </GroupedList>
             <GroupedList header="AMOUNTS">
               <GroupedRow
                 title="Total"
-                trailing={<Text style={styles.value}>{formatMoney(invoice.total_minor, invoice.currency)}</Text>}
+                trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{formatMoney(invoice.total_minor, invoice.currency)}</Text>}
               />
               <GroupedRow
                 title="Paid"
-                trailing={<Text style={styles.value}>{formatMoney(invoice.paid_minor, invoice.currency)}</Text>}
+                trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{formatMoney(invoice.paid_minor, invoice.currency)}</Text>}
               />
               <GroupedRow
                 title="Outstanding"
-                trailing={<Text style={styles.value}>{formatMoney(outstanding, invoice.currency)}</Text>}
+                trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{formatMoney(outstanding, invoice.currency)}</Text>}
                 last
               />
             </GroupedList>
@@ -99,5 +102,5 @@ export function InvoiceDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  value: { ...typeStyle.body, color: colors.secondary },
+  value: {},
 });

@@ -17,7 +17,8 @@ import {
   StatusCaption,
   confirmAction,
 } from "@/ui";
-import { colors, radius, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, radius, space } from "@/ui/theme";
 
 const SEGMENTS = ["All", "Pending", "Overdue", "Paid"];
 
@@ -33,6 +34,8 @@ export function payInvoice(invoiceId: string) {
 
 export function BillingScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const qc = useQueryClient();
   const router = useRouter();
   const [filter, setFilter] = useState("All");
@@ -71,7 +74,7 @@ export function BillingScreen() {
       {isError ? (
         <ErrorRetry onPress={() => void refetch()} />
       ) : isLoading ? (
-        <View style={styles.group}>
+        <View style={[styles.group, { backgroundColor: palette.surface, borderRadius: radius.md, overflow: "hidden" as const }]}>
           {Array.from({ length: 8 }).map((_, i) => (
             <RowSkeleton key={i} />
           ))}
@@ -94,7 +97,7 @@ export function BillingScreen() {
                 subtitle={`Due ${formatDate(item.due_date)}`}
                 trailing={
                   <View style={styles.trailing}>
-                    <Text style={styles.amount}>
+                    <Text style={[t.caption, styles.amount, { color: palette.label }]}>
                       {formatMoney(item.status === "paid" ? item.total_minor : outstanding, item.currency)}
                     </Text>
                     <StatusCaption status={item.status} />
@@ -110,10 +113,10 @@ export function BillingScreen() {
                 renderRightActions={() => (
                   <Pressable
                     onPress={() => void onPay(item.id)}
-                    style={styles.payAction}
+                    style={[styles.payAction, { backgroundColor: palette.success }]}
                     accessibilityRole="button"
                   >
-                    <Text style={styles.payText}>Pay</Text>
+                    <Text style={[styles.payText, { color: palette.onAccent }]}>Pay</Text>
                   </Pressable>
                 )}
               >
@@ -130,22 +133,17 @@ export function BillingScreen() {
 const styles = StyleSheet.create({
   list: {
     marginHorizontal: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
     overflow: "hidden",
   },
   group: {
     marginHorizontal: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
     overflow: "hidden",
   },
   trailing: { alignItems: "flex-end" },
-  amount: { ...typeStyle.caption, color: colors.label, marginBottom: 2 },
+  amount: { marginBottom: 2 },
   payAction: {
-    backgroundColor: colors.green,
     justifyContent: "center",
     paddingHorizontal: space.xl,
   },
-  payText: { color: colors.surface, fontWeight: "600", fontSize: 17 },
+  payText: { fontWeight: "600", fontSize: 17 },
 });

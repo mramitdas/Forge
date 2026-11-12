@@ -5,18 +5,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/auth/auth-context";
 import { GroupedList, GroupedRow, Screen } from "@/ui";
-import { colors, radius } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { radius, space } from "@/ui/theme";
 
 function Glyph({ name, bg }: { name: keyof typeof Ionicons.glyphMap; bg: string }) {
+  const { palette } = useTheme();
   return (
     <View style={[styles.glyph, { backgroundColor: bg }]}>
-      <Ionicons name={name} size={18} color={colors.surface} />
+      <Ionicons name={name} size={18} color={palette.onAccent} />
     </View>
   );
 }
 
 export function MoreScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
   const router = useRouter();
 
   const unreadQ = useQuery({
@@ -33,7 +36,7 @@ export function MoreScreen() {
       <GroupedList header="CHECK-IN">
         <GroupedRow
           title="Check In"
-          leading={<Glyph name="calendar" bg={colors.tint} />}
+          leading={<Glyph name="calendar" bg={palette.accentSoft} />}
           chevron
           onPress={() => router.push("/(tabs)/more/checkin")}
           last
@@ -42,13 +45,13 @@ export function MoreScreen() {
       <GroupedList header="MONEY">
         <GroupedRow
           title="Billing"
-          leading={<Glyph name="card" bg={colors.green} />}
+          leading={<Glyph name="card" bg={palette.accentSoft} />}
           chevron
           onPress={() => router.push("/(tabs)/more/billing")}
         />
         <GroupedRow
           title="Expenses"
-          leading={<Glyph name="remove-circle" bg={colors.red} />}
+          leading={<Glyph name="remove-circle" bg={palette.accentSoft} />}
           chevron
           onPress={() => router.push("/(tabs)/more/expenses")}
           last
@@ -57,8 +60,8 @@ export function MoreScreen() {
       <GroupedList header="ACTIVITY">
         <GroupedRow
           title="Notifications"
-          leading={<Glyph name="notifications" bg={colors.amber} />}
-          trailing={unread > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{unread}</Text></View> : undefined}
+          leading={<Glyph name="notifications" bg={palette.accentSoft} />}
+          trailing={unread > 0 ? <View style={[styles.badge, { backgroundColor: palette.danger }]}><Text style={[styles.badgeText, { color: palette.onAccent }]}>{unread}</Text></View> : undefined}
           chevron
           onPress={() => router.push("/(tabs)/more/notifications")}
           last
@@ -68,7 +71,7 @@ export function MoreScreen() {
         <GroupedRow
           title="Settings"
           subtitle={me?.user?.full_name}
-          leading={<Glyph name="settings" bg={colors.secondary} />}
+          leading={<Glyph name="settings" bg={palette.accentSoft} />}
           chevron
           onPress={() => router.push("/(tabs)/more/settings")}
           last
@@ -90,10 +93,9 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: radius.full,
-    backgroundColor: colors.red,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 6,
   },
-  badgeText: { color: colors.surface, fontSize: 12, fontWeight: "600" },
+  badgeText: { fontSize: 12, fontWeight: "600" },
 });

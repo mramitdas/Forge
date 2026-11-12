@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity } from "react-native";
-import { colors, radius, space, type } from "./tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, radius, space } from "@/ui/theme";
 
 type SummaryCardProps = {
   value: string;
@@ -9,30 +10,29 @@ type SummaryCardProps = {
 };
 
 export function SummaryCard({ value, caption, onPress, valueColor }: SummaryCardProps) {
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, { backgroundColor: palette.surface, borderRadius: radius.md }]}
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole="button"
       accessibilityLabel={`${caption}: ${value}`}
     >
-      <Text style={[styles.value, valueColor ? { color: valueColor } : null]} numberOfLines={1}>
+      <Text style={[t.largeTitle, valueColor ? { color: valueColor } : null]} numberOfLines={1}>
         {value}
       </Text>
-      <Text style={styles.caption}>{caption}</Text>
+      <Text style={[t.footnote, styles.caption]}>{caption}</Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
     padding: space.lg,
     marginHorizontal: space.lg,
     marginBottom: space.md,
   },
-  value: { ...type.largeTitle },
-  caption: { ...type.footnote, marginTop: space.xs },
+  caption: { marginTop: space.xs },
 });

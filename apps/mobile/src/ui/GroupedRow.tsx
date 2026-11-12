@@ -1,7 +1,8 @@
 import { type ReactNode } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, rowMinHeight, space, type } from "./tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, radius, space, rowMinHeight } from "@/ui/theme";
 
 type GroupedRowProps = {
   title: string;
@@ -24,25 +25,27 @@ export function GroupedRow({
   destructive,
   last,
 }: GroupedRowProps) {
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const body = (
     <View style={[styles.row, last && styles.rowLast]}>
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.mid}>
         <Text
-          style={[styles.title, destructive && styles.destructive]}
+          style={[t.title, destructive && { color: palette.danger, fontWeight: "600" as const }]}
           numberOfLines={destructive ? undefined : 1}
         >
           {title}
         </Text>
         {subtitle ? (
-          <Text style={styles.subtitle} numberOfLines={1}>
+          <Text style={[t.subhead, styles.subtitle]} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
       {chevron ? (
-        <Ionicons name="chevron-forward" size={16} color={colors.tertiary} />
+        <Ionicons name="chevron-forward" size={16} color={palette.tertiary} />
       ) : null}
       {!last ? (
         <View
@@ -69,20 +72,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
     position: "relative",
   },
   rowLast: {},
   leading: { marginRight: space.md },
   mid: { flex: 1, minWidth: 0 },
-  title: { ...type.title, fontWeight: "400" },
-  destructive: {
-    color: colors.red,
-    fontWeight: "600",
-    textAlign: "center",
-    width: "100%",
-  },
-  subtitle: { ...type.subhead, marginTop: 1 },
+  subtitle: { marginTop: 1 },
   trailing: { marginLeft: space.sm, flexShrink: 0 },
   separator: {
     position: "absolute",
@@ -90,7 +85,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.separator,
   },
   separatorInset: { left: 60 },
 });
