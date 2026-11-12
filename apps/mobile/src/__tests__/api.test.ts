@@ -43,6 +43,12 @@ function stubFetch(...responses: FetchResponse[]) {
   return fn;
 }
 
+// stubFetch swaps global.fetch; restoring keeps suite order-independent
+const originalFetch = global.fetch;
+afterEach(() => {
+  global.fetch = originalFetch;
+});
+
 beforeEach(() => {
   mockStore.clear();
   jest.clearAllMocks();
