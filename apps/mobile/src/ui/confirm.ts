@@ -7,8 +7,17 @@ export function confirmAction(opts: {
   destructive?: boolean;
 }): Promise<boolean> {
   const { title, message, confirm, destructive } = opts;
-  return new Promise((resolve) => {
-    if (Platform.OS === "ios") {
+
+  // react-native-web stubs Alert.alert to a no-op, so Pay Cash and Log Out
+  // silently resolve to "no" on the web preview. The browser dialog is the
+  // only thing that actually blocks for a user answer here.
+  if (Platform.OS === "web") {
+    const text = [title, message].filter(Boolean).join("\n\n");
+    return Promise.resolve(window.confirm(text));
+  }
+
+  if (Platform.OS === "ios") {
+    return new Promise((resolve) => {
       ActionSheetIOS.showActionSheetWithOptions(
         {
           title,
@@ -19,8 +28,10 @@ export function confirmAction(opts: {
         },
         (index) => resolve(index === 1),
       );
-      return;
-    }
+    });
+  }
+
+  return new Promise((resolve) => {
     Alert.alert(title, message, [
       { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
       {
