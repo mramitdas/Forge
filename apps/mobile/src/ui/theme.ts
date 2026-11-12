@@ -85,3 +85,16 @@ export const type = {
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
 export const radius = { sm: 8, md: 10, lg: 12, full: 999 };
 export const rowMinHeight = 44;
+
+/** The type scale with theme-correct colors resolved. */
+export function textStyles(p: Palette) {
+  return {
+    largeTitle: { ...type.largeTitle, color: p.label },
+    title: { ...type.title, color: p.label },
+    body: { ...type.body, color: p.label },
+    subhead: { ...type.subhead, color: p.secondary },
+    footnote: { ...type.footnote, color: p.secondary },
+    caption: { ...type.caption, color: p.secondary },
+  };
+}
+export type TextStyles = ReturnType<typeof textStyles>;

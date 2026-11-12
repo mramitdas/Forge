@@ -1,13 +1,14 @@
-import { StyleSheet, Text } from "react-native";
-import { colors, type } from "./tokens";
+import { Text } from "react-native";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles } from "@/ui/theme";
 
-const TINT: Record<string, string> = {
-  active: colors.green,
-  paid: colors.green,
-  allowed: colors.green,
-  pending: colors.amber,
-  overdue: colors.red,
-  denied: colors.red,
+const TINT: Record<string, "success" | "warning" | "danger" | "secondary"> = {
+  active: "success",
+  paid: "success",
+  allowed: "success",
+  pending: "warning",
+  overdue: "danger",
+  denied: "danger",
 };
 
 function titleCase(s: string): string {
@@ -16,11 +17,9 @@ function titleCase(s: string): string {
 }
 
 export function StatusCaption({ status }: { status: string }) {
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const key = status.toLowerCase();
-  const color = TINT[key] ?? colors.secondary;
-  return <Text style={[styles.text, { color }]}>{titleCase(status)}</Text>;
+  const color = TINT[key] ? palette[TINT[key]] : palette.secondary;
+  return <Text style={[t.caption, { color }]}>{titleCase(status)}</Text>;
 }
-
-const styles = StyleSheet.create({
-  text: { ...type.caption, fontWeight: "400" },
-});

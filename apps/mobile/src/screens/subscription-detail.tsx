@@ -7,13 +7,16 @@ import { formatDate, formatMoney } from "@/lib/money";
 import { useAuth } from "@/auth/auth-context";
 import type { MemberOut, PageOut, PlanOut, SubscriptionOut } from "@/lib/types";
 import { ErrorRetry, GroupedList, GroupedRow, Screen, StatusCaption, confirmAction } from "@/ui";
-import { colors, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles } from "@/ui/theme";
 
 export function SubscriptionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const qc = useQueryClient();
-  const canActivate = me?.permissions.includes("membership.manage") ?? false;
+  const transformed = me?.permissions.includes("membership.manage") ?? false;
 
   const listQ = useQuery({
     queryKey: ["subscriptions", "list", "All"],
@@ -64,13 +67,13 @@ export function SubscriptionDetailScreen() {
         ) : !sub ? null : (
           <>
             <GroupedList header="MEMBER">
-              <GroupedRow title="Name" trailing={<Text style={styles.value}>{memberName}</Text>} last />
+              <GroupedRow title="Name" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{memberName}</Text>} last />
             </GroupedList>
             <GroupedList header="PLAN">
-              <GroupedRow title="Plan" trailing={<Text style={styles.value}>{planName}</Text>} />
+              <GroupedRow title="Plan" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{planName}</Text>} />
               <GroupedRow
                 title="Price"
-                trailing={<Text style={styles.value}>{formatMoney(sub.price_minor, sub.currency)}</Text>}
+                trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{formatMoney(sub.price_minor, sub.currency)}</Text>}
                 last
               />
             </GroupedList>
@@ -78,22 +81,22 @@ export function SubscriptionDetailScreen() {
               <GroupedRow title="Status" trailing={<StatusCaption status={sub.status} />} />
               <GroupedRow
                 title="Auto-renew"
-                trailing={<Text style={styles.value}>{sub.auto_renew ? "On" : "Off"}</Text>}
+                trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{sub.auto_renew ? "On" : "Off"}</Text>}
                 last
               />
             </GroupedList>
             <GroupedList header="DATES">
-              <GroupedRow title="Start" trailing={<Text style={styles.value}>{formatDate(sub.start_at)}</Text>} />
+              <GroupedRow title="Start" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{formatDate(sub.start_at)}</Text>} />
               <GroupedRow
                 title="End"
-                trailing={<Text style={styles.value}>{sub.end_at ? formatDate(sub.end_at) : "Open"}</Text>}
+                trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{sub.end_at ? formatDate(sub.end_at) : "Open"}</Text>}
                 last
               />
             </GroupedList>
             <GroupedList header="BRANCH">
-              <GroupedRow title="Branch" trailing={<Text style={styles.value}>{branchName}</Text>} last />
+              <GroupedRow title="Branch" trailing={<Text style={[t.body, styles.value, { color: palette.secondary }]}>{branchName}</Text>} last />
             </GroupedList>
-            {sub.status === "pending" && canActivate ? (
+            {sub.status === "pending" && transformed ? (
               <GroupedList>
                 <GroupedRow title="Activate" onPress={() => void onActivate()} last />
               </GroupedList>
@@ -106,5 +109,5 @@ export function SubscriptionDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  value: { ...typeStyle.body, color: colors.secondary },
+  value: {},
 });

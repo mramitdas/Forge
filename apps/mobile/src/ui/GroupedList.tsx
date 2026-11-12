@@ -1,6 +1,8 @@
 import { type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { colors, radius, space, type } from "./tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles } from "@/ui/theme";
+import { radius, space, type } from "@/ui/theme";
 
 type GroupedListProps = {
   header?: string;
@@ -9,10 +11,14 @@ type GroupedListProps = {
 };
 
 export function GroupedList({ header, children, style }: GroupedListProps) {
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   return (
     <View style={[styles.wrap, style]}>
-      {header ? <Text style={styles.header}>{header}</Text> : null}
-      <View style={styles.group}>{children}</View>
+      {header ? <Text style={[t.footnote, styles.header]}>{header}</Text> : null}
+      <View style={[styles.group, { backgroundColor: palette.surface, borderRadius: radius.md, overflow: "hidden" as const }]}>
+        {children}
+      </View>
     </View>
   );
 }
@@ -23,14 +29,9 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   header: {
-    ...type.footnote,
     textTransform: "uppercase",
     marginLeft: space.lg,
     marginBottom: 6,
   },
-  group: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    overflow: "hidden",
-  },
+  group: {},
 });

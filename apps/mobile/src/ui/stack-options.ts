@@ -1,10 +1,12 @@
-import { colors } from "./tokens";
+import { type Palette } from "@/ui/theme";
 
-export const stackScreenOptions = {
-  headerTintColor: colors.tint,
-  headerBackTitle: "Back",
-  contentStyle: { backgroundColor: colors.canvas },
-};
+export function stackScreenOptions(p: Palette) {
+  return {
+    headerTintColor: p.accent,
+    headerBackTitle: "Back",
+    contentStyle: { backgroundColor: p.canvas },
+  };
+}
 
 export const largeTitleOptions = {
   headerLargeTitleEnabled: true,
@@ -13,3 +15,5 @@ export const largeTitleOptions = {
 export const inlineTitleOptions = {
   headerLargeTitleEnabled: false,
 };
+
+export type { Palette };

@@ -7,7 +7,8 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/auth/auth-context";
 import type { ExpenseOut } from "@/lib/types";
 import { GroupedList, GroupedRow, Screen } from "@/ui";
-import { colors, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, space } from "@/ui/theme";
 
 const CATEGORIES = ["operations", "maintenance", "utilities", "supplies", "other"];
 const METHODS = ["cash", "card", "upi", "netbanking", "credit", "wallet"];
@@ -19,6 +20,8 @@ function titleCase(s: string): string {
 
 export function ExpenseAddScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const router = useRouter();
   const qc = useQueryClient();
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -62,7 +65,7 @@ export function ExpenseAddScreen() {
               onPress={() => {
                 if (canSave) create.mutate();
               }}
-              style={[styles.save, !canSave && styles.saveDisabled]}
+              style={[t.title, styles.save, { color: palette.accent, fontWeight: "600" as const }, !canSave && { color: palette.tertiary }]}
               accessibilityRole="button"
             >
               Save
@@ -77,7 +80,7 @@ export function ExpenseAddScreen() {
               key={c}
               title={titleCase(c)}
               trailing={
-                category === c ? <Ionicons name="checkmark" size={20} color={colors.tint} /> : undefined
+                category === c ? <Ionicons name="checkmark" size={20} color={palette.accent} /> : undefined
               }
               onPress={() => setCategory(c)}
               last={i === CATEGORIES.length - 1}
@@ -90,8 +93,8 @@ export function ExpenseAddScreen() {
             value={amount}
             onChangeText={setAmount}
             keyboardType="decimal-pad"
-            placeholderTextColor={colors.tertiary}
-            style={styles.input}
+            placeholderTextColor={palette.tertiary}
+            style={[t.body, styles.input, { color: palette.label }]}
             accessibilityLabel="Amount"
           />
         </GroupedList>
@@ -101,7 +104,7 @@ export function ExpenseAddScreen() {
               key={m}
               title={titleCase(m)}
               trailing={
-                method === m ? <Ionicons name="checkmark" size={20} color={colors.tint} /> : undefined
+                method === m ? <Ionicons name="checkmark" size={20} color={palette.accent} /> : undefined
               }
               onPress={() => setMethod(m)}
               last={i === METHODS.length - 1}
@@ -113,8 +116,8 @@ export function ExpenseAddScreen() {
             placeholder="Optional"
             value={description}
             onChangeText={setDescription}
-            placeholderTextColor={colors.tertiary}
-            style={styles.input}
+            placeholderTextColor={palette.tertiary}
+            style={[t.body, styles.input, { color: palette.label }]}
             accessibilityLabel="Description"
           />
         </GroupedList>
@@ -124,12 +127,9 @@ export function ExpenseAddScreen() {
 }
 
 const styles = StyleSheet.create({
-  save: { ...typeStyle.title, color: colors.tint, fontWeight: "600" },
-  saveDisabled: { color: colors.tertiary },
+  save: {},
   input: {
-    ...typeStyle.body,
     paddingHorizontal: space.lg,
     paddingVertical: 12,
-    backgroundColor: colors.surface,
   },
 });

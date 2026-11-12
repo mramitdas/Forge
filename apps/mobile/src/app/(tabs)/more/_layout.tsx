@@ -1,9 +1,11 @@
 import { Stack } from "expo-router";
+import { useTheme } from "@/theme/theme-context";
 import { inlineTitleOptions, largeTitleOptions, stackScreenOptions } from "@/ui/stack-options";
 
 export default function MoreLayout() {
+  const { palette } = useTheme();
   return (
-    <Stack screenOptions={stackScreenOptions}>
+    <Stack screenOptions={stackScreenOptions(palette)}>
       <Stack.Screen name="index" options={{ title: "More", ...largeTitleOptions }} />
       <Stack.Screen name="checkin" options={{ title: "Check In", ...inlineTitleOptions }} />
       <Stack.Screen name="billing/index" options={{ title: "Billing", ...largeTitleOptions }} />

@@ -6,10 +6,13 @@ import { useAuth } from "@/auth/auth-context";
 import { formatTime } from "@/lib/money";
 import type { NotificationPageOut } from "@/lib/types";
 import { Empty, ErrorRetry, GroupedList, GroupedRow, RowSkeleton, Screen } from "@/ui";
-import { colors, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles } from "@/ui/theme";
 
 export function NotificationsScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const qc = useQueryClient();
 
   const { data, isLoading, isError, isRefetching, refetch } = useQuery({
@@ -53,7 +56,7 @@ export function NotificationsScreen() {
               ? () => (
                   <Text
                     onPress={() => markAll.mutate()}
-                    style={styles.markAll}
+                    style={[t.footnote, styles.markAll, { color: palette.accent }]}
                     accessibilityRole="button"
                   >
                     Mark All Read
@@ -84,7 +87,7 @@ export function NotificationsScreen() {
                 key={item.id}
                 title={item.title}
                 subtitle={item.body ? item.body : formatTime(item.created_at)}
-                leading={!item.read_at ? <View style={styles.dot} /> : <View style={styles.dotSpacer} />}
+                leading={!item.read_at ? <View style={[styles.dot, { backgroundColor: palette.accent }]} /> : <View style={styles.dotSpacer} />}
                 onPress={() => {
                   if (!item.read_at) markRead.mutate(item.id);
                 }}
@@ -99,12 +102,11 @@ export function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  markAll: { ...typeStyle.footnote, color: colors.tint },
+  markAll: {},
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.tint,
   },
   dotSpacer: { width: 8, height: 8 },
 });

@@ -1,13 +1,14 @@
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/auth/auth-context";
+import { useTheme } from "@/theme/theme-context";
 import { TAB_ITEMS } from "@/lib/tab-items";
-import { colors } from "@/ui/tokens";
 
 export { TAB_ITEMS };
 
 export default function TabLayout() {
   const { me, loading } = useAuth();
+  const { palette, scheme } = useTheme();
 
   if (loading) return null;
   if (!me) return <Redirect href="/(auth)/login" />;
@@ -16,9 +17,11 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.tint,
-        tabBarInactiveTintColor: colors.secondary,
-        tabBarStyle: { backgroundColor: "rgba(249,249,249,0.94)" },
+        tabBarActiveTintColor: palette.accent,
+        tabBarInactiveTintColor: palette.secondary,
+        tabBarStyle: {
+          backgroundColor: scheme === "dark" ? "rgba(14,16,20,0.85)" : "rgba(255,255,255,0.85)",
+        },
       }}
     >
       <Tabs.Screen

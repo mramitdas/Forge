@@ -21,10 +21,13 @@ import {
   SearchBar,
   StatusCaption,
 } from "@/ui";
-import { colors, radius, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, radius, space } from "@/ui/theme";
 
 export function CheckInScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const qc = useQueryClient();
   const [memberId, setMemberId] = useState("");
   const [search, setSearch] = useState("");
@@ -82,17 +85,17 @@ export function CheckInScreen() {
     membersListQ.data?.items.find((m) => m.id === id)?.full_name ?? "Member";
 
   const footer = (
-    <View style={styles.footer}>
+    <View style={[styles.footer, { backgroundColor: palette.canvas }]}>
       <TouchableOpacity
         disabled={!canSubmit}
         onPress={() => checkin.mutate({ member_id: memberId, branch_id: branchId, source: "manual" })}
-        style={[styles.submit, !canSubmit && styles.submitDisabled]}
+        style={[styles.submit, { backgroundColor: palette.accent }, !canSubmit && styles.submitDisabled]}
         accessibilityRole="button"
       >
         {checkin.isPending ? (
-          <ActivityIndicator color={colors.surface} />
+          <ActivityIndicator color={palette.onAccent} />
         ) : (
-          <Text style={styles.submitText}>Check In</Text>
+          <Text style={[styles.submitText, { color: palette.onAccent }]}>Check In</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -108,7 +111,7 @@ export function CheckInScreen() {
       }}
       refreshing={membersQ.isRefetching || recentQ.isRefetching}
     >
-      <Text style={styles.kicker}>{branch ? `Branch: ${branch.name}` : "No branch assigned"}</Text>
+      <Text style={[t.footnote, styles.kicker]}>{branch ? `Branch: ${branch.name}` : "No branch assigned"}</Text>
       <SearchBar
         value={search}
         onChangeText={setSearch}
@@ -129,7 +132,7 @@ export function CheckInScreen() {
               subtitle={m.status}
               trailing={
                 memberId === m.id ? (
-                  <Ionicons name="checkmark" size={20} color={colors.tint} />
+                  <Ionicons name="checkmark" size={20} color={palette.accent} />
                 ) : undefined
               }
               onPress={() => setMemberId((cur) => (cur === m.id ? "" : m.id))}
@@ -160,21 +163,18 @@ export function CheckInScreen() {
 
 const styles = StyleSheet.create({
   kicker: {
-    ...typeStyle.footnote,
     paddingHorizontal: space.lg,
     marginBottom: space.md,
   },
   footer: {
     padding: space.lg,
-    backgroundColor: colors.canvas,
   },
   submit: {
     height: 50,
-    backgroundColor: colors.tint,
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
   submitDisabled: { opacity: 0.5 },
-  submitText: { color: colors.surface, fontWeight: "600", fontSize: 17 },
+  submitText: { fontWeight: "600", fontSize: 17 },
 });

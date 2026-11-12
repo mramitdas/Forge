@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { colors, radius, space, type } from "./tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, radius, space } from "@/ui/theme";
 
 type SegmentedProps = {
   values: string[];
@@ -8,19 +9,24 @@ type SegmentedProps = {
 };
 
 export function Segmented({ values, value, onChange }: SegmentedProps) {
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   return (
-    <View style={styles.track}>
+    <View style={[styles.track, { backgroundColor: palette.surfaceStrong, borderRadius: radius.sm }]}>
       {values.map((v) => {
         const selected = v === value;
         return (
           <TouchableOpacity
             key={v}
-            style={[styles.segment, selected && styles.selected]}
+            style={[styles.segment, selected && { backgroundColor: palette.surface }]}
             onPress={() => onChange(v)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
           >
-            <Text style={[styles.label, selected && styles.labelSelected]} numberOfLines={1}>
+            <Text
+              style={[t.caption, styles.label, selected && { fontWeight: "600" as const }]}
+              numberOfLines={1}
+            >
               {v}
             </Text>
           </TouchableOpacity>
@@ -35,8 +41,6 @@ const styles = StyleSheet.create({
     height: 32,
     marginHorizontal: space.lg,
     marginBottom: space.md,
-    backgroundColor: colors.gray5,
-    borderRadius: radius.sm,
     flexDirection: "row",
     padding: 2,
   },
@@ -46,14 +50,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 6,
   },
-  selected: {
-    backgroundColor: colors.surface,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
-  label: { ...type.caption, fontWeight: "500", color: colors.label },
-  labelSelected: { fontWeight: "600" },
+  label: {},
 });

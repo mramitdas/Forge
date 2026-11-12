@@ -16,10 +16,13 @@ import {
   SummaryCard,
   SummaryCardSkeleton,
 } from "@/ui";
-import { colors, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, space } from "@/ui/theme";
 
 export function HomeScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const router = useRouter();
   const qc = useQueryClient();
 
@@ -68,7 +71,7 @@ export function HomeScreen() {
       onRefresh={refresh}
       refreshing={membersCountQ.isRefetching || summaryQ.isRefetching || recentQ.isRefetching}
     >
-      <Text style={styles.kicker}>
+      <Text style={[t.footnote, styles.kicker]}>
         {[me?.tenant_name, formatDay()].filter(Boolean).join(" · ")}
       </Text>
 
@@ -100,7 +103,7 @@ export function HomeScreen() {
           <SummaryCard
             value={summaryQ.data ? formatMoney(overdue) : "—"}
             caption="past due"
-            valueColor={overdue > 0 ? colors.red : undefined}
+            valueColor={overdue > 0 ? palette.danger : undefined}
             onPress={() => router.push("/(tabs)/more/billing")}
           />
 
@@ -127,7 +130,6 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   kicker: {
-    ...typeStyle.footnote,
     paddingHorizontal: space.lg,
     marginBottom: space.md,
   },

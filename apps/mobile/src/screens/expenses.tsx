@@ -6,7 +6,8 @@ import { useAuth } from "@/auth/auth-context";
 import { formatDate, formatMoney } from "@/lib/money";
 import type { ExpenseOut, ExpenseYearOut } from "@/lib/types";
 import { Empty, ErrorRetry, GroupedList, GroupedRow, RowSkeleton, Screen } from "@/ui";
-import { colors, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, space } from "@/ui/theme";
 
 function titleCase(s: string): string {
   if (!s) return s;
@@ -32,6 +33,8 @@ function groupByMonth(expenses: ExpenseOut[]) {
 
 export function ExpensesScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const router = useRouter();
   const year = new Date().getFullYear();
 
@@ -50,10 +53,10 @@ export function ExpensesScreen() {
           title: "Expenses",
           headerRight: () => (
             <View style={styles.headerRight}>
-              <Text style={styles.year}>{year}</Text>
+              <Text style={[t.footnote, styles.year]}>{year}</Text>
               <Text
-                style={styles.add}
                 onPress={() => router.push("/(tabs)/more/expense-add")}
+                style={[t.title, styles.add, { color: palette.accent, fontWeight: "400" as const }]}
                 accessibilityRole="button"
               >
                 Add
@@ -86,7 +89,7 @@ export function ExpensesScreen() {
                   title={titleCase(item.category)}
                   subtitle={item.description || formatDate(item.paid_at)}
                   trailing={
-                    <Text style={styles.amount}>{formatMoney(item.amount_minor, item.currency)}</Text>
+                    <Text style={[t.body, styles.amount, { color: palette.secondary }]}>{formatMoney(item.amount_minor, item.currency)}</Text>
                   }
                   last={i === g.items.length - 1}
                 />
@@ -101,7 +104,7 @@ export function ExpensesScreen() {
 
 const styles = StyleSheet.create({
   headerRight: { flexDirection: "row", alignItems: "center", gap: space.md },
-  year: { ...typeStyle.footnote },
-  add: { ...typeStyle.title, color: colors.tint, fontWeight: "400" },
-  amount: { ...typeStyle.body, color: colors.secondary },
+  year: {},
+  add: {},
+  amount: {},
 });

@@ -6,19 +6,23 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/auth/auth-context";
 import type { MemberOut, PageOut } from "@/lib/types";
 import { Empty, ErrorRetry, GroupedRow, RowSkeleton, Screen, SearchBar, StatusCaption } from "@/ui";
-import { colors, radius, space, type as typeStyle } from "@/ui/tokens";
+import { useTheme } from "@/theme/theme-context";
+import { textStyles, radius, space } from "@/ui/theme";
 
 function InitialAvatar({ name }: { name: string }) {
+  const { palette } = useTheme();
+  const t = textStyles(palette);
   const letter = (name || "?").charAt(0).toUpperCase();
   return (
-    <View style={styles.avatar}>
-      <Text style={styles.avatarText}>{letter}</Text>
+    <View style={[styles.avatar, { backgroundColor: palette.surfaceStrong }]}>
+      <Text style={[t.title, styles.avatarText, { color: palette.label }]}>{letter}</Text>
     </View>
   );
 }
 
 export function MembersScreen() {
   const { me } = useAuth();
+  const { palette } = useTheme();
   const router = useRouter();
   const [search, setSearch] = useState("");
 
@@ -44,7 +48,7 @@ export function MembersScreen() {
       {isError ? (
         <ErrorRetry onPress={() => void refetch()} />
       ) : isLoading ? (
-        <View style={styles.group}>
+        <View style={[styles.group, { backgroundColor: palette.surface, borderRadius: radius.md, overflow: "hidden" as const }]}>
           {Array.from({ length: 8 }).map((_, i) => (
             <RowSkeleton key={i} />
           ))}
@@ -77,24 +81,19 @@ export function MembersScreen() {
 const styles = StyleSheet.create({
   list: {
     marginHorizontal: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
     overflow: "hidden",
     paddingBottom: 0,
   },
   group: {
     marginHorizontal: space.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
     overflow: "hidden",
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.gray5,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { ...typeStyle.title, fontSize: 15 },
+  avatarText: { fontSize: 15 },
 });
