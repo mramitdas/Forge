@@ -1,5 +1,5 @@
-import { PlaceholderScreen } from '@/screens/placeholder';
+import { AppearanceScreen } from '@/screens/settings-appearance';
 
 export default function AppearanceRoute() {
-  return <PlaceholderScreen name="Appearance" />;
+  return <AppearanceScreen />;
 }
