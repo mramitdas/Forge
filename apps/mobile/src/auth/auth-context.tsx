@@ -2,12 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
 
 import { authenticate, type FixtureSession } from '@/fixtures/session';
+import { readItem, removeItem, writeItem } from '@/lib/storage';
 import { capabilitiesFor, type CapabilityCode, type Role } from '@/lib/capabilities';
 
 export type Session = {
@@ -20,12 +22,16 @@ export type Session = {
   mustResetPassword: boolean;
 };
 
-export type SignInResult = { ok: true } | { ok: false; error: string };
+export type SignInResult = { ok: true; session: Session } | { ok: false; error: string };
+
+const SESSION_KEY = 'fitwoody.session';
 
 type AuthContextValue = {
   session: Session | null;
-  signIn: (email: string, password: string) => Promise<SignInResult>;
+  signIn: (email: string, password: string, staySignedIn?: boolean) => Promise<SignInResult>;
   signOut: () => void;
+  /** Marks a forced password reset as done. */
+  completePasswordReset: () => void;
   /** Phase 1 only: swap the signed-in persona to exercise the role matrix. */
   switchRole: (role: Role) => void;
 };
@@ -39,15 +45,38 @@ function toSession(fixture: FixtureSession): Session {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
 
-  const signIn = useCallback(async (email: string, password: string): Promise<SignInResult> => {
-    // Phase 2 replaces this call with the real API — the signature stays.
-    const result = authenticate(email, password);
-    if (!result.ok) return result;
-    setSession(toSession(result.session));
-    return { ok: true };
+  useEffect(() => {
+    readItem(SESSION_KEY).then((stored) => {
+      if (!stored) return;
+      try {
+        setSession(JSON.parse(stored) as Session);
+      } catch {
+        removeItem(SESSION_KEY);
+      }
+    });
   }, []);
 
-  const signOut = useCallback(() => setSession(null), []);
+  const signIn = useCallback(
+    async (email: string, password: string, staySignedIn = false): Promise<SignInResult> => {
+      // Phase 2 replaces this call with the real API — the signature stays.
+      const result = authenticate(email, password);
+      if (!result.ok) return result;
+      const next = toSession(result.session);
+      setSession(next);
+      if (staySignedIn) writeItem(SESSION_KEY, JSON.stringify(next));
+      return { ok: true, session: next };
+    },
+    []
+  );
+
+  const signOut = useCallback(() => {
+    setSession(null);
+    removeItem(SESSION_KEY);
+  }, []);
+
+  const completePasswordReset = useCallback(() => {
+    setSession((current) => (current ? { ...current, mustResetPassword: false } : current));
+  }, []);
 
   const switchRole = useCallback((role: Role) => {
     setSession((current) =>
@@ -56,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ session, signIn, signOut, switchRole }),
-    [session, signIn, signOut, switchRole]
+    () => ({ session, signIn, signOut, completePasswordReset, switchRole }),
+    [session, signIn, signOut, completePasswordReset, switchRole]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

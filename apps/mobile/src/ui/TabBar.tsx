@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/auth/auth-context';
 import { elevation, palette, radii, spacing, textStyles } from '@/theme/tokens';
 import { QuickActionsSheet } from './QuickActionsSheet';
 
@@ -21,6 +22,10 @@ export function TabBar() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const { session } = useAuth();
+
+  // A forced password reset blocks everything else.
+  if (session?.mustResetPassword) return null;
 
   const isActive = (href: string) => pathname === href.replace('/(tabs)', '');
 

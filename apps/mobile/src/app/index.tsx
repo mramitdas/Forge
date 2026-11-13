@@ -4,5 +4,7 @@ import { useAuth } from '@/auth/auth-context';
 
 export default function Index() {
   const { session } = useAuth();
-  return <Redirect href={session ? '/(tabs)/home' : '/(auth)/login'} />;
+  if (!session) return <Redirect href="/(auth)/login" />;
+  if (session.mustResetPassword) return <Redirect href="/(tabs)/settings/password" />;
+  return <Redirect href="/(tabs)/home" />;
 }

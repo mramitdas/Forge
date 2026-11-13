@@ -53,6 +53,17 @@ src/query/    TanStack Query provider + per-domain hooks.
 - A query hook without its `view` capability must not fetch (`enabled: false`).
 - Navigation and the QuickActions sheet only list items the user can actually use.
 
+### Signing in (Phase 1 fixtures)
+
+The app ships with fixture personas until the real API lands. Password for all of them is `fitwoody-pass`:
+
+| Persona | Email | Holds |
+|---|---|---|
+| Platform Owner | `owner@platform.dev` | every gym capability |
+| Gym Owner | `owner@gym-erp.dev` | every gym capability |
+| Front desk | `desk@gym-erp.dev` | members, check-ins, invoices (read-only), notifications |
+| Forced reset | `reset@gym-erp.dev` | as Gym Owner, but must change the password first |
+
 ### Testing
 
 - `@testing-library/react-native` v14: `render` is **async** — `await render(<X />)` before querying.
