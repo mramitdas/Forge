@@ -217,9 +217,10 @@ The capability codes behind each action are noted next to it below, so the desig
 
 ### Employee (front desk)
 - Same screens, fewer actions.
-- **Home** — the money cards are absent (no `billing.view`), leaving members and recent activity.
+- Capabilities held: `members.view`, `attendance.view`, `attendance.manage`, `billing.view`, `notifications.view`.
+- **Home** — the money cards are visible but read-only (`billing.view`, never `billing.manage`), leaving members and recent activity as the focus.
 - **Check-in** — the member picker and check-in button are present (this is their main job, `attendance.manage`); the recent-activity list is there too.
-- **Billing** — invoices are visible with `billing.view`; the swipe-to-Pay action only appears with `billing.manage`.
+- **Billing** — invoices are visible with `billing.view`; the swipe-to-Pay action only appears with `billing.manage`, which the front desk does not hold.
 - **Expenses and Subscriptions** — reachable by path, but the navigation and the `+` sheet simply don't offer them, and arriving by path gives "Restricted area".
 - **Member detail** — can look at a member; editing controls only with `members.manage`.
 - **Settings** — their own account only.
