@@ -13,6 +13,7 @@ Every session begins the same way:
 ## 2. Repository map
 
 - `apps/web` — Next.js 15 app-router frontend (client components, TanStack Query)
+- `apps/mobile` — Expo SDK 58 React Native app (Expo Router, TanStack Query); Phase 1 is UI-only, backed by fixtures in `src/fixtures/`
 - `backend` — FastAPI + SQLAlchemy async; Alembic revisions in `backend/alembic/versions/`
 - `apps/web/e2e` — house-style `.cjs` Playwright scripts
   - `apps/web/e2e/platform` — `@playwright/test` suite
@@ -143,6 +144,7 @@ Every suite must pass 100% — do not pin or "update" counts; read the command o
 | --- | --- |
 | Backend behavior | `make test-backend` + `make lint` |
 | Frontend logic/UI | `npm run build --workspace=apps/web` + `make test-web` + the domain e2e script |
+| Mobile | `npm run typecheck` + `npm test` in `apps/mobile` |
 | Migration | `make migrate` + `make test-backend` |
 | Every PR | CI: `Backend lint + tests`, `Frontend build` (`npm run build --workspace=apps/web`) |
 
